@@ -1,0 +1,8 @@
+go 1.26.4
+
+use (
+	./apps/masir-cli
+	./apps/masir-daemon
+	./libs/masir-core
+	./libs/masir-proto
+)
