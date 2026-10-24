@@ -30,30 +30,47 @@ import (
 
 func main() {
 	userFlag := flag.String("user", "", "when running as root, the user to serve (name or uid); defaults to SUDO_UID")
+	idle := flag.Bool("idle", false, "start with masir off and Xray down until a client turns it on, as the CLI starts masird for other work")
 	flag.Parse()
 	// Recorded now: after an update replaces the binary, Linux would report the old,
 	// deleted file instead.
 	self, _ := os.Executable()
-	restart, err := run(*userFlag)
+	restart, stillIdle, err := run(*userFlag, *idle)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if restart {
 		log.Println("starting the new version")
-		log.Fatal(reexec(self))
+		args := os.Args
+		if !stillIdle { // masir was turned on since; the new version must not start idle
+			args = withoutIdle(args)
+		}
+		log.Fatal(reexec(self, args))
 	}
 }
 
+// withoutIdle drops the -idle flag from a command line.
+func withoutIdle(args []string) []string {
+	out := []string{}
+	for _, a := range args {
+		if a != "-idle" && a != "--idle" && a != "-idle=true" && a != "--idle=true" {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 // run serves until asked to stop. It reports whether to start the binary again, after
-// an update installed a new one; by then the TUN and proxy are already torn down.
-func run(userFlag string) (bool, error) {
+// an update installed a new one (by then the TUN and proxy are torn down), and whether
+// the daemon was still idle.
+func run(userFlag string, idle bool) (restart, stillIdle bool, err error) {
 	id, err := identity.Resolve(userFlag)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	dir, err := configDir(id)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	sock := paths.SocketPathIn(dir)
 
@@ -62,20 +79,23 @@ func run(userFlag string) (bool, error) {
 
 	if transport.Alive(sock) {
 		if err := takeOver(ctx, sock, id); err != nil {
-			return false, err
+			return false, false, err
 		}
 	}
 	lis, err := transport.Listen(sock, id.UID, id.GID)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 
 	xc := xray.New(assetDir())
 	defer xc.Close() // tears down the TUN and the proxy on every exit path
 	daemon := server.New(xc, id)
+	if idle {
+		daemon.StartIdle()
+	}
 	if err := daemon.Boot(ctx, dir); err != nil {
 		lis.Close()
-		return false, err
+		return false, false, err
 	}
 
 	srv := grpc.NewServer()
@@ -93,9 +113,9 @@ func run(userFlag string) (bool, error) {
 
 	log.Printf("serving %s (uid %d, root: %v) on %s", id.Name, id.UID, id.Privileged, sock)
 	if err := srv.Serve(lis); err != nil {
-		return false, err
+		return false, false, err
 	}
-	return daemon.RestartRequested(), nil
+	return daemon.RestartRequested(), daemon.Idle(), nil
 }
 
 // configDir is the served user's masir directory. As root it's derived from their home

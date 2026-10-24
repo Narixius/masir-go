@@ -44,6 +44,10 @@ type Server struct {
 
 	upd     *updates    // set by Boot
 	restart atomic.Bool // the daemon stopped to start a newly installed version
+	// idle keeps Xray down, power and always-on proxy alike, until a client turns
+	// masir on: a daemon the CLI started for other work (subscriptions, rules,
+	// updates) shouldn't start proxying.
+	idle atomic.Bool
 
 	stopOnce sync.Once
 	stopped  chan struct{}
@@ -87,6 +91,12 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 	m.OnChange = s.subscriptionsChanged
 	s.subs = m
 
+	if s.idle.Load() && st.Settings.Power { // masir is off while the daemon is idle
+		st.Settings.Power = false
+		if err := store.Save(dir, st); err != nil {
+			return err
+		}
+	}
 	s.initUpdates(dir)
 	s.mu.Lock()
 	s.dir, s.state = dir, st
@@ -100,6 +110,13 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 	go s.maintainUpdates(ctx)
 	return nil
 }
+
+// StartIdle makes Boot leave Xray down and masir off, until SetPower turns it on or
+// always-on proxy is switched on. Call it before Boot.
+func (s *Server) StartIdle() { s.idle.Store(true) }
+
+// Idle reports whether the daemon is still idle.
+func (s *Server) Idle() bool { return s.idle.Load() }
 
 // Stopped is closed when a client asks the daemon to shut down.
 func (s *Server) Stopped() <-chan struct{} { return s.stopped }

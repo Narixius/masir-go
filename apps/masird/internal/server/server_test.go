@@ -351,3 +351,71 @@ func TestFailedChangeLeavesStateAlone(t *testing.T) {
 		t.Fatal("xray should still run the previous config")
 	}
 }
+
+func TestIdleBootWaitsForPower(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	dir, err := paths.ConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := store.State{Settings: store.DefaultSettings()}
+	st.Settings.Power = true // left on by the last daemon
+	st.Settings.AlwaysOnProxy = true
+	st.Settings.AllowLAN = false
+	st.Settings.ProxyPort = freePort(t)
+	if err := store.Save(dir, st); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	xc := xray.New("")
+	defer xc.Close()
+	s := New(xc, identity.Identity{UID: os.Getuid(), GID: os.Getgid(), Name: "tester"})
+	s.StartIdle()
+	if err := s.Boot(ctx, dir); err != nil {
+		t.Fatal(err)
+	}
+	if xc.Running() || listening(uint32(st.Settings.ProxyPort)) {
+		t.Fatal("an idle daemon must not start xray, even with power and always-on proxy saved on")
+	}
+	if saved, _ := store.Load(dir); saved.Settings.Power {
+		t.Error("an idle start saves masir as off, so status doesn't claim it's connected")
+	}
+
+	// Other work doesn't wake it: rules change, xray stays down.
+	if _, err := s.AddRouting(ctx, &pb.AddRoutingRequest{RuleTag: "x", RuleJson: `{"domain":["full:x.com"]}`, Target: "direct"}); err != nil {
+		t.Fatal(err)
+	}
+	if xc.Running() {
+		t.Fatal("managing rules must not start xray on an idle daemon")
+	}
+
+	if _, err := s.SetPower(ctx, &pb.SetPowerRequest{On: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !xc.Running() || !listening(uint32(st.Settings.ProxyPort)) || s.Idle() {
+		t.Fatal("turning masir on ends idle and starts xray")
+	}
+}
+
+func TestIdleEndsWhenAlwaysOnProxyIsSwitchedOn(t *testing.T) {
+	s := newTestServer(t)
+	s.StartIdle()
+	port := uint32(freePort(t))
+	if _, err := s.UpdateSettings(context.Background(), &pb.UpdateSettingsRequest{ProxyPort: &port}); err != nil {
+		t.Fatal(err)
+	}
+	if s.xray.Running() {
+		t.Fatal("still idle after an unrelated setting")
+	}
+	on := true
+	if _, err := s.UpdateSettings(context.Background(), &pb.UpdateSettingsRequest{AlwaysOnProxy: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if !s.xray.Running() || !listening(port) || s.Idle() {
+		t.Fatal("switching always-on proxy on brings the proxy up")
+	}
+}

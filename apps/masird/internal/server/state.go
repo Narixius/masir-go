@@ -40,13 +40,14 @@ func (s *Server) change(ctx context.Context, msg string, fn func(*store.State) e
 }
 
 // applyLocked composes st with the current selection and brings Xray to it:
-// running when power or always-on proxy is on, stopped otherwise. Expects s.mu held.
+// running when power or always-on proxy is on (and the daemon isn't idle), stopped
+// otherwise. Expects s.mu held.
 func (s *Server) applyLocked(ctx context.Context, st store.State) error {
 	active, err := s.subs.Active()
 	if err != nil {
 		return status.Error(codes.Internal, "read selection: "+err.Error())
 	}
-	runs := st.Settings.XrayRuns()
+	runs := st.Settings.XrayRuns() && !s.idle.Load()
 	tun := runs && st.Settings.Power && st.Settings.Tun && s.id.Privileged
 	in := compose.Input{
 		State:   st,
