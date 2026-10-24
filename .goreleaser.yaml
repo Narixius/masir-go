@@ -8,13 +8,23 @@ dist: build/release
 before:
   hooks:
     - sh scripts/fetch-geo.sh
+    - sh scripts/fetch-wintun.sh
 
 builds:
   - id: masir
     dir: apps/masir
     binary: masir
     env: [CGO_ENABLED=0]
-    goos: [darwin, linux, windows]
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+  # Windows archives also carry wintun.dll, which Xray's TUN loads from beside masir.exe.
+  - id: masir-windows
+    dir: apps/masir
+    binary: masir
+    env: [CGO_ENABLED=0]
+    goos: [windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
     ldflags: ["-s -w -X main.version={{ .Version }}"]
@@ -24,11 +34,17 @@ archives:
     ids: [masir]
     name_template: "masir_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
-    format_overrides:
-      - goos: windows
-        formats: [zip]
     files:
       - src: build/geo/*.dat
+        strip_parent: true
+  - id: masir-windows
+    ids: [masir-windows]
+    name_template: "masir_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [zip]
+    files:
+      - src: build/geo/*.dat
+        strip_parent: true
+      - src: "build/wintun/{{ .Arch }}/*"
         strip_parent: true
 
 checksum:

@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -19,10 +19,13 @@ jobs:
           go-version-file: go.work
           cache-dependency-path: "**/go.sum"
       - name: Vet and test
+        shell: bash
         run: |
+          race=-race # needs cgo on Windows, which the runner doesn't set up
+          if [ "$RUNNER_OS" = "Windows" ]; then race=; fi
           for m in apps/masir libs/masir-daemon libs/masir-core libs/masir-proto; do
             echo "::group::$m"
-            (cd "$m" && go vet ./... && go test -race ./...)
+            (cd "$m" && go vet ./... && go test $race ./...)
             echo "::endgroup::"
           done
 
