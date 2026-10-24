@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -164,5 +165,15 @@ func TestVisualKeepsColorCodesAndLines(t *testing.T) {
 	}
 	if Visual("plain ascii") != "plain ascii" {
 		t.Fatal("left-to-right text is unchanged")
+	}
+}
+
+func TestBoldAllUndimsSoBoldLasts(t *testing.T) {
+	got := boldAll("name  \x1b[2mvless\x1b[22m \x1b[32m(active)\x1b[39m  \x1b[33m770ms\x1b[39m")
+	if strings.Contains(got, "\x1b[2m") || strings.Count(got, "\x1b[22m") > 1 {
+		t.Errorf("dim codes inside would end the bold early: %q", got)
+	}
+	if !strings.Contains(got, "\x1b[32m(active)\x1b[39m") || !strings.Contains(got, "\x1b[33m770ms\x1b[39m") {
+		t.Errorf("colors must survive: %q", got)
 	}
 }

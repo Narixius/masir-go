@@ -631,6 +631,14 @@ func (pk *Picker) render(final bool, summary string) {
 }
 
 // itemLine expects pk.mu held, for the live suffix.
+// boldAll makes s bold, colors kept. Dim text is undimmed first: bold and dim share a
+// reset code, so dim inside bold would end the bold early.
+func boldAll(s string) string {
+	s = strings.ReplaceAll(s, "\x1b[2m", "")
+	s = strings.ReplaceAll(s, "\x1b[22m", "")
+	return Bold(s)
+}
+
 func (pk *Picker) itemLine(it PickItem, atCursor bool) string {
 	label := Visual(it.Label)
 	var mark string
@@ -644,12 +652,9 @@ func (pk *Picker) itemLine(it PickItem, atCursor bool) string {
 	default:
 		mark = Gray(symbols.RADIO_INACTIVE)
 	}
-	line := "  " + mark + " " + label
-	if atCursor {
-		line = Green("→ ") + mark + " " + Bold(label)
-	}
+	rest := label
 	if it.Hint != "" {
-		line += "  " + it.Hint
+		rest += "  " + it.Hint
 	}
 	suffix := it.Suffix
 	if s, ok := pk.suffix[it.Value]; ok {
@@ -659,9 +664,12 @@ func (pk *Picker) itemLine(it PickItem, atCursor bool) string {
 		suffix = Gray(spinFrames[pk.frame%len(spinFrames)])
 	}
 	if suffix != "" {
-		line += "  " + suffix
+		rest += "  " + suffix
 	}
-	return line
+	if atCursor { // the whole row stands out: name, hint and latency
+		return Green("→ ") + mark + " " + boldAll(rest)
+	}
+	return "  " + mark + " " + rest
 }
 
 func (pk *Picker) help(rows []row) string {
