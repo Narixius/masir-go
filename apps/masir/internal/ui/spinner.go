@@ -26,12 +26,15 @@ type Spinner struct {
 	s *prompts.SpinnerController
 }
 
-func Spin(msg string) *Spinner {
+func Spin(msg string) *Spinner { return SpinWith(msg, "Cancelled") }
+
+// SpinWith is Spin with what Ctrl-C prints, for work that goes on without the CLI.
+func SpinWith(msg, cancelMsg string) *Spinner {
 	if !styled {
 		return &Spinner{}
 	}
 	s := prompts.Spinner(prompts.SpinnerOptions{
-		CancelMessage: "Cancelled",
+		CancelMessage: cancelMsg,
 		OnCancel: func() {
 			cancelShown.Store(true)
 			OnInterrupt()

@@ -116,6 +116,11 @@ func mainMenu(st *pb.Status) []menuItem {
 			}},
 		}},
 		{label: "Settings", hint: "ports, LAN, DNS", run: with(cmdSettings)},
+		{label: "Updates", hint: updateHint(st), sub: []menuItem{
+			{label: "Update masir", run: with(cmdUpdate)},
+			{label: "Update geo data", hint: "geosite.dat and geoip.dat", run: with(cmdUpdateGeo)},
+			{label: "Update status", run: with(cmdUpdateStatus)},
+		}},
 		{label: "Status", hint: "daemon, xray and connectivity", run: with(cmdStatus)},
 		{label: "Quit"},
 	}
@@ -139,4 +144,11 @@ func statusLine(st *pb.Status) string {
 		state += fmt.Sprintf("  %s %s", ui.Dim("via"), ui.Cyan(ui.Visual(st.ActiveConfigName)))
 	}
 	return state
+}
+
+func updateHint(st *pb.Status) string {
+	if r := st.LatestRelease; r.GetAvailable() {
+		return r.LatestVersion + " is available"
+	}
+	return "masir and geo data"
 }

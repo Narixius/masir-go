@@ -67,11 +67,15 @@ func printStatus(st *pb.Status) {
 	}
 	fmt.Printf("\n%s %s %s %s\n", ui.Bold("Masir Daemon"), ui.Dim(st.Version), ui.Green("● Active"),
 		ui.Dim("(")+priv+ui.Dim(", "+how+")"))
-	fmt.Println(ui.Tree([][2]string{
+	daemonRows := [][2]string{
 		{"Serving", fmt.Sprintf("%s (uid %d)", ui.Visual(st.ServedUser), st.ServedUid)},
 		{"Uptime", formatUptime(time.Duration(st.UptimeSeconds)*time.Second) +
 			ui.Dim(time.Now().Add(-time.Duration(st.UptimeSeconds)*time.Second).Format(" (since 2006-01-02 15:04:05)"))},
-	}))
+	}
+	if r := st.LatestRelease; r.GetAvailable() {
+		daemonRows = append(daemonRows, [2]string{"Update", ui.Yellow(r.LatestVersion+" is available") + ui.Dim(" — `masir update`")})
+	}
+	fmt.Println(ui.Tree(daemonRows))
 
 	set := st.Settings
 	fmt.Println()
@@ -113,6 +117,14 @@ func printStatus(st *pb.Status) {
 		[2]string{"DoH DNS", set.GetDohDns()},
 		[2]string{"DNS Servers", strings.Join(set.GetDnsServers(), ", ")},
 	)
+	switch geo := st.GeoUpdatedAt; {
+	case geo == "":
+		rows = append(rows, [2]string{"Geo Data", ui.Yellow("missing; geosite:/geoip: rules won't work") + ui.Dim(" — `masir update geo`")})
+	default:
+		if t, err := time.Parse(time.RFC3339, geo); err == nil {
+			rows = append(rows, [2]string{"Geo Data", t.Local().Format("2006-01-02") + ui.Dim(" ("+formatAge(time.Since(t))+" ago)")})
+		}
+	}
 	if len(set.GetTunDns()) > 0 {
 		rows = append(rows, [2]string{"TUN DNS", strings.Join(set.GetTunDns(), ", ")})
 	}
@@ -316,4 +328,16 @@ func shortErr(err error) string {
 		return msg[i+2:]
 	}
 	return msg
+}
+
+// formatAge is a rough duration: minutes, hours or days.
+func formatAge(d time.Duration) string {
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
 }

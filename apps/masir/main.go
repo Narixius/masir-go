@@ -229,11 +229,44 @@ func rootCmd() *cobra.Command {
 		leaf("stop", "Stop the daemon", daemonStop, cobra.NoArgs),
 		restart, enable, disable, runDaemon)
 
+	targetArg := cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs)
+	targets := []string{"masir\tthe app itself", "geo\tgeosite.dat and geoip.dat"}
+	control := func(use, short string, fn func(args) error) *cobra.Command {
+		c := leaf(use+" [masir|geo]", short, fn, targetArg)
+		c.ValidArgs = targets
+		return c
+	}
+	updateGeo := leaf("geo", "Download the latest geosite.dat and geoip.dat from XTLS/Xray-rules-dat", cmdUpdateGeo, cobra.NoArgs,
+		flagSpec{names: []string{"force"}, bool: true, help: "download even if the installed files are current"})
+	updateStatus := control("status", "Show update jobs, following one that's running", cmdUpdateStatus)
+	updateCmd := group("update", "Update masir to the latest release, or refresh geo data",
+		updateGeo,
+		control("pause", "Pause a download; it resumes where it stopped", cmdUpdatePause),
+		control("resume", "Resume a paused update", cmdUpdateResume),
+		control("stop", "Stop an update and delete what it downloaded", cmdUpdateStop),
+		updateStatus)
+	updateCmd.Args = cobra.NoArgs
+	updateCmd.RunE = runE(cmdUpdate)
+	addFlags(updateCmd, []flagSpec{
+		{names: []string{"check"}, bool: true, help: "only report whether a newer version exists"},
+		{names: []string{"yes", "y"}, bool: true, help: "install without asking"},
+		{names: []string{"force"}, bool: true, help: "install even if not newer, or over a development build"},
+	})
+	updateCmd.Example = "# Install the latest release\n" +
+		"masir update\n" +
+		"# Is there something newer?\n" +
+		"masir update --check\n" +
+		"# Refresh geosite.dat and geoip.dat\n" +
+		"masir update geo\n" +
+		"# Control a download that's in progress\n" +
+		"masir update pause\n" +
+		"masir update resume"
+
 	// Help lists commands in this order, most used first; cobra appends completion and help.
 	cobra.EnableCommandSorting = false
 	root.AddCommand(connect, disconnect, status, use, mode, sub, rules, settings,
 		leaf("logs", "Follow the daemon's log", cmdLogs, cobra.NoArgs),
-		daemonGroup, getConfig,
+		daemonGroup, updateCmd, getConfig,
 		leaf("menu", "Pick a command from an interactive menu", func(args) error { return menu() }, cobra.NoArgs),
 		leaf("version", "Print the versions of masir, masird and Xray", cmdVersion, cobra.NoArgs))
 	return root
