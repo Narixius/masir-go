@@ -25,8 +25,13 @@ func Alive(endpoint string) bool {
 	return true
 }
 
-// Listen ignores uid and gid: Windows has no peer-credential check wired up yet,
-// so access is whatever the pipe's default security allows.
-func Listen(endpoint string, _, _ int) (net.Listener, error) {
-	return winio.ListenPipe(endpoint, nil)
+// Listen opens the daemon's pipe for LocalSystem, Administrators and the served user
+// only: on a shared machine, nobody else may control the daemon, which may run with
+// Administrator rights.
+func Listen(endpoint string, peer Peer) (net.Listener, error) {
+	sddl, err := pipeSDDL(peer.SID)
+	if err != nil {
+		return nil, err
+	}
+	return winio.ListenPipe(endpoint, &winio.PipeConfig{SecurityDescriptor: sddl})
 }

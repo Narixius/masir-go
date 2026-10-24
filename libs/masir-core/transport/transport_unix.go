@@ -27,7 +27,8 @@ func Alive(endpoint string) bool {
 
 // Listen serves endpoint to one user: the socket belongs to uid with mode 0600, and
 // only uid and root may connect, checked by the kernel's peer credentials.
-func Listen(endpoint string, uid, gid int) (net.Listener, error) {
+func Listen(endpoint string, peer Peer) (net.Listener, error) {
+	uid, gid := peer.UID, peer.GID
 	l, err := net.Listen("unix", endpoint)
 	if err != nil {
 		if Alive(endpoint) {

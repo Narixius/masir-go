@@ -13,7 +13,7 @@ import (
 
 func TestListenServesOneUser(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "d.sock")
-	l, err := Listen(sock, os.Getuid(), os.Getgid())
+	l, err := Listen(sock, Peer{UID: os.Getuid(), GID: os.Getgid()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestListenServesOneUser(t *testing.T) {
 	if !fileExists(sock) {
 		t.Skip("listener removed its socket on close; nothing stale to test")
 	}
-	l2, err := Listen(sock, os.Getuid(), os.Getgid())
+	l2, err := Listen(sock, Peer{UID: os.Getuid(), GID: os.Getgid()})
 	if err != nil {
 		t.Fatalf("stale socket: %v", err)
 	}
