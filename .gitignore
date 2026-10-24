@@ -5,3 +5,5 @@ outbound.json
 apps/masir/masir
 apps/masird/masird
 *.exe
+build
+go-clack

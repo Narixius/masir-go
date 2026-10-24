@@ -48,7 +48,7 @@ require (
 	golang.org/x/term v0.45.0
 )
 
-replace github.com/orochaa/go-clack => ../../go-clack
+replace github.com/orochaa/go-clack => github.com/Narixius/go-clack v0.1.22-0.20261024213753-964c3673406c
 
 replace github.com/narixius/masir-go/libs/masir-core => ../../libs/masir-core
 
