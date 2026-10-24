@@ -129,7 +129,7 @@ func printStatus(st *pb.Status) {
 		rows = append(rows, [2]string{"TUN DNS", strings.Join(set.GetTunDns(), ", ")})
 	}
 	if !st.TunAvailable && set.GetTun() {
-		rows = append(rows, [2]string{"TUN", ui.Yellow("on, but needs root: `masir connect` sets it up")})
+		rows = append(rows, [2]string{"TUN", ui.Yellow("on, but needs " + privilegeName + ": `masir connect` sets it up")})
 	}
 	if st.FellBackRules > 0 {
 		rows = append(rows, [2]string{"Rules", ui.Yellow(fmt.Sprintf("%d rule(s) lost their proxy and use the active one; see `masir rules list`", st.FellBackRules))})

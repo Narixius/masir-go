@@ -33,6 +33,11 @@ var matcherFlags = []flagSpec{
 // exitStatus is set by commands that failed; they report their own errors (see runE).
 var exitStatus int
 
+// elevatedResult is set (--elevated-result) when masir runs elevated for another masir
+// process, which can't see this one's output (see elevate on Windows): the outcome
+// goes to this file. lastErr is what failed.
+var elevatedResult, lastErr string
+
 func main() {
 	ui.SetupBidi()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
@@ -42,13 +47,33 @@ func main() {
 	// errors (unknown command, bad flag), which handleError prints in masir's style.
 	err := fang.Execute(ctx, rootCmd(), fang.WithVersion(version), fang.WithErrorHandler(handleError))
 	stop()
+	if elevatedResult != "" {
+		writeElevatedResult(err == nil && exitStatus == 0)
+	}
 	if err != nil {
 		os.Exit(1)
 	}
 	os.Exit(exitStatus)
 }
 
+// writeElevatedResult writes "ok" or the error, atomically so the waiting process
+// never reads half of it.
+func writeElevatedResult(ok bool) {
+	msg := "ok"
+	if !ok {
+		msg = lastErr
+		if msg == "" {
+			msg = "the elevated masir failed"
+		}
+	}
+	tmp := elevatedResult + ".tmp"
+	if os.WriteFile(tmp, []byte(msg), 0o600) == nil {
+		_ = os.Rename(tmp, elevatedResult)
+	}
+}
+
 func handleError(_ io.Writer, _ fang.Styles, err error) {
+	lastErr = err.Error()
 	ui.Error(ui.Red(capitalize(err.Error())) + "\n" + ui.Dim("Run `masir --help` for usage."))
 }
 
@@ -57,12 +82,14 @@ func handleError(_ io.Writer, _ fang.Styles, err error) {
 func report(err error) int {
 	switch {
 	case cancelled(err):
+		lastErr = "cancelled"
 		ui.Cancelled()
 		return 130
 	case errors.Is(err, errReported):
 		return 1
 	default:
-		ui.Error(ui.Red(message(err)))
+		lastErr = message(err)
+		ui.Error(ui.Red(lastErr))
 		return 1
 	}
 }
@@ -88,6 +115,8 @@ func rootCmd() *cobra.Command {
 	// picocolors reads these from os.Args itself; declaring them keeps cobra from rejecting them.
 	root.PersistentFlags().Bool("color", false, "force colored output")
 	root.PersistentFlags().Bool("no-color", false, "disable colored output")
+	root.PersistentFlags().StringVar(&elevatedResult, "elevated-result", "", "file for an elevated run's outcome")
+	_ = root.PersistentFlags().MarkHidden("elevated-result")
 	_ = root.PersistentFlags().MarkHidden("color")
 	_ = root.PersistentFlags().MarkHidden("no-color")
 

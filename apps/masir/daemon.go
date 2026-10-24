@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
+	"runtime"
 	"time"
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
@@ -18,10 +18,6 @@ import (
 	masird "github.com/narixius/masir-go/libs/masir-daemon"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
-
-// installDir holds the root service's own copy of masir: a root daemon must not run a
-// binary the user (or anything running as them) can replace.
-const installDir = "/usr/local/lib/masir"
 
 var errNoService = errors.New("installing the masir daemon as a service isn't supported on this OS yet")
 
@@ -60,7 +56,7 @@ func daemonStop(args) error {
 
 func daemonRestart(a args) error {
 	if service.Installed() {
-		s := ui.Spin("Restarting the masir service (sudo may ask for your password)")
+		s := ui.Spin("Restarting the masir service (" + elevationHint + ")")
 		if err := restartService(); err != nil {
 			s.Fail(err.Error())
 			return errReported
@@ -84,25 +80,21 @@ func daemonRestart(a args) error {
 }
 
 func daemonEnable(a args) error {
-	uid := os.Getuid()
-	if v := a.str("user"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return fail("--user must be a uid")
-		}
-		uid = n
+	user := a.str("user")
+	if user == "" {
+		user = currentUser()
 	}
-	return enableService(uid)
+	return enableService(user)
 }
 
 func daemonDisable(args) error {
-	if os.Geteuid() != 0 {
-		return asRoot("daemon", "disable")
+	if !elevated() {
+		return elevate("daemon", "disable")
 	}
 	if err := uninstallService(); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(installDir); err != nil {
+	if err := os.RemoveAll(installDir()); err != nil {
 		return err
 	}
 	ui.Success("The masir service is removed. The daemon runs in the background again when masir needs it.")
@@ -112,7 +104,7 @@ func daemonDisable(args) error {
 // daemonRun runs the daemon in this process, in the foreground: it's how the background
 // daemon and the root service run (both start this same executable).
 func daemonRun(a args) error {
-	return masird.Run(masird.Options{User: a.str("user"), Idle: a.boolean("idle", false), Version: version})
+	return runDaemon(masird.Options{User: a.str("user"), Idle: a.boolean("idle", false), Version: version})
 }
 
 // ensureDaemon starts the daemon in the background, as this user, unless something already
@@ -151,16 +143,17 @@ func ensureDaemon(sock string, idle bool) error {
 	return waitFor(func() bool { return transport.Alive(sock) }, 10*time.Second, "the masir daemon didn't start; see "+logf.Name())
 }
 
-// enableService installs the daemon as a root service serving uid. Run as the user, it
-// re-runs itself under sudo, which asks for the password (or Touch ID).
-func enableService(uid int) error {
-	if os.Geteuid() != 0 {
-		return asRoot("daemon", "enable", "--user", strconv.Itoa(os.Getuid()))
+// enableService installs the daemon as a privileged service serving user (a uid, or a
+// SID on Windows). Run as the user, it re-runs itself with privileges: sudo asks for
+// the password, or Windows for permission.
+func enableService(user string) error {
+	if !elevated() {
+		return elevate("daemon", "enable", "--user", currentUser())
 	}
-	if uid == 0 {
-		return fail("run `masir daemon enable` as your normal user; it asks for sudo itself")
+	if user == "" || user == "0" {
+		return fail("run `masir daemon enable` as your normal user; it asks for permission itself")
 	}
-	if service.DefinitionPath() == "" {
+	if !service.Supported() {
 		return errNoService
 	}
 	src, err := self()
@@ -171,10 +164,10 @@ func enableService(uid int) error {
 	if err != nil {
 		return err
 	}
-	if err := installService(bin, uid); err != nil {
+	if err := installService(bin, user); err != nil {
 		return err
 	}
-	ui.Success("masir is installed as a root service. It starts at boot, and TUN mode needs no password from now on.")
+	ui.Success("masir is installed as a system service. It starts at boot, and TUN mode needs no permission prompt from now on.")
 	return nil
 }
 
@@ -189,9 +182,9 @@ func enableTun() error {
 	return err
 }
 
-// ensurePrivileged makes sure a root daemon is answering, as TUN needs: if the one
-// running isn't root, it installs the service (sudo asks once) and waits for it to
-// take over from the background daemon.
+// ensurePrivileged makes sure a privileged daemon is answering, as TUN needs: if the
+// one running isn't, it installs the service (sudo or Windows asks once) and waits for
+// it to take over from the background daemon.
 func ensurePrivileged() error {
 	st, err := currentStatus()
 	if err != nil {
@@ -200,13 +193,12 @@ func ensurePrivileged() error {
 	if st.Privileged {
 		return nil
 	}
-	if service.DefinitionPath() == "" {
-		return fail("TUN mode needs a root service, which masir can't install on this OS yet; use `masir connect --proxy`")
+	if !service.Supported() {
+		return fail("TUN mode needs a system service, which masir can't install on this OS yet; use `masir connect --proxy`")
 	}
-	ui.Note("TUN mode routes all system traffic, which needs root.\n"+
-		"masir will install its daemon as a system service; sudo asks for your password once.",
+	ui.Note("TUN mode routes all system traffic, which needs "+privilegeName+".\n"+elevationNote,
 		ui.Yellow("▲ Elevated Privileges Required"))
-	if err := enableService(os.Getuid()); err != nil {
+	if err := enableService(currentUser()); err != nil {
 		return err
 	}
 	cachedClient = nil // the root daemon has taken over the socket
@@ -229,21 +221,28 @@ func ensurePrivileged() error {
 	return nil
 }
 
-// installBinary copies this executable and the geo files beside it into installDir,
-// root-owned: the service must never run a binary the user can modify.
+// installBinary copies this executable and the files that ship beside it (geo data,
+// and wintun.dll on Windows) into installDir(), which only root or Administrators can
+// change: the service must never run a binary the user can modify.
 func installBinary(src string) (string, error) {
-	if err := os.MkdirAll(installDir, 0o755); err != nil {
+	dir := installDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	bin := filepath.Join(installDir, "masir")
+	stopServiceForInstall()
+	name := "masir"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	bin := filepath.Join(dir, name)
 	if err := copyFile(src, bin, 0o755); err != nil {
 		return "", err
 	}
-	os.Remove(filepath.Join(installDir, "masird")) // the separate daemon binary of earlier versions
-	for _, dat := range []string{"geoip.dat", "geosite.dat"} {
-		from := filepath.Join(filepath.Dir(src), dat)
+	os.Remove(filepath.Join(dir, "masird")) // the separate daemon binary of earlier versions
+	for _, f := range []string{"geoip.dat", "geosite.dat", "wintun.dll"} {
+		from := filepath.Join(filepath.Dir(src), f)
 		if _, err := os.Stat(from); err == nil {
-			if err := copyFile(from, filepath.Join(installDir, dat), 0o644); err != nil {
+			if err := copyFile(from, filepath.Join(dir, f), 0o644); err != nil {
 				return "", err
 			}
 		}

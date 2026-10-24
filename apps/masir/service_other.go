@@ -1,8 +1,8 @@
-//go:build !darwin && !linux
+//go:build !darwin && !linux && !windows
 
 package main
 
-func installService(string, int) error { return errNoService }
+func installService(string, string) error { return errNoService }
 
 func uninstallService() error { return errNoService }
 

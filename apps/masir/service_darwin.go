@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/narixius/masir-go/libs/masir-core/service"
 )
@@ -38,7 +39,11 @@ func servicePlist(bin string, uid int) string {
 	return fmt.Sprintf(plistTemplate, service.Label, bin, uid)
 }
 
-func installService(bin string, uid int) error {
+func installService(bin, user string) error {
+	uid, err := strconv.Atoi(user)
+	if err != nil {
+		return fail("the service's user must be a uid, not %q", user)
+	}
 	_ = exec.Command("launchctl", "bootout", "system/"+service.Label).Run() // replace an earlier install
 	if err := os.WriteFile(service.DefinitionPath(), []byte(servicePlist(bin, uid)), 0o644); err != nil {
 		return err

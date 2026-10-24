@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/narixius/masir-go/libs/masir-core/service"
 )
@@ -28,7 +29,11 @@ func serviceUnit(bin string, uid int) string {
 	return fmt.Sprintf(unitTemplate, bin, uid)
 }
 
-func installService(bin string, uid int) error {
+func installService(bin, user string) error {
+	uid, err := strconv.Atoi(user)
+	if err != nil {
+		return fail("the service's user must be a uid, not %q", user)
+	}
 	if err := os.WriteFile(service.DefinitionPath(), []byte(serviceUnit(bin, uid)), 0o644); err != nil {
 		return err
 	}
