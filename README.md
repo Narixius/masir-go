@@ -1,8 +1,8 @@
 # masir
 
-**The Xray client that routes the way you think: by app, by site, by country, by any Xray rule, and never makes you restart the core to do it.**
+**The Xray client that routes the way you think.**
 
-masir is a proxy manager for [Xray](https://github.com/XTLS/Xray-core). Add your subscriptions, pick a server, and decide which apps and sites go through it. Telegram and Spotify through the proxy, local banking direct, ads blocked, one stubborn service pinned to the one server that works for it. Everything runs in a single executable with a daemon that keeps your connection up, and a terminal interface that is genuinely pleasant to use.
+Decide, app by app and site by site, what goes through the proxy and what doesn't, with the full power of Xray's routing, and without restarting the core every time you change something. Subscriptions, server switching and updates take care of themselves.
 
 **[Download the latest release](https://github.com/Narixius/masir-go/releases/latest)**
 
@@ -29,25 +29,31 @@ Connectivity
 
 ## Why masir
 
-**Route by app, not just by address.** Send a whole application through the proxy, or keep it direct, with one rule. On macOS, picking an app covers the app bundle and every helper process inside it, so multi-process apps like Electron apps follow one rule. The rule wizard lists your installed apps and running processes; you never have to hunt for a process name.
+**Route by app.** One rule sends a whole app through the proxy or keeps it direct, helper processes included. Pick it from a list of your installed apps.
 
-**Full Xray routing, not a simplified subset.** Every rule is a real Xray routing rule: domains, `geosite:` lists, IPs and CIDRs, `geoip:` lists, ports, TCP or UDP, sniffed protocols (TLS, QUIC, BitTorrent), source addresses, processes. Use the guided wizard, the command-line flags, or hand masir the rule as raw Xray JSON. Rules are checked by Xray itself before they're saved, so a broken rule never reaches your running config.
+**Full Xray routing.** Every rule is a real Xray routing rule: domains, `geosite:`, IPs, `geoip:`, ports, protocols, processes, or raw JSON. Xray checks each rule before it's saved.
 
-**Changes apply live, through Xray's own gRPC API.** Switching servers, adding, editing, reordering or removing rules, pinning a rule to a server, changing the proxy port: masir patches the running core through Xray's `HandlerService` and `RoutingService`. The core restarts only when something truly global changes, such as DNS. No reconnect storms every time you tweak a rule.
+**Live changes, no restarts.** Rules, server switches and pins are applied to the running core through Xray's own gRPC API. Xray keeps running while you tweak, so nothing else drops.
 
-**Pin rules to any server, from any subscription.** The active proxy is just the default. A rule can send traffic to one specific server, even from a different subscription than the one you're using. If that server disappears in a subscription refresh, the rule falls back to the active proxy and `masir rules` tells you, instead of silently breaking.
+**Pin rules to any server.** Send one service through one server, from any subscription, whatever the active server is. If that server disappears, the rule falls back instead of breaking.
 
-**Subscriptions that take care of themselves.** Paste a subscription URL and masir handles the rest: Xray JSON configs and share links (`vless://`, `vmess://`, `trojan://`, `ss://`, `hysteria2://` and more), refreshing on the provider's schedule, traffic usage and expiry dates, and fetching through your proxy when the provider is blocked. Your selected server survives refreshes, even when the provider regenerates its server list.
+**Subscriptions on autopilot.** JSON configs and share links (`vless://`, `vmess://`, `trojan://`, `ss://`, `hysteria2://`, ...), refreshed on schedule, with traffic and expiry shown, fetched through the proxy when the provider is blocked.
 
-**Pick servers with live latency.** The server picker groups servers by subscription and tests the ones on screen as you scroll, each result appearing the moment it arrives. Press `l` to retest one, `a` to retest all, `/` to filter. Or let masir decide with `masir use --fastest`.
+**Live latency.** The server picker tests what's on screen as you scroll. `l` retests one, `a` retests all, or let `masir use --fastest` pick.
 
-**TUN mode without touching your DNS settings.** TUN routes every app on the system, including ones that ignore proxy settings. DNS is captured and resolved inside Xray (DNS over HTTPS through the proxy), so masir never rewrites your system resolver. Prefer to keep it simple? Proxy mode gives you a SOCKS5 and HTTP proxy on a single port (7890 by default, the Clash convention), shareable with other devices on your network.
+**TUN or proxy, your choice.** TUN routes the whole system without touching your DNS settings; proxy mode gives you SOCKS5 and HTTP on one port, shareable over your LAN.
 
-**Updates itself, and its geo data.** `masir update` installs new releases from this repository: verified against SHA-256 checksums, resumable, and restarted for you. `masir update geo` keeps `geosite.dat` and `geoip.dat` current from [XTLS/Xray-rules-dat](https://github.com/XTLS/Xray-rules-dat), reloaded into the running Xray without a restart. Downloads can be paused, resumed or stopped, and go through your proxy when GitHub is blocked.
+**Keeps itself current.** `masir update` and `masir update geo` install verified releases and fresh geo data, with pause, resume and stop.
 
-**Built for people, scriptable for machines.** Interactive prompts when you're at a terminal, clean plain-text output when you pipe it, `--json` where it matters, and shell completions that know your rule names, subscriptions and server ids. Persian and Arabic server names display correctly even in terminals without bidirectional text support.
+**Scriptable, and built to be built on.** Plain output when piped, `--json` where it matters, smart shell completions, and a gRPC API for your own tools or a GUI.
 
-**A daemon you can build on.** Everything masir does goes through a documented gRPC API on a local socket, with server reflection enabled. The CLI is one client; a GUI, a menu bar app or your own scripts can be others.
+## Philosophy
+
+Routing is what Xray does best. Its rules can send each connection exactly where it should go: this app through the proxy, that site direct, ads nowhere, one service through the one server that works for it. Most Xray clients barely expose any of that. They start Xray system-wide, push all traffic through the tunnel, and hide routing behind a screen that's hard to find and harder to configure. Doing anything beyond the defaults means hand-editing JSON, and switching servers often restarts the core and drops every connection.
+
+masir started from the opposite end. Routing comes first: rules are easy to write and easy to read, and nothing about them is watered down, so anything Xray can match, masir can route. The core stays up while you change things, because Xray's own API can apply changes live. Servers from several subscriptions sit side by side, and any rule can point at any of them. And the tool should feel good to use every day: fast to pick a server, clear about what's running, quiet when everything works.
+
+It's the client I wanted for myself, for living with Xray configs and moving between many servers. If you've felt the same friction, it's probably the client you wanted too.
 
 ## Install
 
@@ -62,7 +68,7 @@ Connectivity
    | Windows, x86-64 | `masir_<version>_windows_amd64.zip` |
    | Windows, ARM64 | `masir_<version>_windows_arm64.zip` |
 
-   Each archive holds the `masir` executable plus `geosite.dat` and `geoip.dat`; Windows archives also carry `wintun.dll`, the driver TUN mode uses. Keep the files together.
+   Each archive holds the `masir` executable plus `geosite.dat` and `geoip.dat`. Keep the three files together. (On Windows, the [Wintun](https://www.wintun.net) driver TUN mode needs is built into `masir.exe`.)
 
 2. Put them in a folder on your `PATH`, for example:
 
@@ -246,7 +252,7 @@ The API covers everything the CLI does and more: custom inbounds and outbounds, 
 | System service | launchd | systemd | Windows service |
 | Updates | yes | yes | yes |
 
-On Windows, TUN runs on the [Wintun](https://www.wintun.net) driver that ships in the release archive, and masir keeps DNS queries inside the tunnel with Xray's Windows Filtering Platform rules, so lookups can't leak through other network adapters. Windows TUN support is new: if something doesn't work on your setup, please open an issue with the output of `masir logs`.
+On Windows, TUN runs on the [Wintun](https://www.wintun.net) driver, built into `masir.exe` and written beside the service's copy when it starts, and masir keeps DNS queries inside the tunnel with Xray's Windows Filtering Platform rules, so lookups can't leak through other network adapters. Windows TUN support is new: if something doesn't work on your setup, please open an issue with the output of `masir logs`.
 
 ## Building from source
 
