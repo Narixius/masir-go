@@ -1,8 +1,8 @@
-go 1.26.4
+go 1.27.2
 
 use (
-	./apps/masir-cli
-	./apps/masir-daemon
+	./apps/masir
+	./apps/masird
 	./libs/masir-core
 	./libs/masir-proto
 )

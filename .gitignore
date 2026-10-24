@@ -1,0 +1,7 @@
+dist
+outbound.json
+
+# binaries from `go build` run inside an app directory
+apps/masir/masir
+apps/masird/masird
+*.exe
