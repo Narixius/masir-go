@@ -1,6 +1,6 @@
-# Builds masir and masird for each OS and architecture and publishes them, bundled
-# with geo data, as a GitHub release. masird's updater picks archives by these names
-# (see apps/masird/internal/update).
+# Builds masir (a single executable: the CLI and, as `masir daemon run`, the daemon)
+# for each OS and architecture and publishes it, bundled with geo data, as a GitHub
+# release. The updater picks archives by these names (see libs/masir-daemon/internal/update).
 version: 2
 project_name: masir
 dist: build/release
@@ -18,18 +18,10 @@ builds:
     goarch: [amd64, arm64]
     flags: [-trimpath]
     ldflags: ["-s -w -X main.version={{ .Version }}"]
-  - id: masird
-    dir: apps/masird
-    binary: masird
-    env: [CGO_ENABLED=0]
-    goos: [darwin, linux, windows]
-    goarch: [amd64, arm64]
-    flags: [-trimpath]
-    ldflags: ["-s -w -X github.com/narixius/masir-go/apps/masird/internal/server.Version={{ .Version }}"]
 
 archives:
   - id: masir
-    ids: [masir, masird]
+    ids: [masir]
     name_template: "masir_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:

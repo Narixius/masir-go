@@ -1,6 +1,6 @@
 name: Release
 
-# Pushing a tag like v0.2.0 publishes a release; masird finds it from there.
+# Pushing a tag like v0.2.0 publishes a release; `masir update` finds it from there.
 on:
   push:
     tags: ["v*"]

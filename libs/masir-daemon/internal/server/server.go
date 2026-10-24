@@ -1,4 +1,3 @@
-// apps/masird/internal/server/server.go
 package server
 
 import (
@@ -9,11 +8,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/narixius/masir-go/apps/masird/internal/compose"
-	"github.com/narixius/masir-go/apps/masird/internal/identity"
-	"github.com/narixius/masir-go/apps/masird/internal/store"
-	"github.com/narixius/masir-go/apps/masird/internal/subs"
-	"github.com/narixius/masir-go/apps/masird/internal/xray"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/compose"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/identity"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 

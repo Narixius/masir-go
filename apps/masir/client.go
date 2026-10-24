@@ -117,7 +117,7 @@ func message(err error) string {
 		return "can't reach the masir daemon; start it with `masir daemon start`"
 	}
 	if st.Code() == codes.Unimplemented {
-		return "the running masird is older than this masir CLI. " + staleDaemonHint()
+		return "the running masir daemon is an older version than this masir. " + staleDaemonHint()
 	}
 	msg := st.Message()
 	if hint := explain(msg); hint != "" {
@@ -145,7 +145,7 @@ func explain(msg string) string {
 		return "That category isn't in the installed geo data. masir uses XTLS/Xray-rules-dat, whose geoip.dat has " +
 			"only ir, cn, ru, private and service lists (google, telegram, netflix, …); `masir rules add` lists them."
 	case strings.Contains(msg, "geosite") || strings.Contains(msg, "geoip.dat"):
-		return "geosite:/geoip: rules need geoip.dat and geosite.dat next to masird: `masir update geo` downloads them."
+		return "geosite:/geoip: rules need geoip.dat and geosite.dat next to the masir executable: `masir update geo` downloads them."
 	}
 	return ""
 }
@@ -155,11 +155,11 @@ var errReported = errors.New("reported")
 
 func fail(format string, a ...any) error { return fmt.Errorf(format, a...) }
 
-// staleDaemonHint says how to run the masird that matches this CLI: the root service
-// keeps its own copy of masird, which only `daemon enable` or `update` replaces.
+// staleDaemonHint says how to run a daemon that matches this masir: the root service
+// keeps its own copy of masir, which only `daemon enable` or `update` replaces.
 func staleDaemonHint() string {
 	if service.Installed() {
 		return "Install the new one into the service with `masir daemon enable`, or use `masir update` once a release is out."
 	}
-	return "Restart it with `masir daemon restart` so the masird next to this CLI starts."
+	return "Restart it with `masir daemon restart` to run this version."
 }

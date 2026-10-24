@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/narixius/masir-go/apps/masird/internal/xray"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

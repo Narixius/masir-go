@@ -2,7 +2,7 @@ go 1.27.2
 
 use (
 	./apps/masir
-	./apps/masird
+	./libs/masir-daemon
 	./libs/masir-core
 	./libs/masir-proto
 )

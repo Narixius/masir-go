@@ -20,6 +20,8 @@ const plistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
   <key>ProgramArguments</key>
   <array>
     <string>%s</string>
+    <string>daemon</string>
+    <string>run</string>
     <string>--user</string>
     <string>%d</string>
   </array>

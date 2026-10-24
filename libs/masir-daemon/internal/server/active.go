@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/narixius/masir-go/apps/masird/internal/subs"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 

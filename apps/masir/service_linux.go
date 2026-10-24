@@ -17,7 +17,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=%s --user %d
+ExecStart=%s daemon run --user %d
 Restart=on-failure
 
 [Install]

@@ -15,14 +15,15 @@ import (
 	"github.com/narixius/masir-go/libs/masir-core/paths"
 	"github.com/narixius/masir-go/libs/masir-core/service"
 	"github.com/narixius/masir-go/libs/masir-core/transport"
+	masird "github.com/narixius/masir-go/libs/masir-daemon"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
-// installDir holds the root service's own copy of masird: a root daemon must not run a
+// installDir holds the root service's own copy of masir: a root daemon must not run a
 // binary the user (or anything running as them) can replace.
 const installDir = "/usr/local/lib/masir"
 
-var errNoService = errors.New("installing masird as a service isn't supported on this OS yet")
+var errNoService = errors.New("installing the masir daemon as a service isn't supported on this OS yet")
 
 func daemonStart(args) error {
 	sock, err := paths.SocketPath()
@@ -104,22 +105,17 @@ func daemonDisable(args) error {
 	if err := os.RemoveAll(installDir); err != nil {
 		return err
 	}
-	ui.Success("masird service removed. It runs in the background again when masir needs it.")
+	ui.Success("The masir service is removed. The daemon runs in the background again when masir needs it.")
 	return nil
 }
 
-// daemonRun runs masird in the foreground, attached to this terminal.
+// daemonRun runs the daemon in this process, in the foreground: it's how the background
+// daemon and the root service run (both start this same executable).
 func daemonRun(a args) error {
-	bin, err := siblingBinary("masird")
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command(bin, a.pos...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return cmd.Run()
+	return masird.Run(masird.Options{User: a.str("user"), Idle: a.boolean("idle", false), Version: version})
 }
 
-// ensureDaemon starts masird in the background, as this user, unless something already
+// ensureDaemon starts the daemon in the background, as this user, unless something already
 // answers on sock (a background daemon or the root service). An idle
 // daemon keeps Xray down until masir is turned on: commands that only need the daemon
 // for subscriptions, rules or updates don't start proxying. `masir daemon start`
@@ -128,7 +124,7 @@ func ensureDaemon(sock string, idle bool) error {
 	if transport.Alive(sock) {
 		return nil
 	}
-	bin, err := siblingBinary("masird")
+	bin, err := self()
 	if err != nil {
 		return err
 	}
@@ -141,21 +137,21 @@ func ensureDaemon(sock string, idle bool) error {
 		return err
 	}
 	defer logf.Close()
-	var args []string
+	args := []string{"daemon", "run"}
 	if idle {
-		args = append(args, "-idle")
+		args = append(args, "--idle")
 	}
 	cmd := exec.Command(bin, args...)
 	cmd.Stdout, cmd.Stderr = logf, logf
 	cmd.SysProcAttr = detached()
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start masird: %w", err)
+		return fmt.Errorf("start the masir daemon: %w", err)
 	}
 	_ = cmd.Process.Release()
-	return waitFor(func() bool { return transport.Alive(sock) }, 10*time.Second, "masird didn't start; see "+logf.Name())
+	return waitFor(func() bool { return transport.Alive(sock) }, 10*time.Second, "the masir daemon didn't start; see "+logf.Name())
 }
 
-// enableService installs masird as a root service serving uid. Run as the user, it
+// enableService installs the daemon as a root service serving uid. Run as the user, it
 // re-runs itself under sudo, which asks for the password (or Touch ID).
 func enableService(uid int) error {
 	if os.Geteuid() != 0 {
@@ -167,7 +163,7 @@ func enableService(uid int) error {
 	if service.DefinitionPath() == "" {
 		return errNoService
 	}
-	src, err := siblingBinary("masird")
+	src, err := self()
 	if err != nil {
 		return err
 	}
@@ -178,7 +174,7 @@ func enableService(uid int) error {
 	if err := installService(bin, uid); err != nil {
 		return err
 	}
-	ui.Success("masird is installed as a root service. It starts at boot, and TUN mode needs no password from now on.")
+	ui.Success("masir is installed as a root service. It starts at boot, and TUN mode needs no password from now on.")
 	return nil
 }
 
@@ -233,15 +229,17 @@ func ensurePrivileged() error {
 	return nil
 }
 
-// installBinary copies masird and the geo assets beside it into installDir, root-owned.
+// installBinary copies this executable and the geo files beside it into installDir,
+// root-owned: the service must never run a binary the user can modify.
 func installBinary(src string) (string, error) {
 	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		return "", err
 	}
-	bin := filepath.Join(installDir, "masird")
+	bin := filepath.Join(installDir, "masir")
 	if err := copyFile(src, bin, 0o755); err != nil {
 		return "", err
 	}
+	os.Remove(filepath.Join(installDir, "masird")) // the separate daemon binary of earlier versions
 	for _, dat := range []string{"geoip.dat", "geosite.dat"} {
 		from := filepath.Join(filepath.Dir(src), dat)
 		if _, err := os.Stat(from); err == nil {
@@ -292,20 +290,14 @@ func sudo(argv ...string) error {
 	return nil
 }
 
-// siblingBinary finds name next to this executable, where masir and masird ship together.
-func siblingBinary(name string) (string, error) {
+// self is this executable, resolved through symlinks: masir is also the daemon, so the
+// background daemon and the service run this same file.
+func self() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
-	if exe, err = filepath.EvalSymlinks(exe); err != nil {
-		return "", err
-	}
-	p := filepath.Join(filepath.Dir(exe), name)
-	if _, err := os.Stat(p); err != nil {
-		return "", fmt.Errorf("%s not found next to %s", name, exe)
-	}
-	return p, nil
+	return filepath.EvalSymlinks(exe)
 }
 
 func waitFor(ok func() bool, timeout time.Duration, failure string) error {

@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/narixius/masir-go/apps/masird/internal/update"
-	"github.com/narixius/masir-go/apps/masird/internal/xray"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/update"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
@@ -73,12 +73,12 @@ func (s *Server) runner(t pb.UpdateTarget) (*update.Runner, error) {
 
 func (s *Server) masirTask(force bool) update.Task {
 	return update.Masir{
-		Clients:    s.clients(),
-		Current:    Version,
-		Force:      force,
-		InstallDir: s.xray.AssetDir(),
-		WorkDir:    filepath.Join(s.dir, "updates", "masir"),
-		Restart:    s.restartForUpdate,
+		Clients: s.clients(),
+		Current: Version,
+		Force:   force,
+		Binary:  executable(),
+		WorkDir: filepath.Join(s.dir, "updates", "masir"),
+		Restart: s.restartForUpdate,
 	}.Run
 }
 
@@ -248,6 +248,19 @@ func (s *Server) geoAge() (time.Duration, bool) {
 		return 0, false
 	}
 	return time.Since(fi.ModTime()), true
+}
+
+// executable is the running binary, resolved through symlinks so the file itself is
+// replaced, not a link to it.
+func executable() string {
+	p, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
 }
 
 func jobErr(err error) error {

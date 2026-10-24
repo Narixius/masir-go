@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/narixius/masir-go/apps/masird/internal/store"
-	"github.com/narixius/masir-go/apps/masird/internal/subs"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
 )
 
 const (

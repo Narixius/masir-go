@@ -20,7 +20,7 @@ jobs:
           cache-dependency-path: "**/go.sum"
       - name: Vet and test
         run: |
-          for m in apps/masir apps/masird libs/masir-core libs/masir-proto; do
+          for m in apps/masir libs/masir-daemon libs/masir-core libs/masir-proto; do
             echo "::group::$m"
             (cd "$m" && go vet ./... && go test -race ./...)
             echo "::endgroup::"

@@ -1,9 +1,11 @@
-package main
+// Package daemon is masir's daemon: it owns Xray, settings, rules and subscriptions,
+// and serves them over gRPC on a local socket. The masir CLI runs it with
+// `masir daemon run`, so masir ships as a single executable.
+package daemon
 
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -19,34 +21,45 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/narixius/masir-go/apps/masird/internal/atomicfile"
-	"github.com/narixius/masir-go/apps/masird/internal/identity"
-	"github.com/narixius/masir-go/apps/masird/internal/server"
-	"github.com/narixius/masir-go/apps/masird/internal/xray"
 	"github.com/narixius/masir-go/libs/masir-core/paths"
 	"github.com/narixius/masir-go/libs/masir-core/transport"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/identity"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/server"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
-func main() {
-	userFlag := flag.String("user", "", "when running as root, the user to serve (name or uid); defaults to SUDO_UID")
-	idle := flag.Bool("idle", false, "start with masir off and Xray down until a client turns it on, as the CLI starts masird for other work")
-	flag.Parse()
+// Options configure a daemon run.
+type Options struct {
+	// User is who a root daemon serves (name or uid); empty means SUDO_UID.
+	User string
+	// Idle starts with masir off and Xray down until a client turns it on, as the CLI
+	// starts the daemon for other work (subscriptions, rules, updates).
+	Idle bool
+	// Version is reported in status and compared against releases by the updater.
+	Version string
+}
+
+// Run serves until a signal or a client stops the daemon. After an update installs a
+// new binary, Run doesn't return: it starts the new binary in place of this process.
+func Run(opts Options) error {
+	if opts.Version != "" {
+		server.Version = opts.Version
+	}
 	// Recorded now: after an update replaces the binary, Linux would report the old,
 	// deleted file instead.
 	self, _ := os.Executable()
-	restart, stillIdle, err := run(*userFlag, *idle)
-	if err != nil {
-		log.Fatal(err)
+	restart, stillIdle, err := run(opts.User, opts.Idle)
+	if err != nil || !restart {
+		return err
 	}
-	if restart {
-		log.Println("starting the new version")
-		args := os.Args
-		if !stillIdle { // masir was turned on since; the new version must not start idle
-			args = withoutIdle(args)
-		}
-		log.Fatal(reexec(self, args))
+	log.Println("starting the new version")
+	args := os.Args
+	if !stillIdle { // masir was turned on since; the new version must not start idle
+		args = withoutIdle(args)
 	}
+	return reexec(self, args)
 }
 
 // withoutIdle drops the -idle flag from a command line.

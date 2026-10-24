@@ -16,8 +16,9 @@ import (
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
-// cmdUpdate updates masir: masird installs the new release, then this CLI updates its
-// own binary if it lives somewhere masird doesn't.
+// cmdUpdate updates masir: the daemon installs the new release over its own binary,
+// then this CLI updates itself too if it's a different copy (the root service keeps
+// its own).
 func cmdUpdate(a args) error {
 	sp := ui.Spin("Checking for updates")
 	res, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.CheckUpdateResponse, error) {
@@ -274,13 +275,13 @@ func watchUpdate(target pb.UpdateTarget) error {
 			sp.Fail(err.Error())
 			return errReported
 		}
-		sp.Stop(fmt.Sprintf("masird %s is running.", job.Version))
+		sp.Stop(fmt.Sprintf("The masir %s daemon is running.", job.Version))
 		return updateSelf(job)
 	}
 	return nil
 }
 
-// awaitDaemon waits for masird to come back running version: launchd or systemd starts
+// awaitDaemon waits for the daemon to come back running version: launchd or systemd starts
 // the service again, and a background daemon restarts itself.
 func awaitDaemon(version string) error {
 	cachedClient = nil
@@ -300,13 +301,13 @@ func awaitDaemon(version string) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	if _, err := daemon(); err != nil { // a background daemon that didn't come back: start it
-		return fmt.Errorf("masird didn't come back after the update: %v", message(err))
+		return fmt.Errorf("the daemon didn't come back after the update: %v", message(err))
 	}
 	return nil
 }
 
-// updateSelf puts the new CLI in place of this one, when masird didn't already (it
-// replaces only a masir sitting next to it).
+// updateSelf puts the new binary in place of this one, when the daemon didn't already:
+// it replaces the copy it runs from, which is a different file under the root service.
 func updateSelf(job *pb.UpdateJob) error {
 	if job.StagedDir == "" {
 		return nil
@@ -328,7 +329,7 @@ func updateSelf(job *pb.UpdateJob) error {
 		return nil
 	}
 	if err := replaceSelf(src, self); err != nil {
-		ui.Warn(fmt.Sprintf("masird is updated, but this CLI couldn't replace itself (%v). Run:\n  sudo cp %q %q", err, src, self))
+		ui.Warn(fmt.Sprintf("The daemon is updated, but this copy of masir couldn't replace itself (%v). Run:\n  sudo cp %q %q", err, src, self))
 		return nil
 	}
 	ui.Success("masir " + job.Version + " is installed.")
@@ -413,7 +414,7 @@ func jobSummary(j *pb.UpdateJob) string {
 	}
 	switch j.State {
 	case pb.UpdateState_UPDATE_STATE_UNSPECIFIED:
-		return "no update since masird started"
+		return "no update since the daemon started"
 	case pb.UpdateState_UPDATE_STATE_PAUSED:
 		return "paused at " + progressText(j) + " — `masir update resume` continues it"
 	case pb.UpdateState_UPDATE_STATE_DONE:

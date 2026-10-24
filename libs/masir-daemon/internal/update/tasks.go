@@ -18,12 +18,12 @@ import (
 
 // Masir is the job that installs a new masir release.
 type Masir struct {
-	Clients    Clients
-	Current    string // the running version
-	Force      bool   // install even when not newer
-	InstallDir string // where masird runs from; a masir CLI there is replaced too
-	WorkDir    string
-	// Restart is called once the new binaries are in place; masird then exits and
+	Clients Clients
+	Current string // the running version
+	Force   bool   // install even when not newer
+	Binary  string // the running masir executable, replaced by the new one
+	WorkDir string
+	// Restart is called once the new binary is in place; the daemon then exits and
 	// starts the new version.
 	Restart func()
 }
@@ -87,14 +87,10 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 		return err
 	}
 	r.StagedDir(staged)
-	for _, bin := range []string{exe("masird"), exe("masir")} {
-		dst := filepath.Join(m.InstallDir, bin)
-		if bin == exe("masir") && fileSize(dst) == 0 {
-			continue // no CLI beside masird; the CLI updates itself from the staged copy
-		}
-		if err := replaceFile(filepath.Join(staged, bin), dst); err != nil {
-			return fmt.Errorf("install %s: %w", bin, err)
-		}
+	// A CLI installed elsewhere (the service runs its own copy) updates itself from
+	// the staged binary.
+	if err := replaceFile(filepath.Join(staged, exe("masir")), m.Binary); err != nil {
+		return fmt.Errorf("install %s: %w", m.Binary, err)
 	}
 	r.State(pb.UpdateState_UPDATE_STATE_RESTARTING)
 	if m.Restart != nil {
@@ -260,12 +256,12 @@ func prepare(workDir, tag string) error {
 	return os.MkdirAll(filepath.Join(workDir, tag), 0o755)
 }
 
-// unpack extracts masir's binaries from a release archive into dir.
+// unpack extracts the masir binary from a release archive into dir.
 func unpack(archive, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	want := map[string]bool{exe("masir"): true, exe("masird"): true}
+	want := map[string]bool{exe("masir"): true}
 	found := 0
 	extract := func(name string, r io.Reader) error {
 		base := filepath.Base(name)
@@ -328,7 +324,7 @@ func unpack(archive, dir string) error {
 		}
 	}
 	if found < len(want) {
-		return errors.New("the release archive is missing masir or masird")
+		return errors.New("the release archive has no masir binary")
 	}
 	return nil
 }

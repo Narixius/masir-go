@@ -1,4 +1,4 @@
-module github.com/narixius/masir-go/apps/masird
+module github.com/narixius/masir-go/libs/masir-daemon
 
 go 1.27.2
 

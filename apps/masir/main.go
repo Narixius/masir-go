@@ -78,7 +78,7 @@ func rootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "masir",
 		Short: "Proxy manager for Xray",
-		Long:  "Proxy manager for Xray: subscriptions, routing rules, and a system-wide TUN, run by the masird daemon.",
+		Long:  "Proxy manager for Xray: subscriptions, routing rules, and a system-wide TUN, run by its daemon (`masir daemon`).",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "masir %s\n", cmd.Root().Version)
@@ -221,9 +221,10 @@ func rootCmd() *cobra.Command {
 	enable.Aliases = []string{"install"}
 	disable := leaf("disable", "Remove the root service; asks for sudo", daemonDisable, cobra.NoArgs)
 	disable.Aliases = []string{"uninstall"}
-	runDaemon := leaf("run", "Run the daemon in the foreground", daemonRun, cobra.ArbitraryArgs)
-	runDaemon.Hidden = true
-	runDaemon.DisableFlagParsing = true // everything goes to masird as is
+	runDaemon := leaf("run", "Run the daemon in the foreground", daemonRun, cobra.NoArgs,
+		flagSpec{names: []string{"user"}, help: "As root: the user to serve (name or uid); default SUDO_UID"},
+		flagSpec{names: []string{"idle"}, bool: true, help: "Start with masir off and Xray down until it's turned on"})
+	runDaemon.Hidden = true // the background daemon and the service run this
 	daemonGroup := group("daemon", "Manage the masir daemon",
 		leaf("start", "Start the daemon in the background", daemonStart, cobra.NoArgs),
 		leaf("stop", "Stop the daemon", daemonStop, cobra.NoArgs),
@@ -268,7 +269,7 @@ func rootCmd() *cobra.Command {
 		leaf("logs", "Follow the daemon's log", cmdLogs, cobra.NoArgs),
 		daemonGroup, updateCmd, getConfig,
 		leaf("menu", "Pick a command from an interactive menu", func(args) error { return menu() }, cobra.NoArgs),
-		leaf("version", "Print the versions of masir, masird and Xray", cmdVersion, cobra.NoArgs))
+		leaf("version", "Print the versions of masir, its daemon and Xray", cmdVersion, cobra.NoArgs))
 	return root
 }
 
@@ -313,7 +314,7 @@ func cmdVersion(args) error {
 		ctx, cancel := rpc()
 		defer cancel()
 		if res, err := c.GetStatus(ctx, nil); err == nil {
-			fmt.Printf("masird %s\nxray-core %s\n", res.Status.Version, res.Status.XrayVersion)
+			fmt.Printf("daemon %s\nxray-core %s\n", res.Status.Version, res.Status.XrayVersion)
 		}
 	}
 	return nil

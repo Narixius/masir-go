@@ -131,18 +131,17 @@ func wait(t *testing.T, r *Runner) *pb.UpdateJob {
 func TestMasirUpdateInstallsAndRestarts(t *testing.T) {
 	gh := newFakeGitHub(t)
 	name := ArchiveName("v0.2.0", runtime.GOOS, runtime.GOARCH)
-	arc := archive(t, name, map[string]string{exe("masir"): "new cli", exe("masird"): "new daemon", "README.md": "x"})
+	arc := archive(t, name, map[string]string{exe("masir"): "new masir", "geosite.dat": "x"})
 	gh.publish(ReleaseRepo, "v0.2.0", map[string][]byte{
 		name:            arc,
 		"checksums.txt": []byte(fmt.Sprintf("%s  %s\n%s  other.tar.gz\n", sum(arc), name, strings.Repeat("0", 64))),
 	})
 
-	install := t.TempDir()
-	os.WriteFile(filepath.Join(install, exe("masird")), []byte("old daemon"), 0o755)
-	os.WriteFile(filepath.Join(install, exe("masir")), []byte("old cli"), 0o755)
+	bin := filepath.Join(t.TempDir(), exe("masir"))
+	os.WriteFile(bin, []byte("old masir"), 0o755)
 	var restarted atomic.Bool
 	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, t.TempDir())
-	task := Masir{Clients: clients(), Current: "0.1.0", InstallDir: install, WorkDir: r.workDir, Restart: func() { restarted.Store(true) }}
+	task := Masir{Clients: clients(), Current: "0.1.0", Binary: bin, WorkDir: r.workDir, Restart: func() { restarted.Store(true) }}
 	if _, err := r.Start(task.Run); err != nil {
 		t.Fatal(err)
 	}
@@ -150,15 +149,16 @@ func TestMasirUpdateInstallsAndRestarts(t *testing.T) {
 	if job.State != pb.UpdateState_UPDATE_STATE_RESTARTING || job.Error != "" {
 		t.Fatalf("job = %v (%s)", job.State, job.Error)
 	}
-	for bin, want := range map[string]string{exe("masird"): "new daemon", exe("masir"): "new cli"} {
-		if got, _ := os.ReadFile(filepath.Join(install, bin)); string(got) != want {
-			t.Errorf("%s = %q, want %q", bin, got, want)
-		}
+	if got, _ := os.ReadFile(bin); string(got) != "new masir" {
+		t.Errorf("the running binary = %q, want the new one", got)
+	}
+	if fi, _ := os.Stat(bin); fi.Mode().Perm()&0o100 == 0 && runtime.GOOS != "windows" {
+		t.Error("the new binary must be executable")
 	}
 	if !restarted.Load() || job.Version != "v0.2.0" || job.BytesDone != int64(len(arc)) {
 		t.Errorf("restarted=%v version=%q bytes=%d/%d", restarted.Load(), job.Version, job.BytesDone, len(arc))
 	}
-	if staged, _ := os.ReadFile(filepath.Join(job.StagedDir, exe("masir"))); string(staged) != "new cli" {
+	if staged, _ := os.ReadFile(filepath.Join(job.StagedDir, exe("masir"))); string(staged) != "new masir" {
 		t.Error("the staged CLI is where the job says")
 	}
 
@@ -179,18 +179,18 @@ func TestMasirUpdateInstallsAndRestarts(t *testing.T) {
 func TestMasirUpdateRejectsATamperedArchive(t *testing.T) {
 	gh := newFakeGitHub(t)
 	name := ArchiveName("v0.2.0", runtime.GOOS, runtime.GOARCH)
-	arc := archive(t, name, map[string]string{exe("masir"): "x", exe("masird"): "y"})
+	arc := archive(t, name, map[string]string{exe("masir"): "x"})
 	gh.publish(ReleaseRepo, "v0.2.0", map[string][]byte{name: arc, "checksums.txt": []byte(strings.Repeat("a", 64) + "  " + name)})
 
-	install := t.TempDir()
-	os.WriteFile(filepath.Join(install, exe("masird")), []byte("old daemon"), 0o755)
+	bin := filepath.Join(t.TempDir(), exe("masir"))
+	os.WriteFile(bin, []byte("old masir"), 0o755)
 	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, t.TempDir())
-	r.Start(Masir{Clients: clients(), Current: "0.1.0", InstallDir: install, WorkDir: r.workDir}.Run)
+	r.Start(Masir{Clients: clients(), Current: "0.1.0", Binary: bin, WorkDir: r.workDir}.Run)
 	job := wait(t, r)
 	if job.State != pb.UpdateState_UPDATE_STATE_FAILED || !strings.Contains(job.Error, "checksum") {
 		t.Fatalf("job = %v %q", job.State, job.Error)
 	}
-	if got, _ := os.ReadFile(filepath.Join(install, exe("masird"))); string(got) != "old daemon" {
+	if got, _ := os.ReadFile(bin); string(got) != "old masir" {
 		t.Error("a failed verification must leave the installed binary alone")
 	}
 }

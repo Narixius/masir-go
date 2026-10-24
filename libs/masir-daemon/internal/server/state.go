@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/narixius/masir-go/apps/masird/internal/atomicfile"
-	"github.com/narixius/masir-go/apps/masird/internal/compose"
-	"github.com/narixius/masir-go/apps/masird/internal/store"
-	"github.com/narixius/masir-go/apps/masird/internal/subs"
-	"github.com/narixius/masir-go/apps/masird/internal/xray"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/compose"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

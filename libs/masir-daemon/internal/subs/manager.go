@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/narixius/masir-go/apps/masird/internal/atomicfile"
-	"github.com/narixius/masir-go/apps/masird/internal/xray"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 )
 
 const (

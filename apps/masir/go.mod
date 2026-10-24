@@ -1,13 +1,18 @@
 module github.com/narixius/masir-go/apps/masir
 
-go 1.26.4
+go 1.27.2
 
 require (
 	github.com/charmbracelet/fang v1.0.0
+	github.com/narixius/masir-go/libs/masir-core v0.0.0
+	github.com/narixius/masir-go/libs/masir-daemon v0.0.0
+	github.com/narixius/masir-go/libs/masir-proto v0.0.0
 	github.com/orochaa/go-clack v0.1.21
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800
+	golang.org/x/sys v0.49.0
+	golang.org/x/term v0.47.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 )
@@ -15,6 +20,8 @@ require (
 require (
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251106193318-19329a3e8410 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/andybalholm/brotli v1.2.6 // indirect
+	github.com/apernet/quic-go v0.63.1-0.20261004180939-a10df75c260c // indirect
 	github.com/charmbracelet/colorprofile v0.3.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20251106190538-99ea45596692 // indirect
 	github.com/charmbracelet/x/ansi v0.11.0 // indirect
@@ -25,27 +32,64 @@ require (
 	github.com/clipperhouse/displaywidth v0.4.1 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
+	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344 // indirect
+	github.com/go-typeset/bidi v0.3.1 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jackpal/go-nat-pmp v1.1.0 // indirect
+	github.com/juju/ratelimit v1.0.2 // indirect
+	github.com/klauspost/compress v1.20.3 // indirect
+	github.com/klauspost/cpuid/v2 v2.4.1 // indirect
+	github.com/koron/go-ssdp v0.9.1 // indirect
+	github.com/libp2p/go-nat v1.0.1-0.20250821073202-01afc089f138 // indirect
+	github.com/libp2p/go-netroute v0.4.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
+	github.com/metacubex/age v0.0.0-20260603010618-28d156b4ea78 // indirect
+	github.com/metacubex/hkdf v0.1.0 // indirect
+	github.com/metacubex/hpke v0.1.0 // indirect
+	github.com/metacubex/mlkem v0.1.0 // indirect
+	github.com/miekg/dns v1.1.73 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/mango v0.1.0 // indirect
 	github.com/muesli/mango-cobra v1.2.0 // indirect
 	github.com/muesli/mango-pflag v0.1.0 // indirect
 	github.com/muesli/roff v0.1.0 // indirect
+	github.com/pelletier/go-toml v1.9.5 // indirect
+	github.com/pion/dtls/v3 v3.1.14 // indirect
+	github.com/pion/logging v0.2.4 // indirect
+	github.com/pion/stun/v3 v3.1.7 // indirect
+	github.com/pion/transport/v4 v4.1.1 // indirect
+	github.com/pion/transport/v5 v5.1.1 // indirect
+	github.com/pires/go-proxyproto v0.15.0 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
+	github.com/refraction-networking/utls v1.8.3-0.20260301010127-aa6edf4b11af // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/vishvananda/netlink v1.3.1 // indirect
+	github.com/vishvananda/netns v0.0.5 // indirect
+	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
-)
-
-require (
-	github.com/go-typeset/bidi v0.3.1 // indirect
-	github.com/narixius/masir-go/libs/masir-core v0.0.0
-	github.com/narixius/masir-go/libs/masir-proto v0.0.0
-	golang.org/x/sys v0.49.0
-	golang.org/x/term v0.45.0
+	github.com/xtls/libxray v1.261021.0 // indirect
+	github.com/xtls/reality v0.0.0-20261014101318-83f621788ca8 // indirect
+	github.com/xtls/xray-core v1.260327.1-0.20261021115930-1b1647cd9ddf // indirect
+	github.com/yuin/gopher-lua v1.1.2 // indirect
+	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
+	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20261020153306-9f2b28d4331a // indirect
+	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
+	golang.org/x/mod v0.42.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
+	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f // indirect
+	golang.zx2c4.com/wireguard/windows v1.1.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
+	layeh.com/gopher-luar v1.0.11 // indirect
+	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
 replace github.com/orochaa/go-clack => github.com/Narixius/go-clack v0.1.22-0.20261024213753-964c3673406c
@@ -53,3 +97,5 @@ replace github.com/orochaa/go-clack => github.com/Narixius/go-clack v0.1.22-0.20
 replace github.com/narixius/masir-go/libs/masir-core => ../../libs/masir-core
 
 replace github.com/narixius/masir-go/libs/masir-proto => ../../libs/masir-proto
+
+replace github.com/narixius/masir-go/libs/masir-daemon => ../../libs/masir-daemon

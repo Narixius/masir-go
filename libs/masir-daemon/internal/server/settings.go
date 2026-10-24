@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/narixius/masir-go/apps/masird/internal/store"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
