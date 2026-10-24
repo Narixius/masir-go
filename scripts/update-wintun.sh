@@ -1,13 +1,13 @@
 #!/bin/sh
-# Downloads Wintun, which Xray's TUN needs on Windows, into build/wintun/<arch>, for the
-# Windows release archives. The archive is pinned by its SHA-256 as published on
-# wintun.net. Its license allows shipping wintun.dll alongside software that uses it
-# only through the Wintun API, as Xray does; the license ships with it.
+# Refreshes the Wintun driver embedded in masir.exe (Xray's TUN loads it on Windows) in
+# libs/masir-daemon/internal/wintun. Run it when moving to a new Wintun release, then
+# update version and sha256 below to what wintun.net publishes. Its license allows
+# shipping wintun.dll with software that uses only the Wintun API, as Xray does.
 set -eu
 
 version=0.14.1
 sha256=07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51
-out=build/wintun
+out=libs/masir-daemon/internal/wintun
 mkdir -p "$out"
 
 zip="$out/wintun-$version.zip"
@@ -25,9 +25,8 @@ fi
 rm -rf "$out/x"
 unzip -q "$zip" -d "$out/x"
 for arch in amd64 arm64; do
-	mkdir -p "$out/$arch"
-	cp "$out/x/wintun/bin/$arch/wintun.dll" "$out/$arch/wintun.dll"
-	cp "$out/x/wintun/LICENSE.txt" "$out/$arch/wintun-LICENSE.txt"
+	cp "$out/x/wintun/bin/$arch/wintun.dll" "$out/wintun_$arch.dll"
 done
+cp "$out/x/wintun/LICENSE.txt" "$out/LICENSE.txt"
 rm -rf "$out/x" "$zip"
 echo "wintun $version ok"

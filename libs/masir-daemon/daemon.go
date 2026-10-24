@@ -26,6 +26,7 @@ import (
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/identity"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/server"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/wintun"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
@@ -116,6 +117,11 @@ func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle
 		return false, false, err
 	}
 
+	if id.Privileged { // only a privileged daemon can bring TUN up; Windows needs Wintun for it
+		if err := wintun.Ensure(assetDir()); err != nil {
+			log.Printf("write wintun.dll beside the executable: %v", err)
+		}
+	}
 	xc := xray.New(assetDir())
 	defer xc.Close() // tears down the TUN and the proxy on every exit path
 	daemon := server.New(xc, id)

@@ -131,7 +131,7 @@ func wait(t *testing.T, r *Runner) *pb.UpdateJob {
 func TestMasirUpdateInstallsAndRestarts(t *testing.T) {
 	gh := newFakeGitHub(t)
 	name := ArchiveName("v0.2.0", runtime.GOOS, runtime.GOARCH)
-	arc := archive(t, name, map[string]string{exe("masir"): "new masir", "geosite.dat": "x", "wintun.dll": "driver"})
+	arc := archive(t, name, map[string]string{exe("masir"): "new masir", "geosite.dat": "x"})
 	gh.publish(ReleaseRepo, "v0.2.0", map[string][]byte{
 		name:            arc,
 		"checksums.txt": []byte(fmt.Sprintf("%s  %s\n%s  other.tar.gz\n", sum(arc), name, strings.Repeat("0", 64))),
@@ -157,9 +157,6 @@ func TestMasirUpdateInstallsAndRestarts(t *testing.T) {
 	}
 	if !restarted.Load() || job.Version != "v0.2.0" || job.BytesDone != int64(len(arc)) {
 		t.Errorf("restarted=%v version=%q bytes=%d/%d", restarted.Load(), job.Version, job.BytesDone, len(arc))
-	}
-	if dll, _ := os.ReadFile(filepath.Join(filepath.Dir(bin), "wintun.dll")); string(dll) != "driver" {
-		t.Error("wintun.dll in the archive is installed beside the binary")
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(bin), "geosite.dat")); err == nil {
 		t.Error("geo data is the geo job's business, not the masir update's")

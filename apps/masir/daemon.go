@@ -221,9 +221,9 @@ func ensurePrivileged() error {
 	return nil
 }
 
-// installBinary copies this executable and the files that ship beside it (geo data,
-// and wintun.dll on Windows) into installDir(), which only root or Administrators can
-// change: the service must never run a binary the user can modify.
+// installBinary copies this executable and the geo data beside it into installDir(),
+// which only root or Administrators can change: the service must never run a binary
+// the user can modify. (On Windows the service writes the Wintun driver it embeds.)
 func installBinary(src string) (string, error) {
 	dir := installDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -239,7 +239,7 @@ func installBinary(src string) (string, error) {
 		return "", err
 	}
 	os.Remove(filepath.Join(dir, "masird")) // the separate daemon binary of earlier versions
-	for _, f := range []string{"geoip.dat", "geosite.dat", "wintun.dll"} {
+	for _, f := range []string{"geoip.dat", "geosite.dat"} {
 		from := filepath.Join(filepath.Dir(src), f)
 		if _, err := os.Stat(from); err == nil {
 			if err := copyFile(from, filepath.Join(dir, f), 0o644); err != nil {

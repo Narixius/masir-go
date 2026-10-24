@@ -142,8 +142,8 @@ func explain(msg string) string {
 	case strings.Contains(msg, "operation not permitted") && strings.Contains(msg, "tun"):
 		return "TUN needs the daemon to run as root: `masir daemon enable` sets that up."
 	case strings.Contains(msg, "wintun.dll"):
-		return "TUN on Windows needs wintun.dll next to masir.exe. It ships in the Windows release archive: " +
-			"put it beside masir.exe, then run `masir daemon enable` to copy it into the service."
+		return "TUN on Windows needs wintun.dll beside masir.exe; the service writes it there from masir.exe " +
+			"when it starts. Reinstall the service with `masir daemon enable` and see `masir logs` if this persists."
 	case strings.Contains(msg, "failed to load code") || strings.Contains(msg, "failed to check code"):
 		return "That category isn't in the installed geo data. masir uses XTLS/Xray-rules-dat, whose geoip.dat has " +
 			"only ir, cn, ru, private and service lists (google, telegram, netflix, …); `masir rules add` lists them."
