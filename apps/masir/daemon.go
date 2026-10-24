@@ -34,7 +34,7 @@ func daemonStart(args) error {
 		return nil
 	}
 	s := ui.Spin("Starting the masir daemon")
-	if err := ensureDaemon(sock); err != nil {
+	if err := ensureDaemon(sock, false); err != nil {
 		s.Fail(err.Error())
 		return errReported
 	}
@@ -120,8 +120,11 @@ func daemonRun(a args) error {
 }
 
 // ensureDaemon starts masird in the background, as this user, unless something already
-// answers on sock (a background daemon or the root service).
-func ensureDaemon(sock string) error {
+// answers on sock (a background daemon or the root service). An idle
+// daemon keeps Xray down until masir is turned on: commands that only need the daemon
+// for subscriptions, rules or updates don't start proxying. `masir daemon start`
+// starts it normally, following the saved settings.
+func ensureDaemon(sock string, idle bool) error {
 	if transport.Alive(sock) {
 		return nil
 	}
@@ -138,7 +141,11 @@ func ensureDaemon(sock string) error {
 		return err
 	}
 	defer logf.Close()
-	cmd := exec.Command(bin)
+	var args []string
+	if idle {
+		args = append(args, "-idle")
+	}
+	cmd := exec.Command(bin, args...)
 	cmd.Stdout, cmd.Stderr = logf, logf
 	cmd.SysProcAttr = detached()
 	if err := cmd.Start(); err != nil {

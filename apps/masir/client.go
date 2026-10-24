@@ -17,6 +17,7 @@ import (
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
 	"github.com/narixius/masir-go/libs/masir-core/paths"
+	"github.com/narixius/masir-go/libs/masir-core/service"
 	"github.com/narixius/masir-go/libs/masir-core/transport"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
@@ -32,7 +33,7 @@ func daemon() (pb.DaemonServiceClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureDaemon(sock); err != nil {
+	if err := ensureDaemon(sock, true); err != nil { // idle: only `masir connect` starts Xray
 		return nil, err
 	}
 	return dial(sock)
@@ -115,6 +116,9 @@ func message(err error) string {
 	if st.Code() == codes.Unavailable && strings.Contains(st.Message(), "connection error") {
 		return "can't reach the masir daemon; start it with `masir daemon start`"
 	}
+	if st.Code() == codes.Unimplemented {
+		return "the running masird is older than this masir CLI. " + staleDaemonHint()
+	}
 	msg := st.Message()
 	if hint := explain(msg); hint != "" {
 		return msg + "\n" + hint
@@ -147,3 +151,12 @@ func explain(msg string) string {
 var errReported = errors.New("reported")
 
 func fail(format string, a ...any) error { return fmt.Errorf(format, a...) }
+
+// staleDaemonHint says how to run the masird that matches this CLI: the root service
+// keeps its own copy of masird, which only `daemon enable` or `update` replaces.
+func staleDaemonHint() string {
+	if service.Installed() {
+		return "Install the new one into the service with `masir daemon enable`, or use `masir update` once a release is out."
+	}
+	return "Restart it with `masir daemon restart` so the masird next to this CLI starts."
+}
