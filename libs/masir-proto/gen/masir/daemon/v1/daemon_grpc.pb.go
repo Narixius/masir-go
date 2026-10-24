@@ -55,6 +55,12 @@ const (
 	DaemonService_TestSubscriptionLatency_FullMethodName = "/masir.daemon.v1.DaemonService/TestSubscriptionLatency"
 	DaemonService_SelectConfig_FullMethodName            = "/masir.daemon.v1.DaemonService/SelectConfig"
 	DaemonService_GetActiveConfig_FullMethodName         = "/masir.daemon.v1.DaemonService/GetActiveConfig"
+	DaemonService_CheckUpdate_FullMethodName             = "/masir.daemon.v1.DaemonService/CheckUpdate"
+	DaemonService_StartUpdate_FullMethodName             = "/masir.daemon.v1.DaemonService/StartUpdate"
+	DaemonService_PauseUpdate_FullMethodName             = "/masir.daemon.v1.DaemonService/PauseUpdate"
+	DaemonService_ResumeUpdate_FullMethodName            = "/masir.daemon.v1.DaemonService/ResumeUpdate"
+	DaemonService_StopUpdate_FullMethodName              = "/masir.daemon.v1.DaemonService/StopUpdate"
+	DaemonService_WatchUpdate_FullMethodName             = "/masir.daemon.v1.DaemonService/WatchUpdate"
 )
 
 // DaemonServiceClient is the client API for DaemonService service.
@@ -107,6 +113,15 @@ type DaemonServiceClient interface {
 	// active proxy
 	SelectConfig(ctx context.Context, in *SelectConfigRequest, opts ...grpc.CallOption) (*SelectConfigResponse, error)
 	GetActiveConfig(ctx context.Context, in *GetActiveConfigRequest, opts ...grpc.CallOption) (*GetActiveConfigResponse, error)
+	// Updates run as jobs in the daemon, one per target, so any UI can show progress
+	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading.
+	CheckUpdate(ctx context.Context, in *CheckUpdateRequest, opts ...grpc.CallOption) (*CheckUpdateResponse, error)
+	StartUpdate(ctx context.Context, in *StartUpdateRequest, opts ...grpc.CallOption) (*StartUpdateResponse, error)
+	PauseUpdate(ctx context.Context, in *PauseUpdateRequest, opts ...grpc.CallOption) (*PauseUpdateResponse, error)
+	ResumeUpdate(ctx context.Context, in *ResumeUpdateRequest, opts ...grpc.CallOption) (*ResumeUpdateResponse, error)
+	StopUpdate(ctx context.Context, in *StopUpdateRequest, opts ...grpc.CallOption) (*StopUpdateResponse, error)
+	// WatchUpdate sends the job's state now and on every change, until it finishes.
+	WatchUpdate(ctx context.Context, in *WatchUpdateRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchUpdateResponse], error)
 }
 
 type daemonServiceClient struct {
@@ -504,6 +519,75 @@ func (c *daemonServiceClient) GetActiveConfig(ctx context.Context, in *GetActive
 	return out, nil
 }
 
+func (c *daemonServiceClient) CheckUpdate(ctx context.Context, in *CheckUpdateRequest, opts ...grpc.CallOption) (*CheckUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckUpdateResponse)
+	err := c.cc.Invoke(ctx, DaemonService_CheckUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) StartUpdate(ctx context.Context, in *StartUpdateRequest, opts ...grpc.CallOption) (*StartUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartUpdateResponse)
+	err := c.cc.Invoke(ctx, DaemonService_StartUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) PauseUpdate(ctx context.Context, in *PauseUpdateRequest, opts ...grpc.CallOption) (*PauseUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PauseUpdateResponse)
+	err := c.cc.Invoke(ctx, DaemonService_PauseUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) ResumeUpdate(ctx context.Context, in *ResumeUpdateRequest, opts ...grpc.CallOption) (*ResumeUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResumeUpdateResponse)
+	err := c.cc.Invoke(ctx, DaemonService_ResumeUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) StopUpdate(ctx context.Context, in *StopUpdateRequest, opts ...grpc.CallOption) (*StopUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StopUpdateResponse)
+	err := c.cc.Invoke(ctx, DaemonService_StopUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) WatchUpdate(ctx context.Context, in *WatchUpdateRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchUpdateResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[3], DaemonService_WatchUpdate_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchUpdateRequest, WatchUpdateResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_WatchUpdateClient = grpc.ServerStreamingClient[WatchUpdateResponse]
+
 // DaemonServiceServer is the server API for DaemonService service.
 // All implementations must embed UnimplementedDaemonServiceServer
 // for forward compatibility.
@@ -554,6 +638,15 @@ type DaemonServiceServer interface {
 	// active proxy
 	SelectConfig(context.Context, *SelectConfigRequest) (*SelectConfigResponse, error)
 	GetActiveConfig(context.Context, *GetActiveConfigRequest) (*GetActiveConfigResponse, error)
+	// Updates run as jobs in the daemon, one per target, so any UI can show progress
+	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading.
+	CheckUpdate(context.Context, *CheckUpdateRequest) (*CheckUpdateResponse, error)
+	StartUpdate(context.Context, *StartUpdateRequest) (*StartUpdateResponse, error)
+	PauseUpdate(context.Context, *PauseUpdateRequest) (*PauseUpdateResponse, error)
+	ResumeUpdate(context.Context, *ResumeUpdateRequest) (*ResumeUpdateResponse, error)
+	StopUpdate(context.Context, *StopUpdateRequest) (*StopUpdateResponse, error)
+	// WatchUpdate sends the job's state now and on every change, until it finishes.
+	WatchUpdate(*WatchUpdateRequest, grpc.ServerStreamingServer[WatchUpdateResponse]) error
 	mustEmbedUnimplementedDaemonServiceServer()
 }
 
@@ -671,6 +764,24 @@ func (UnimplementedDaemonServiceServer) SelectConfig(context.Context, *SelectCon
 }
 func (UnimplementedDaemonServiceServer) GetActiveConfig(context.Context, *GetActiveConfigRequest) (*GetActiveConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetActiveConfig not implemented")
+}
+func (UnimplementedDaemonServiceServer) CheckUpdate(context.Context, *CheckUpdateRequest) (*CheckUpdateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckUpdate not implemented")
+}
+func (UnimplementedDaemonServiceServer) StartUpdate(context.Context, *StartUpdateRequest) (*StartUpdateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartUpdate not implemented")
+}
+func (UnimplementedDaemonServiceServer) PauseUpdate(context.Context, *PauseUpdateRequest) (*PauseUpdateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PauseUpdate not implemented")
+}
+func (UnimplementedDaemonServiceServer) ResumeUpdate(context.Context, *ResumeUpdateRequest) (*ResumeUpdateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeUpdate not implemented")
+}
+func (UnimplementedDaemonServiceServer) StopUpdate(context.Context, *StopUpdateRequest) (*StopUpdateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopUpdate not implemented")
+}
+func (UnimplementedDaemonServiceServer) WatchUpdate(*WatchUpdateRequest, grpc.ServerStreamingServer[WatchUpdateResponse]) error {
+	return status.Error(codes.Unimplemented, "method WatchUpdate not implemented")
 }
 func (UnimplementedDaemonServiceServer) mustEmbedUnimplementedDaemonServiceServer() {}
 func (UnimplementedDaemonServiceServer) testEmbeddedByValue()                       {}
@@ -1320,6 +1431,107 @@ func _DaemonService_GetActiveConfig_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DaemonService_CheckUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).CheckUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_CheckUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).CheckUpdate(ctx, req.(*CheckUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_StartUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).StartUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_StartUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).StartUpdate(ctx, req.(*StartUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_PauseUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).PauseUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_PauseUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).PauseUpdate(ctx, req.(*PauseUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_ResumeUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).ResumeUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_ResumeUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).ResumeUpdate(ctx, req.(*ResumeUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_StopUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).StopUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_StopUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).StopUpdate(ctx, req.(*StopUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_WatchUpdate_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchUpdateRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(DaemonServiceServer).WatchUpdate(m, &grpc.GenericServerStream[WatchUpdateRequest, WatchUpdateResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_WatchUpdateServer = grpc.ServerStreamingServer[WatchUpdateResponse]
+
 // DaemonService_ServiceDesc is the grpc.ServiceDesc for DaemonService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1459,6 +1671,26 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetActiveConfig",
 			Handler:    _DaemonService_GetActiveConfig_Handler,
 		},
+		{
+			MethodName: "CheckUpdate",
+			Handler:    _DaemonService_CheckUpdate_Handler,
+		},
+		{
+			MethodName: "StartUpdate",
+			Handler:    _DaemonService_StartUpdate_Handler,
+		},
+		{
+			MethodName: "PauseUpdate",
+			Handler:    _DaemonService_PauseUpdate_Handler,
+		},
+		{
+			MethodName: "ResumeUpdate",
+			Handler:    _DaemonService_ResumeUpdate_Handler,
+		},
+		{
+			MethodName: "StopUpdate",
+			Handler:    _DaemonService_StopUpdate_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -1474,6 +1706,11 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "TestSubscriptionLatency",
 			Handler:       _DaemonService_TestSubscriptionLatency_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "WatchUpdate",
+			Handler:       _DaemonService_WatchUpdate_Handler,
 			ServerStreams: true,
 		},
 	},

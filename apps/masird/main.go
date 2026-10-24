@@ -31,19 +31,29 @@ import (
 func main() {
 	userFlag := flag.String("user", "", "when running as root, the user to serve (name or uid); defaults to SUDO_UID")
 	flag.Parse()
-	if err := run(*userFlag); err != nil {
+	// Recorded now: after an update replaces the binary, Linux would report the old,
+	// deleted file instead.
+	self, _ := os.Executable()
+	restart, err := run(*userFlag)
+	if err != nil {
 		log.Fatal(err)
+	}
+	if restart {
+		log.Println("starting the new version")
+		log.Fatal(reexec(self))
 	}
 }
 
-func run(userFlag string) error {
+// run serves until asked to stop. It reports whether to start the binary again, after
+// an update installed a new one; by then the TUN and proxy are already torn down.
+func run(userFlag string) (bool, error) {
 	id, err := identity.Resolve(userFlag)
 	if err != nil {
-		return err
+		return false, err
 	}
 	dir, err := configDir(id)
 	if err != nil {
-		return err
+		return false, err
 	}
 	sock := paths.SocketPathIn(dir)
 
@@ -52,12 +62,12 @@ func run(userFlag string) error {
 
 	if transport.Alive(sock) {
 		if err := takeOver(ctx, sock, id); err != nil {
-			return err
+			return false, err
 		}
 	}
 	lis, err := transport.Listen(sock, id.UID, id.GID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	xc := xray.New(assetDir())
@@ -65,7 +75,7 @@ func run(userFlag string) error {
 	daemon := server.New(xc, id)
 	if err := daemon.Boot(ctx, dir); err != nil {
 		lis.Close()
-		return err
+		return false, err
 	}
 
 	srv := grpc.NewServer()
@@ -82,7 +92,10 @@ func run(userFlag string) error {
 	}()
 
 	log.Printf("serving %s (uid %d, root: %v) on %s", id.Name, id.UID, id.Privileged, sock)
-	return srv.Serve(lis)
+	if err := srv.Serve(lis); err != nil {
+		return false, err
+	}
+	return daemon.RestartRequested(), nil
 }
 
 // configDir is the served user's masir directory. As root it's derived from their home

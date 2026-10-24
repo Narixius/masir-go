@@ -18,6 +18,7 @@ import (
 
 	proxymancmd "github.com/xtls/xray-core/app/proxyman/command"
 	routercmd "github.com/xtls/xray-core/app/router/command"
+	"github.com/xtls/xray-core/common/geodata"
 	corenet "github.com/xtls/xray-core/common/net"
 	xserial "github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/common/session"
@@ -28,6 +29,8 @@ import (
 
 // Core owns the single Xray instance. Everything else in masird talks to this, never to *core.Instance.
 type Core struct {
+	assetDir string // where geoip.dat and geosite.dat live
+
 	mu      sync.RWMutex
 	inst    *core.Instance
 	conn    *grpc.ClientConn
@@ -41,7 +44,16 @@ func New(assetDir string) *Core {
 	if assetDir != "" {
 		_ = os.Setenv("XRAY_LOCATION_ASSET", assetDir)
 	}
-	return &Core{}
+	return &Core{assetDir: assetDir}
+}
+
+// AssetDir is where Xray reads geoip.dat and geosite.dat.
+func (c *Core) AssetDir() string { return c.assetDir }
+
+// ReloadGeodata makes the running Xray use new geo files. Xray caches what it loaded,
+// so rebuilding the config alone would keep the old data.
+func ReloadGeodata() error {
+	return errors.Join(geodata.IPReg.Reload(), geodata.DomainReg.Reload())
 }
 
 // Apply is the single entry point for changes. It restarts Xray or patches it live.

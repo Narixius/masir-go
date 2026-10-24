@@ -71,6 +71,128 @@ func (Fallback) EnumDescriptor() ([]byte, []int) {
 	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{0}
 }
 
+type UpdateTarget int32
+
+const (
+	UpdateTarget_UPDATE_TARGET_UNSPECIFIED UpdateTarget = 0
+	UpdateTarget_UPDATE_TARGET_MASIR       UpdateTarget = 1 // masir and masird, from this project's GitHub releases
+	UpdateTarget_UPDATE_TARGET_GEO         UpdateTarget = 2 // geosite.dat and geoip.dat, from XTLS/Xray-rules-dat
+)
+
+// Enum value maps for UpdateTarget.
+var (
+	UpdateTarget_name = map[int32]string{
+		0: "UPDATE_TARGET_UNSPECIFIED",
+		1: "UPDATE_TARGET_MASIR",
+		2: "UPDATE_TARGET_GEO",
+	}
+	UpdateTarget_value = map[string]int32{
+		"UPDATE_TARGET_UNSPECIFIED": 0,
+		"UPDATE_TARGET_MASIR":       1,
+		"UPDATE_TARGET_GEO":         2,
+	}
+)
+
+func (x UpdateTarget) Enum() *UpdateTarget {
+	p := new(UpdateTarget)
+	*p = x
+	return p
+}
+
+func (x UpdateTarget) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (UpdateTarget) Descriptor() protoreflect.EnumDescriptor {
+	return file_masir_daemon_v1_daemon_proto_enumTypes[1].Descriptor()
+}
+
+func (UpdateTarget) Type() protoreflect.EnumType {
+	return &file_masir_daemon_v1_daemon_proto_enumTypes[1]
+}
+
+func (x UpdateTarget) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use UpdateTarget.Descriptor instead.
+func (UpdateTarget) EnumDescriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{1}
+}
+
+type UpdateState int32
+
+const (
+	UpdateState_UPDATE_STATE_UNSPECIFIED UpdateState = 0 // no job has run since the daemon started
+	UpdateState_UPDATE_STATE_CHECKING    UpdateState = 1 // finding the latest release
+	UpdateState_UPDATE_STATE_DOWNLOADING UpdateState = 2
+	UpdateState_UPDATE_STATE_PAUSED      UpdateState = 3 // the partial download is kept; ResumeUpdate continues it
+	UpdateState_UPDATE_STATE_VERIFYING   UpdateState = 4 // checking SHA-256 sums
+	UpdateState_UPDATE_STATE_INSTALLING  UpdateState = 5
+	UpdateState_UPDATE_STATE_RESTARTING  UpdateState = 6 // masird is exiting to start the new version
+	UpdateState_UPDATE_STATE_DONE        UpdateState = 7
+	UpdateState_UPDATE_STATE_UP_TO_DATE  UpdateState = 8 // nothing newer to install
+	UpdateState_UPDATE_STATE_FAILED      UpdateState = 9
+	UpdateState_UPDATE_STATE_STOPPED     UpdateState = 10 // stopped by StopUpdate; the partial download is deleted
+)
+
+// Enum value maps for UpdateState.
+var (
+	UpdateState_name = map[int32]string{
+		0:  "UPDATE_STATE_UNSPECIFIED",
+		1:  "UPDATE_STATE_CHECKING",
+		2:  "UPDATE_STATE_DOWNLOADING",
+		3:  "UPDATE_STATE_PAUSED",
+		4:  "UPDATE_STATE_VERIFYING",
+		5:  "UPDATE_STATE_INSTALLING",
+		6:  "UPDATE_STATE_RESTARTING",
+		7:  "UPDATE_STATE_DONE",
+		8:  "UPDATE_STATE_UP_TO_DATE",
+		9:  "UPDATE_STATE_FAILED",
+		10: "UPDATE_STATE_STOPPED",
+	}
+	UpdateState_value = map[string]int32{
+		"UPDATE_STATE_UNSPECIFIED": 0,
+		"UPDATE_STATE_CHECKING":    1,
+		"UPDATE_STATE_DOWNLOADING": 2,
+		"UPDATE_STATE_PAUSED":      3,
+		"UPDATE_STATE_VERIFYING":   4,
+		"UPDATE_STATE_INSTALLING":  5,
+		"UPDATE_STATE_RESTARTING":  6,
+		"UPDATE_STATE_DONE":        7,
+		"UPDATE_STATE_UP_TO_DATE":  8,
+		"UPDATE_STATE_FAILED":      9,
+		"UPDATE_STATE_STOPPED":     10,
+	}
+)
+
+func (x UpdateState) Enum() *UpdateState {
+	p := new(UpdateState)
+	*p = x
+	return p
+}
+
+func (x UpdateState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (UpdateState) Descriptor() protoreflect.EnumDescriptor {
+	return file_masir_daemon_v1_daemon_proto_enumTypes[2].Descriptor()
+}
+
+func (UpdateState) Type() protoreflect.EnumType {
+	return &file_masir_daemon_v1_daemon_proto_enumTypes[2]
+}
+
+func (x UpdateState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use UpdateState.Descriptor instead.
+func (UpdateState) EnumDescriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{2}
+}
+
 // Everything a UI needs to draw the daemon's state and decide what to offer,
 // e.g. asking for root when the user wants TUN and tun_available is false.
 type Status struct {
@@ -92,12 +214,14 @@ type Status struct {
 	TunRunning   bool   `protobuf:"varint,13,opt,name=tun_running,json=tunRunning,proto3" json:"tun_running,omitempty"`
 	LastError    string `protobuf:"bytes,14,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"` // why what runs doesn't match the settings; empty when it does
 	// settings and selection
-	Settings             *Settings `protobuf:"bytes,15,opt,name=settings,proto3" json:"settings,omitempty"`
-	ActiveSubscriptionId string    `protobuf:"bytes,16,opt,name=active_subscription_id,json=activeSubscriptionId,proto3" json:"active_subscription_id,omitempty"`
-	ActiveConfigId       string    `protobuf:"bytes,17,opt,name=active_config_id,json=activeConfigId,proto3" json:"active_config_id,omitempty"`
-	ActiveConfigName     string    `protobuf:"bytes,18,opt,name=active_config_name,json=activeConfigName,proto3" json:"active_config_name,omitempty"`
-	ActiveStale          bool      `protobuf:"varint,19,opt,name=active_stale,json=activeStale,proto3" json:"active_stale,omitempty"`         // the selection is gone from its subscription; its copy keeps running
-	FellBackRules        uint32    `protobuf:"varint,20,opt,name=fell_back_rules,json=fellBackRules,proto3" json:"fell_back_rules,omitempty"` // rules whose target couldn't be used (see ListRoutingRules)
+	Settings             *Settings    `protobuf:"bytes,15,opt,name=settings,proto3" json:"settings,omitempty"`
+	ActiveSubscriptionId string       `protobuf:"bytes,16,opt,name=active_subscription_id,json=activeSubscriptionId,proto3" json:"active_subscription_id,omitempty"`
+	ActiveConfigId       string       `protobuf:"bytes,17,opt,name=active_config_id,json=activeConfigId,proto3" json:"active_config_id,omitempty"`
+	ActiveConfigName     string       `protobuf:"bytes,18,opt,name=active_config_name,json=activeConfigName,proto3" json:"active_config_name,omitempty"`
+	ActiveStale          bool         `protobuf:"varint,19,opt,name=active_stale,json=activeStale,proto3" json:"active_stale,omitempty"`         // the selection is gone from its subscription; its copy keeps running
+	FellBackRules        uint32       `protobuf:"varint,20,opt,name=fell_back_rules,json=fellBackRules,proto3" json:"fell_back_rules,omitempty"` // rules whose target couldn't be used (see ListRoutingRules)
+	LatestRelease        *ReleaseInfo `protobuf:"bytes,21,opt,name=latest_release,json=latestRelease,proto3" json:"latest_release,omitempty"`    // from the daemon's daily check; unset until it has run
+	GeoUpdatedAt         string       `protobuf:"bytes,22,opt,name=geo_updated_at,json=geoUpdatedAt,proto3" json:"geo_updated_at,omitempty"`     // RFC 3339 time geosite.dat was last written; empty if missing
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -270,6 +394,20 @@ func (x *Status) GetFellBackRules() uint32 {
 		return x.FellBackRules
 	}
 	return 0
+}
+
+func (x *Status) GetLatestRelease() *ReleaseInfo {
+	if x != nil {
+		return x.LatestRelease
+	}
+	return nil
+}
+
+func (x *Status) GetGeoUpdatedAt() string {
+	if x != nil {
+		return x.GeoUpdatedAt
+	}
+	return ""
 }
 
 type GetStatusRequest struct {
@@ -4262,11 +4400,741 @@ func (x *GetActiveConfigResponse) GetConfig() *SubscriptionConfig {
 	return nil
 }
 
+type ReleaseInfo struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CurrentVersion string                 `protobuf:"bytes,1,opt,name=current_version,json=currentVersion,proto3" json:"current_version,omitempty"`
+	LatestVersion  string                 `protobuf:"bytes,2,opt,name=latest_version,json=latestVersion,proto3" json:"latest_version,omitempty"`
+	Available      bool                   `protobuf:"varint,3,opt,name=available,proto3" json:"available,omitempty"` // latest is newer than current (never for development builds)
+	Url            string                 `protobuf:"bytes,4,opt,name=url,proto3" json:"url,omitempty"`              // the release page
+	PublishedAtMs  int64                  `protobuf:"varint,5,opt,name=published_at_ms,json=publishedAtMs,proto3" json:"published_at_ms,omitempty"`
+	CheckedAtMs    int64                  `protobuf:"varint,6,opt,name=checked_at_ms,json=checkedAtMs,proto3" json:"checked_at_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ReleaseInfo) Reset() {
+	*x = ReleaseInfo{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseInfo) ProtoMessage() {}
+
+func (x *ReleaseInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseInfo.ProtoReflect.Descriptor instead.
+func (*ReleaseInfo) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *ReleaseInfo) GetCurrentVersion() string {
+	if x != nil {
+		return x.CurrentVersion
+	}
+	return ""
+}
+
+func (x *ReleaseInfo) GetLatestVersion() string {
+	if x != nil {
+		return x.LatestVersion
+	}
+	return ""
+}
+
+func (x *ReleaseInfo) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *ReleaseInfo) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *ReleaseInfo) GetPublishedAtMs() int64 {
+	if x != nil {
+		return x.PublishedAtMs
+	}
+	return 0
+}
+
+func (x *ReleaseInfo) GetCheckedAtMs() int64 {
+	if x != nil {
+		return x.CheckedAtMs
+	}
+	return 0
+}
+
+type UpdateJob struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Target       UpdateTarget           `protobuf:"varint,1,opt,name=target,proto3,enum=masir.daemon.v1.UpdateTarget" json:"target,omitempty"`
+	State        UpdateState            `protobuf:"varint,2,opt,name=state,proto3,enum=masir.daemon.v1.UpdateState" json:"state,omitempty"`
+	Version      string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`                          // being installed: a release tag, or the geo data's release
+	File         string                 `protobuf:"bytes,4,opt,name=file,proto3" json:"file,omitempty"`                                // the file downloading now
+	BytesDone    int64                  `protobuf:"varint,5,opt,name=bytes_done,json=bytesDone,proto3" json:"bytes_done,omitempty"`    // across all files of the job
+	BytesTotal   int64                  `protobuf:"varint,6,opt,name=bytes_total,json=bytesTotal,proto3" json:"bytes_total,omitempty"` // 0 while unknown
+	Error        string                 `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`                              // why it failed
+	StartedAtMs  int64                  `protobuf:"varint,8,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	FinishedAtMs int64                  `protobuf:"varint,9,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
+	// For a masir update: where the new binaries were unpacked, so a CLI installed
+	// somewhere masird can't write can copy its own new binary from there.
+	StagedDir     string `protobuf:"bytes,10,opt,name=staged_dir,json=stagedDir,proto3" json:"staged_dir,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateJob) Reset() {
+	*x = UpdateJob{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateJob) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateJob) ProtoMessage() {}
+
+func (x *UpdateJob) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateJob.ProtoReflect.Descriptor instead.
+func (*UpdateJob) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *UpdateJob) GetTarget() UpdateTarget {
+	if x != nil {
+		return x.Target
+	}
+	return UpdateTarget_UPDATE_TARGET_UNSPECIFIED
+}
+
+func (x *UpdateJob) GetState() UpdateState {
+	if x != nil {
+		return x.State
+	}
+	return UpdateState_UPDATE_STATE_UNSPECIFIED
+}
+
+func (x *UpdateJob) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *UpdateJob) GetFile() string {
+	if x != nil {
+		return x.File
+	}
+	return ""
+}
+
+func (x *UpdateJob) GetBytesDone() int64 {
+	if x != nil {
+		return x.BytesDone
+	}
+	return 0
+}
+
+func (x *UpdateJob) GetBytesTotal() int64 {
+	if x != nil {
+		return x.BytesTotal
+	}
+	return 0
+}
+
+func (x *UpdateJob) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *UpdateJob) GetStartedAtMs() int64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *UpdateJob) GetFinishedAtMs() int64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
+func (x *UpdateJob) GetStagedDir() string {
+	if x != nil {
+		return x.StagedDir
+	}
+	return ""
+}
+
+type CheckUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckUpdateRequest) Reset() {
+	*x = CheckUpdateRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckUpdateRequest) ProtoMessage() {}
+
+func (x *CheckUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckUpdateRequest.ProtoReflect.Descriptor instead.
+func (*CheckUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{84}
+}
+
+type CheckUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Release       *ReleaseInfo           `protobuf:"bytes,1,opt,name=release,proto3" json:"release,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckUpdateResponse) Reset() {
+	*x = CheckUpdateResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckUpdateResponse) ProtoMessage() {}
+
+func (x *CheckUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckUpdateResponse.ProtoReflect.Descriptor instead.
+func (*CheckUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *CheckUpdateResponse) GetRelease() *ReleaseInfo {
+	if x != nil {
+		return x.Release
+	}
+	return nil
+}
+
+type StartUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Target        UpdateTarget           `protobuf:"varint,1,opt,name=target,proto3,enum=masir.daemon.v1.UpdateTarget" json:"target,omitempty"`
+	Force         bool                   `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"` // install even when not newer, or from a development build
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartUpdateRequest) Reset() {
+	*x = StartUpdateRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartUpdateRequest) ProtoMessage() {}
+
+func (x *StartUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartUpdateRequest.ProtoReflect.Descriptor instead.
+func (*StartUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *StartUpdateRequest) GetTarget() UpdateTarget {
+	if x != nil {
+		return x.Target
+	}
+	return UpdateTarget_UPDATE_TARGET_UNSPECIFIED
+}
+
+func (x *StartUpdateRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
+}
+
+type StartUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Job           *UpdateJob             `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartUpdateResponse) Reset() {
+	*x = StartUpdateResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartUpdateResponse) ProtoMessage() {}
+
+func (x *StartUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartUpdateResponse.ProtoReflect.Descriptor instead.
+func (*StartUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *StartUpdateResponse) GetJob() *UpdateJob {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type PauseUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Target        UpdateTarget           `protobuf:"varint,1,opt,name=target,proto3,enum=masir.daemon.v1.UpdateTarget" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PauseUpdateRequest) Reset() {
+	*x = PauseUpdateRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PauseUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PauseUpdateRequest) ProtoMessage() {}
+
+func (x *PauseUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PauseUpdateRequest.ProtoReflect.Descriptor instead.
+func (*PauseUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *PauseUpdateRequest) GetTarget() UpdateTarget {
+	if x != nil {
+		return x.Target
+	}
+	return UpdateTarget_UPDATE_TARGET_UNSPECIFIED
+}
+
+type PauseUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Job           *UpdateJob             `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PauseUpdateResponse) Reset() {
+	*x = PauseUpdateResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PauseUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PauseUpdateResponse) ProtoMessage() {}
+
+func (x *PauseUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PauseUpdateResponse.ProtoReflect.Descriptor instead.
+func (*PauseUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{89}
+}
+
+func (x *PauseUpdateResponse) GetJob() *UpdateJob {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type ResumeUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Target        UpdateTarget           `protobuf:"varint,1,opt,name=target,proto3,enum=masir.daemon.v1.UpdateTarget" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeUpdateRequest) Reset() {
+	*x = ResumeUpdateRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeUpdateRequest) ProtoMessage() {}
+
+func (x *ResumeUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeUpdateRequest.ProtoReflect.Descriptor instead.
+func (*ResumeUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *ResumeUpdateRequest) GetTarget() UpdateTarget {
+	if x != nil {
+		return x.Target
+	}
+	return UpdateTarget_UPDATE_TARGET_UNSPECIFIED
+}
+
+type ResumeUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Job           *UpdateJob             `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeUpdateResponse) Reset() {
+	*x = ResumeUpdateResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeUpdateResponse) ProtoMessage() {}
+
+func (x *ResumeUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeUpdateResponse.ProtoReflect.Descriptor instead.
+func (*ResumeUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{91}
+}
+
+func (x *ResumeUpdateResponse) GetJob() *UpdateJob {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type StopUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Target        UpdateTarget           `protobuf:"varint,1,opt,name=target,proto3,enum=masir.daemon.v1.UpdateTarget" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopUpdateRequest) Reset() {
+	*x = StopUpdateRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[92]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopUpdateRequest) ProtoMessage() {}
+
+func (x *StopUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[92]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopUpdateRequest.ProtoReflect.Descriptor instead.
+func (*StopUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *StopUpdateRequest) GetTarget() UpdateTarget {
+	if x != nil {
+		return x.Target
+	}
+	return UpdateTarget_UPDATE_TARGET_UNSPECIFIED
+}
+
+type StopUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Job           *UpdateJob             `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopUpdateResponse) Reset() {
+	*x = StopUpdateResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopUpdateResponse) ProtoMessage() {}
+
+func (x *StopUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopUpdateResponse.ProtoReflect.Descriptor instead.
+func (*StopUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *StopUpdateResponse) GetJob() *UpdateJob {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type WatchUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Target        UpdateTarget           `protobuf:"varint,1,opt,name=target,proto3,enum=masir.daemon.v1.UpdateTarget" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchUpdateRequest) Reset() {
+	*x = WatchUpdateRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[94]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchUpdateRequest) ProtoMessage() {}
+
+func (x *WatchUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[94]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchUpdateRequest.ProtoReflect.Descriptor instead.
+func (*WatchUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{94}
+}
+
+func (x *WatchUpdateRequest) GetTarget() UpdateTarget {
+	if x != nil {
+		return x.Target
+	}
+	return UpdateTarget_UPDATE_TARGET_UNSPECIFIED
+}
+
+type WatchUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Job           *UpdateJob             `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchUpdateResponse) Reset() {
+	*x = WatchUpdateResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[95]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchUpdateResponse) ProtoMessage() {}
+
+func (x *WatchUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[95]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchUpdateResponse.ProtoReflect.Descriptor instead.
+func (*WatchUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *WatchUpdateResponse) GetJob() *UpdateJob {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
 var File_masir_daemon_v1_daemon_proto protoreflect.FileDescriptor
 
 const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\n" +
-	"\x1cmasir/daemon/v1/daemon.proto\x12\x0fmasir.daemon.v1\"\x91\x06\n" +
+	"\x1cmasir/daemon/v1/daemon.proto\x12\x0fmasir.daemon.v1\"\xfc\x06\n" +
 	"\x06Status\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12!\n" +
 	"\fxray_version\x18\x02 \x01(\tR\vxrayVersion\x12%\n" +
@@ -4294,7 +5162,9 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x10active_config_id\x18\x11 \x01(\tR\x0eactiveConfigId\x12,\n" +
 	"\x12active_config_name\x18\x12 \x01(\tR\x10activeConfigName\x12!\n" +
 	"\factive_stale\x18\x13 \x01(\bR\vactiveStale\x12&\n" +
-	"\x0ffell_back_rules\x18\x14 \x01(\rR\rfellBackRules\"\x12\n" +
+	"\x0ffell_back_rules\x18\x14 \x01(\rR\rfellBackRules\x12C\n" +
+	"\x0elatest_release\x18\x15 \x01(\v2\x1c.masir.daemon.v1.ReleaseInfoR\rlatestRelease\x12$\n" +
+	"\x0egeo_updated_at\x18\x16 \x01(\tR\fgeoUpdatedAt\"\x12\n" +
 	"\x10GetStatusRequest\"D\n" +
 	"\x11GetStatusResponse\x12/\n" +
 	"\x06status\x18\x01 \x01(\v2\x17.masir.daemon.v1.StatusR\x06status\"\x14\n" +
@@ -4537,11 +5407,74 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x17GetActiveConfigResponse\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\tR\bconfigId\x12;\n" +
-	"\x06config\x18\x03 \x01(\v2#.masir.daemon.v1.SubscriptionConfigR\x06config*M\n" +
+	"\x06config\x18\x03 \x01(\v2#.masir.daemon.v1.SubscriptionConfigR\x06config\"\xd9\x01\n" +
+	"\vReleaseInfo\x12'\n" +
+	"\x0fcurrent_version\x18\x01 \x01(\tR\x0ecurrentVersion\x12%\n" +
+	"\x0elatest_version\x18\x02 \x01(\tR\rlatestVersion\x12\x1c\n" +
+	"\tavailable\x18\x03 \x01(\bR\tavailable\x12\x10\n" +
+	"\x03url\x18\x04 \x01(\tR\x03url\x12&\n" +
+	"\x0fpublished_at_ms\x18\x05 \x01(\x03R\rpublishedAtMs\x12\"\n" +
+	"\rchecked_at_ms\x18\x06 \x01(\x03R\vcheckedAtMs\"\xe3\x02\n" +
+	"\tUpdateJob\x125\n" +
+	"\x06target\x18\x01 \x01(\x0e2\x1d.masir.daemon.v1.UpdateTargetR\x06target\x122\n" +
+	"\x05state\x18\x02 \x01(\x0e2\x1c.masir.daemon.v1.UpdateStateR\x05state\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\tR\aversion\x12\x12\n" +
+	"\x04file\x18\x04 \x01(\tR\x04file\x12\x1d\n" +
+	"\n" +
+	"bytes_done\x18\x05 \x01(\x03R\tbytesDone\x12\x1f\n" +
+	"\vbytes_total\x18\x06 \x01(\x03R\n" +
+	"bytesTotal\x12\x14\n" +
+	"\x05error\x18\a \x01(\tR\x05error\x12\"\n" +
+	"\rstarted_at_ms\x18\b \x01(\x03R\vstartedAtMs\x12$\n" +
+	"\x0efinished_at_ms\x18\t \x01(\x03R\ffinishedAtMs\x12\x1d\n" +
+	"\n" +
+	"staged_dir\x18\n" +
+	" \x01(\tR\tstagedDir\"\x14\n" +
+	"\x12CheckUpdateRequest\"M\n" +
+	"\x13CheckUpdateResponse\x126\n" +
+	"\arelease\x18\x01 \x01(\v2\x1c.masir.daemon.v1.ReleaseInfoR\arelease\"a\n" +
+	"\x12StartUpdateRequest\x125\n" +
+	"\x06target\x18\x01 \x01(\x0e2\x1d.masir.daemon.v1.UpdateTargetR\x06target\x12\x14\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force\"C\n" +
+	"\x13StartUpdateResponse\x12,\n" +
+	"\x03job\x18\x01 \x01(\v2\x1a.masir.daemon.v1.UpdateJobR\x03job\"K\n" +
+	"\x12PauseUpdateRequest\x125\n" +
+	"\x06target\x18\x01 \x01(\x0e2\x1d.masir.daemon.v1.UpdateTargetR\x06target\"C\n" +
+	"\x13PauseUpdateResponse\x12,\n" +
+	"\x03job\x18\x01 \x01(\v2\x1a.masir.daemon.v1.UpdateJobR\x03job\"L\n" +
+	"\x13ResumeUpdateRequest\x125\n" +
+	"\x06target\x18\x01 \x01(\x0e2\x1d.masir.daemon.v1.UpdateTargetR\x06target\"D\n" +
+	"\x14ResumeUpdateResponse\x12,\n" +
+	"\x03job\x18\x01 \x01(\v2\x1a.masir.daemon.v1.UpdateJobR\x03job\"J\n" +
+	"\x11StopUpdateRequest\x125\n" +
+	"\x06target\x18\x01 \x01(\x0e2\x1d.masir.daemon.v1.UpdateTargetR\x06target\"B\n" +
+	"\x12StopUpdateResponse\x12,\n" +
+	"\x03job\x18\x01 \x01(\v2\x1a.masir.daemon.v1.UpdateJobR\x03job\"K\n" +
+	"\x12WatchUpdateRequest\x125\n" +
+	"\x06target\x18\x01 \x01(\x0e2\x1d.masir.daemon.v1.UpdateTargetR\x06target\"C\n" +
+	"\x13WatchUpdateResponse\x12,\n" +
+	"\x03job\x18\x01 \x01(\v2\x1a.masir.daemon.v1.UpdateJobR\x03job*M\n" +
 	"\bFallback\x12\x18\n" +
 	"\x14FALLBACK_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fFALLBACK_DIRECT\x10\x01\x12\x12\n" +
-	"\x0eFALLBACK_PROXY\x10\x022\x9e\x1b\n" +
+	"\x0eFALLBACK_PROXY\x10\x02*]\n" +
+	"\fUpdateTarget\x12\x1d\n" +
+	"\x19UPDATE_TARGET_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13UPDATE_TARGET_MASIR\x10\x01\x12\x15\n" +
+	"\x11UPDATE_TARGET_GEO\x10\x02*\xba\x02\n" +
+	"\vUpdateState\x12\x1c\n" +
+	"\x18UPDATE_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15UPDATE_STATE_CHECKING\x10\x01\x12\x1c\n" +
+	"\x18UPDATE_STATE_DOWNLOADING\x10\x02\x12\x17\n" +
+	"\x13UPDATE_STATE_PAUSED\x10\x03\x12\x1a\n" +
+	"\x16UPDATE_STATE_VERIFYING\x10\x04\x12\x1b\n" +
+	"\x17UPDATE_STATE_INSTALLING\x10\x05\x12\x1b\n" +
+	"\x17UPDATE_STATE_RESTARTING\x10\x06\x12\x15\n" +
+	"\x11UPDATE_STATE_DONE\x10\a\x12\x1b\n" +
+	"\x17UPDATE_STATE_UP_TO_DATE\x10\b\x12\x17\n" +
+	"\x13UPDATE_STATE_FAILED\x10\t\x12\x18\n" +
+	"\x14UPDATE_STATE_STOPPED\x10\n" +
+	"2\xbc\x1f\n" +
 	"\rDaemonService\x12a\n" +
 	"\x0eGetXrayVersion\x12&.masir.daemon.v1.GetXrayVersionRequest\x1a'.masir.daemon.v1.GetXrayVersionResponse\x12^\n" +
 	"\rGetXrayConfig\x12%.masir.daemon.v1.GetXrayConfigRequest\x1a&.masir.daemon.v1.GetXrayConfigResponse\x12R\n" +
@@ -4581,7 +5514,14 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x12UpdateSubscription\x12*.masir.daemon.v1.UpdateSubscriptionRequest\x1a+.masir.daemon.v1.UpdateSubscriptionResponse\x12~\n" +
 	"\x17TestSubscriptionLatency\x12/.masir.daemon.v1.TestSubscriptionLatencyRequest\x1a0.masir.daemon.v1.TestSubscriptionLatencyResponse0\x01\x12[\n" +
 	"\fSelectConfig\x12$.masir.daemon.v1.SelectConfigRequest\x1a%.masir.daemon.v1.SelectConfigResponse\x12d\n" +
-	"\x0fGetActiveConfig\x12'.masir.daemon.v1.GetActiveConfigRequest\x1a(.masir.daemon.v1.GetActiveConfigResponseB\xc4\x01\n" +
+	"\x0fGetActiveConfig\x12'.masir.daemon.v1.GetActiveConfigRequest\x1a(.masir.daemon.v1.GetActiveConfigResponse\x12X\n" +
+	"\vCheckUpdate\x12#.masir.daemon.v1.CheckUpdateRequest\x1a$.masir.daemon.v1.CheckUpdateResponse\x12X\n" +
+	"\vStartUpdate\x12#.masir.daemon.v1.StartUpdateRequest\x1a$.masir.daemon.v1.StartUpdateResponse\x12X\n" +
+	"\vPauseUpdate\x12#.masir.daemon.v1.PauseUpdateRequest\x1a$.masir.daemon.v1.PauseUpdateResponse\x12[\n" +
+	"\fResumeUpdate\x12$.masir.daemon.v1.ResumeUpdateRequest\x1a%.masir.daemon.v1.ResumeUpdateResponse\x12U\n" +
+	"\n" +
+	"StopUpdate\x12\".masir.daemon.v1.StopUpdateRequest\x1a#.masir.daemon.v1.StopUpdateResponse\x12Z\n" +
+	"\vWatchUpdate\x12#.masir.daemon.v1.WatchUpdateRequest\x1a$.masir.daemon.v1.WatchUpdateResponse0\x01B\xc4\x01\n" +
 	"\x13com.masir.daemon.v1B\vDaemonProtoP\x01ZBgithub.com/you/masir/libs/masir-proto/gen/masir/daemon/v1;daemonv1\xa2\x02\x03MDX\xaa\x02\x0fMasir.Daemon.V1\xca\x02\x0fMasir\\Daemon\\V1\xe2\x02\x1bMasir\\Daemon\\V1\\GPBMetadata\xea\x02\x11Masir::Daemon::V1b\x06proto3"
 
 var (
@@ -4596,195 +5536,237 @@ func file_masir_daemon_v1_daemon_proto_rawDescGZIP() []byte {
 	return file_masir_daemon_v1_daemon_proto_rawDescData
 }
 
-var file_masir_daemon_v1_daemon_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_masir_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 82)
+var file_masir_daemon_v1_daemon_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_masir_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 96)
 var file_masir_daemon_v1_daemon_proto_goTypes = []any{
 	(Fallback)(0),                           // 0: masir.daemon.v1.Fallback
-	(*Status)(nil),                          // 1: masir.daemon.v1.Status
-	(*GetStatusRequest)(nil),                // 2: masir.daemon.v1.GetStatusRequest
-	(*GetStatusResponse)(nil),               // 3: masir.daemon.v1.GetStatusResponse
-	(*WatchStatusRequest)(nil),              // 4: masir.daemon.v1.WatchStatusRequest
-	(*WatchStatusResponse)(nil),             // 5: masir.daemon.v1.WatchStatusResponse
-	(*ShutdownRequest)(nil),                 // 6: masir.daemon.v1.ShutdownRequest
-	(*ShutdownResponse)(nil),                // 7: masir.daemon.v1.ShutdownResponse
-	(*Settings)(nil),                        // 8: masir.daemon.v1.Settings
-	(*GetSettingsRequest)(nil),              // 9: masir.daemon.v1.GetSettingsRequest
-	(*GetSettingsResponse)(nil),             // 10: masir.daemon.v1.GetSettingsResponse
-	(*StringList)(nil),                      // 11: masir.daemon.v1.StringList
-	(*UpdateSettingsRequest)(nil),           // 12: masir.daemon.v1.UpdateSettingsRequest
-	(*UpdateSettingsResponse)(nil),          // 13: masir.daemon.v1.UpdateSettingsResponse
-	(*SetPowerRequest)(nil),                 // 14: masir.daemon.v1.SetPowerRequest
-	(*SetPowerResponse)(nil),                // 15: masir.daemon.v1.SetPowerResponse
-	(*SetFallbackRequest)(nil),              // 16: masir.daemon.v1.SetFallbackRequest
-	(*SetFallbackResponse)(nil),             // 17: masir.daemon.v1.SetFallbackResponse
-	(*SetTunEnabledRequest)(nil),            // 18: masir.daemon.v1.SetTunEnabledRequest
-	(*SetTunEnabledResponse)(nil),           // 19: masir.daemon.v1.SetTunEnabledResponse
-	(*StreamLogsRequest)(nil),               // 20: masir.daemon.v1.StreamLogsRequest
-	(*StreamLogsResponse)(nil),              // 21: masir.daemon.v1.StreamLogsResponse
-	(*LogEntry)(nil),                        // 22: masir.daemon.v1.LogEntry
-	(*GetXrayVersionRequest)(nil),           // 23: masir.daemon.v1.GetXrayVersionRequest
-	(*GetXrayVersionResponse)(nil),          // 24: masir.daemon.v1.GetXrayVersionResponse
-	(*GetXrayConfigRequest)(nil),            // 25: masir.daemon.v1.GetXrayConfigRequest
-	(*GetXrayConfigResponse)(nil),           // 26: masir.daemon.v1.GetXrayConfigResponse
-	(*TestLatencyRequest)(nil),              // 27: masir.daemon.v1.TestLatencyRequest
-	(*TestLatencyResponse)(nil),             // 28: masir.daemon.v1.TestLatencyResponse
-	(*CancelLatencyTestRequest)(nil),        // 29: masir.daemon.v1.CancelLatencyTestRequest
-	(*CancelLatencyTestResponse)(nil),       // 30: masir.daemon.v1.CancelLatencyTestResponse
-	(*RoutingRule)(nil),                     // 31: masir.daemon.v1.RoutingRule
-	(*ListRoutingRulesRequest)(nil),         // 32: masir.daemon.v1.ListRoutingRulesRequest
-	(*ListRoutingRulesResponse)(nil),        // 33: masir.daemon.v1.ListRoutingRulesResponse
-	(*AddRoutingRequest)(nil),               // 34: masir.daemon.v1.AddRoutingRequest
-	(*AddRoutingResponse)(nil),              // 35: masir.daemon.v1.AddRoutingResponse
-	(*RemoveRoutingRequest)(nil),            // 36: masir.daemon.v1.RemoveRoutingRequest
-	(*RemoveRoutingResponse)(nil),           // 37: masir.daemon.v1.RemoveRoutingResponse
-	(*AlterRoutingRequest)(nil),             // 38: masir.daemon.v1.AlterRoutingRequest
-	(*AlterRoutingResponse)(nil),            // 39: masir.daemon.v1.AlterRoutingResponse
-	(*MoveRoutingRequest)(nil),              // 40: masir.daemon.v1.MoveRoutingRequest
-	(*MoveRoutingResponse)(nil),             // 41: masir.daemon.v1.MoveRoutingResponse
-	(*TestRoutingRequest)(nil),              // 42: masir.daemon.v1.TestRoutingRequest
-	(*TestRoutingResponse)(nil),             // 43: masir.daemon.v1.TestRoutingResponse
-	(*TaggedConfig)(nil),                    // 44: masir.daemon.v1.TaggedConfig
-	(*ListInboundsRequest)(nil),             // 45: masir.daemon.v1.ListInboundsRequest
-	(*ListInboundsResponse)(nil),            // 46: masir.daemon.v1.ListInboundsResponse
-	(*ListOutboundsRequest)(nil),            // 47: masir.daemon.v1.ListOutboundsRequest
-	(*ListOutboundsResponse)(nil),           // 48: masir.daemon.v1.ListOutboundsResponse
-	(*AddInboundRequest)(nil),               // 49: masir.daemon.v1.AddInboundRequest
-	(*AddInboundResponse)(nil),              // 50: masir.daemon.v1.AddInboundResponse
-	(*RemoveInboundRequest)(nil),            // 51: masir.daemon.v1.RemoveInboundRequest
-	(*RemoveInboundResponse)(nil),           // 52: masir.daemon.v1.RemoveInboundResponse
-	(*AlterInboundRequest)(nil),             // 53: masir.daemon.v1.AlterInboundRequest
-	(*AlterInboundResponse)(nil),            // 54: masir.daemon.v1.AlterInboundResponse
-	(*AddOutboundRequest)(nil),              // 55: masir.daemon.v1.AddOutboundRequest
-	(*AddOutboundResponse)(nil),             // 56: masir.daemon.v1.AddOutboundResponse
-	(*RemoveOutboundRequest)(nil),           // 57: masir.daemon.v1.RemoveOutboundRequest
-	(*RemoveOutboundResponse)(nil),          // 58: masir.daemon.v1.RemoveOutboundResponse
-	(*AlterOutboundRequest)(nil),            // 59: masir.daemon.v1.AlterOutboundRequest
-	(*AlterOutboundResponse)(nil),           // 60: masir.daemon.v1.AlterOutboundResponse
-	(*Subscription)(nil),                    // 61: masir.daemon.v1.Subscription
-	(*Usage)(nil),                           // 62: masir.daemon.v1.Usage
-	(*SubscriptionConfig)(nil),              // 63: masir.daemon.v1.SubscriptionConfig
-	(*LatencyResult)(nil),                   // 64: masir.daemon.v1.LatencyResult
-	(*ListSubscriptionsRequest)(nil),        // 65: masir.daemon.v1.ListSubscriptionsRequest
-	(*ListSubscriptionsResponse)(nil),       // 66: masir.daemon.v1.ListSubscriptionsResponse
-	(*GetSubscriptionRequest)(nil),          // 67: masir.daemon.v1.GetSubscriptionRequest
-	(*GetSubscriptionResponse)(nil),         // 68: masir.daemon.v1.GetSubscriptionResponse
-	(*AddSubscriptionRequest)(nil),          // 69: masir.daemon.v1.AddSubscriptionRequest
-	(*AddSubscriptionResponse)(nil),         // 70: masir.daemon.v1.AddSubscriptionResponse
-	(*AlterSubscriptionRequest)(nil),        // 71: masir.daemon.v1.AlterSubscriptionRequest
-	(*AlterSubscriptionResponse)(nil),       // 72: masir.daemon.v1.AlterSubscriptionResponse
-	(*RemoveSubscriptionRequest)(nil),       // 73: masir.daemon.v1.RemoveSubscriptionRequest
-	(*RemoveSubscriptionResponse)(nil),      // 74: masir.daemon.v1.RemoveSubscriptionResponse
-	(*UpdateSubscriptionRequest)(nil),       // 75: masir.daemon.v1.UpdateSubscriptionRequest
-	(*UpdateSubscriptionResponse)(nil),      // 76: masir.daemon.v1.UpdateSubscriptionResponse
-	(*TestSubscriptionLatencyRequest)(nil),  // 77: masir.daemon.v1.TestSubscriptionLatencyRequest
-	(*TestSubscriptionLatencyResponse)(nil), // 78: masir.daemon.v1.TestSubscriptionLatencyResponse
-	(*SelectConfigRequest)(nil),             // 79: masir.daemon.v1.SelectConfigRequest
-	(*SelectConfigResponse)(nil),            // 80: masir.daemon.v1.SelectConfigResponse
-	(*GetActiveConfigRequest)(nil),          // 81: masir.daemon.v1.GetActiveConfigRequest
-	(*GetActiveConfigResponse)(nil),         // 82: masir.daemon.v1.GetActiveConfigResponse
+	(UpdateTarget)(0),                       // 1: masir.daemon.v1.UpdateTarget
+	(UpdateState)(0),                        // 2: masir.daemon.v1.UpdateState
+	(*Status)(nil),                          // 3: masir.daemon.v1.Status
+	(*GetStatusRequest)(nil),                // 4: masir.daemon.v1.GetStatusRequest
+	(*GetStatusResponse)(nil),               // 5: masir.daemon.v1.GetStatusResponse
+	(*WatchStatusRequest)(nil),              // 6: masir.daemon.v1.WatchStatusRequest
+	(*WatchStatusResponse)(nil),             // 7: masir.daemon.v1.WatchStatusResponse
+	(*ShutdownRequest)(nil),                 // 8: masir.daemon.v1.ShutdownRequest
+	(*ShutdownResponse)(nil),                // 9: masir.daemon.v1.ShutdownResponse
+	(*Settings)(nil),                        // 10: masir.daemon.v1.Settings
+	(*GetSettingsRequest)(nil),              // 11: masir.daemon.v1.GetSettingsRequest
+	(*GetSettingsResponse)(nil),             // 12: masir.daemon.v1.GetSettingsResponse
+	(*StringList)(nil),                      // 13: masir.daemon.v1.StringList
+	(*UpdateSettingsRequest)(nil),           // 14: masir.daemon.v1.UpdateSettingsRequest
+	(*UpdateSettingsResponse)(nil),          // 15: masir.daemon.v1.UpdateSettingsResponse
+	(*SetPowerRequest)(nil),                 // 16: masir.daemon.v1.SetPowerRequest
+	(*SetPowerResponse)(nil),                // 17: masir.daemon.v1.SetPowerResponse
+	(*SetFallbackRequest)(nil),              // 18: masir.daemon.v1.SetFallbackRequest
+	(*SetFallbackResponse)(nil),             // 19: masir.daemon.v1.SetFallbackResponse
+	(*SetTunEnabledRequest)(nil),            // 20: masir.daemon.v1.SetTunEnabledRequest
+	(*SetTunEnabledResponse)(nil),           // 21: masir.daemon.v1.SetTunEnabledResponse
+	(*StreamLogsRequest)(nil),               // 22: masir.daemon.v1.StreamLogsRequest
+	(*StreamLogsResponse)(nil),              // 23: masir.daemon.v1.StreamLogsResponse
+	(*LogEntry)(nil),                        // 24: masir.daemon.v1.LogEntry
+	(*GetXrayVersionRequest)(nil),           // 25: masir.daemon.v1.GetXrayVersionRequest
+	(*GetXrayVersionResponse)(nil),          // 26: masir.daemon.v1.GetXrayVersionResponse
+	(*GetXrayConfigRequest)(nil),            // 27: masir.daemon.v1.GetXrayConfigRequest
+	(*GetXrayConfigResponse)(nil),           // 28: masir.daemon.v1.GetXrayConfigResponse
+	(*TestLatencyRequest)(nil),              // 29: masir.daemon.v1.TestLatencyRequest
+	(*TestLatencyResponse)(nil),             // 30: masir.daemon.v1.TestLatencyResponse
+	(*CancelLatencyTestRequest)(nil),        // 31: masir.daemon.v1.CancelLatencyTestRequest
+	(*CancelLatencyTestResponse)(nil),       // 32: masir.daemon.v1.CancelLatencyTestResponse
+	(*RoutingRule)(nil),                     // 33: masir.daemon.v1.RoutingRule
+	(*ListRoutingRulesRequest)(nil),         // 34: masir.daemon.v1.ListRoutingRulesRequest
+	(*ListRoutingRulesResponse)(nil),        // 35: masir.daemon.v1.ListRoutingRulesResponse
+	(*AddRoutingRequest)(nil),               // 36: masir.daemon.v1.AddRoutingRequest
+	(*AddRoutingResponse)(nil),              // 37: masir.daemon.v1.AddRoutingResponse
+	(*RemoveRoutingRequest)(nil),            // 38: masir.daemon.v1.RemoveRoutingRequest
+	(*RemoveRoutingResponse)(nil),           // 39: masir.daemon.v1.RemoveRoutingResponse
+	(*AlterRoutingRequest)(nil),             // 40: masir.daemon.v1.AlterRoutingRequest
+	(*AlterRoutingResponse)(nil),            // 41: masir.daemon.v1.AlterRoutingResponse
+	(*MoveRoutingRequest)(nil),              // 42: masir.daemon.v1.MoveRoutingRequest
+	(*MoveRoutingResponse)(nil),             // 43: masir.daemon.v1.MoveRoutingResponse
+	(*TestRoutingRequest)(nil),              // 44: masir.daemon.v1.TestRoutingRequest
+	(*TestRoutingResponse)(nil),             // 45: masir.daemon.v1.TestRoutingResponse
+	(*TaggedConfig)(nil),                    // 46: masir.daemon.v1.TaggedConfig
+	(*ListInboundsRequest)(nil),             // 47: masir.daemon.v1.ListInboundsRequest
+	(*ListInboundsResponse)(nil),            // 48: masir.daemon.v1.ListInboundsResponse
+	(*ListOutboundsRequest)(nil),            // 49: masir.daemon.v1.ListOutboundsRequest
+	(*ListOutboundsResponse)(nil),           // 50: masir.daemon.v1.ListOutboundsResponse
+	(*AddInboundRequest)(nil),               // 51: masir.daemon.v1.AddInboundRequest
+	(*AddInboundResponse)(nil),              // 52: masir.daemon.v1.AddInboundResponse
+	(*RemoveInboundRequest)(nil),            // 53: masir.daemon.v1.RemoveInboundRequest
+	(*RemoveInboundResponse)(nil),           // 54: masir.daemon.v1.RemoveInboundResponse
+	(*AlterInboundRequest)(nil),             // 55: masir.daemon.v1.AlterInboundRequest
+	(*AlterInboundResponse)(nil),            // 56: masir.daemon.v1.AlterInboundResponse
+	(*AddOutboundRequest)(nil),              // 57: masir.daemon.v1.AddOutboundRequest
+	(*AddOutboundResponse)(nil),             // 58: masir.daemon.v1.AddOutboundResponse
+	(*RemoveOutboundRequest)(nil),           // 59: masir.daemon.v1.RemoveOutboundRequest
+	(*RemoveOutboundResponse)(nil),          // 60: masir.daemon.v1.RemoveOutboundResponse
+	(*AlterOutboundRequest)(nil),            // 61: masir.daemon.v1.AlterOutboundRequest
+	(*AlterOutboundResponse)(nil),           // 62: masir.daemon.v1.AlterOutboundResponse
+	(*Subscription)(nil),                    // 63: masir.daemon.v1.Subscription
+	(*Usage)(nil),                           // 64: masir.daemon.v1.Usage
+	(*SubscriptionConfig)(nil),              // 65: masir.daemon.v1.SubscriptionConfig
+	(*LatencyResult)(nil),                   // 66: masir.daemon.v1.LatencyResult
+	(*ListSubscriptionsRequest)(nil),        // 67: masir.daemon.v1.ListSubscriptionsRequest
+	(*ListSubscriptionsResponse)(nil),       // 68: masir.daemon.v1.ListSubscriptionsResponse
+	(*GetSubscriptionRequest)(nil),          // 69: masir.daemon.v1.GetSubscriptionRequest
+	(*GetSubscriptionResponse)(nil),         // 70: masir.daemon.v1.GetSubscriptionResponse
+	(*AddSubscriptionRequest)(nil),          // 71: masir.daemon.v1.AddSubscriptionRequest
+	(*AddSubscriptionResponse)(nil),         // 72: masir.daemon.v1.AddSubscriptionResponse
+	(*AlterSubscriptionRequest)(nil),        // 73: masir.daemon.v1.AlterSubscriptionRequest
+	(*AlterSubscriptionResponse)(nil),       // 74: masir.daemon.v1.AlterSubscriptionResponse
+	(*RemoveSubscriptionRequest)(nil),       // 75: masir.daemon.v1.RemoveSubscriptionRequest
+	(*RemoveSubscriptionResponse)(nil),      // 76: masir.daemon.v1.RemoveSubscriptionResponse
+	(*UpdateSubscriptionRequest)(nil),       // 77: masir.daemon.v1.UpdateSubscriptionRequest
+	(*UpdateSubscriptionResponse)(nil),      // 78: masir.daemon.v1.UpdateSubscriptionResponse
+	(*TestSubscriptionLatencyRequest)(nil),  // 79: masir.daemon.v1.TestSubscriptionLatencyRequest
+	(*TestSubscriptionLatencyResponse)(nil), // 80: masir.daemon.v1.TestSubscriptionLatencyResponse
+	(*SelectConfigRequest)(nil),             // 81: masir.daemon.v1.SelectConfigRequest
+	(*SelectConfigResponse)(nil),            // 82: masir.daemon.v1.SelectConfigResponse
+	(*GetActiveConfigRequest)(nil),          // 83: masir.daemon.v1.GetActiveConfigRequest
+	(*GetActiveConfigResponse)(nil),         // 84: masir.daemon.v1.GetActiveConfigResponse
+	(*ReleaseInfo)(nil),                     // 85: masir.daemon.v1.ReleaseInfo
+	(*UpdateJob)(nil),                       // 86: masir.daemon.v1.UpdateJob
+	(*CheckUpdateRequest)(nil),              // 87: masir.daemon.v1.CheckUpdateRequest
+	(*CheckUpdateResponse)(nil),             // 88: masir.daemon.v1.CheckUpdateResponse
+	(*StartUpdateRequest)(nil),              // 89: masir.daemon.v1.StartUpdateRequest
+	(*StartUpdateResponse)(nil),             // 90: masir.daemon.v1.StartUpdateResponse
+	(*PauseUpdateRequest)(nil),              // 91: masir.daemon.v1.PauseUpdateRequest
+	(*PauseUpdateResponse)(nil),             // 92: masir.daemon.v1.PauseUpdateResponse
+	(*ResumeUpdateRequest)(nil),             // 93: masir.daemon.v1.ResumeUpdateRequest
+	(*ResumeUpdateResponse)(nil),            // 94: masir.daemon.v1.ResumeUpdateResponse
+	(*StopUpdateRequest)(nil),               // 95: masir.daemon.v1.StopUpdateRequest
+	(*StopUpdateResponse)(nil),              // 96: masir.daemon.v1.StopUpdateResponse
+	(*WatchUpdateRequest)(nil),              // 97: masir.daemon.v1.WatchUpdateRequest
+	(*WatchUpdateResponse)(nil),             // 98: masir.daemon.v1.WatchUpdateResponse
 }
 var file_masir_daemon_v1_daemon_proto_depIdxs = []int32{
-	8,  // 0: masir.daemon.v1.Status.settings:type_name -> masir.daemon.v1.Settings
-	1,  // 1: masir.daemon.v1.GetStatusResponse.status:type_name -> masir.daemon.v1.Status
-	1,  // 2: masir.daemon.v1.WatchStatusResponse.status:type_name -> masir.daemon.v1.Status
-	0,  // 3: masir.daemon.v1.Settings.fallback:type_name -> masir.daemon.v1.Fallback
-	8,  // 4: masir.daemon.v1.GetSettingsResponse.settings:type_name -> masir.daemon.v1.Settings
-	8,  // 5: masir.daemon.v1.GetSettingsResponse.defaults:type_name -> masir.daemon.v1.Settings
-	11, // 6: masir.daemon.v1.UpdateSettingsRequest.dns_servers:type_name -> masir.daemon.v1.StringList
-	11, // 7: masir.daemon.v1.UpdateSettingsRequest.tun_dns:type_name -> masir.daemon.v1.StringList
-	8,  // 8: masir.daemon.v1.UpdateSettingsResponse.settings:type_name -> masir.daemon.v1.Settings
-	0,  // 9: masir.daemon.v1.SetFallbackRequest.fallback:type_name -> masir.daemon.v1.Fallback
-	22, // 10: masir.daemon.v1.StreamLogsResponse.entry:type_name -> masir.daemon.v1.LogEntry
-	31, // 11: masir.daemon.v1.ListRoutingRulesResponse.rules:type_name -> masir.daemon.v1.RoutingRule
-	44, // 12: masir.daemon.v1.ListInboundsResponse.inbounds:type_name -> masir.daemon.v1.TaggedConfig
-	44, // 13: masir.daemon.v1.ListOutboundsResponse.outbounds:type_name -> masir.daemon.v1.TaggedConfig
-	62, // 14: masir.daemon.v1.Subscription.usage:type_name -> masir.daemon.v1.Usage
-	64, // 15: masir.daemon.v1.SubscriptionConfig.latency:type_name -> masir.daemon.v1.LatencyResult
-	61, // 16: masir.daemon.v1.ListSubscriptionsResponse.subscriptions:type_name -> masir.daemon.v1.Subscription
-	61, // 17: masir.daemon.v1.GetSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
-	63, // 18: masir.daemon.v1.GetSubscriptionResponse.configs:type_name -> masir.daemon.v1.SubscriptionConfig
-	61, // 19: masir.daemon.v1.AddSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
-	61, // 20: masir.daemon.v1.AlterSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
-	61, // 21: masir.daemon.v1.UpdateSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
-	64, // 22: masir.daemon.v1.TestSubscriptionLatencyResponse.result:type_name -> masir.daemon.v1.LatencyResult
-	63, // 23: masir.daemon.v1.GetActiveConfigResponse.config:type_name -> masir.daemon.v1.SubscriptionConfig
-	23, // 24: masir.daemon.v1.DaemonService.GetXrayVersion:input_type -> masir.daemon.v1.GetXrayVersionRequest
-	25, // 25: masir.daemon.v1.DaemonService.GetXrayConfig:input_type -> masir.daemon.v1.GetXrayConfigRequest
-	2,  // 26: masir.daemon.v1.DaemonService.GetStatus:input_type -> masir.daemon.v1.GetStatusRequest
-	4,  // 27: masir.daemon.v1.DaemonService.WatchStatus:input_type -> masir.daemon.v1.WatchStatusRequest
-	6,  // 28: masir.daemon.v1.DaemonService.Shutdown:input_type -> masir.daemon.v1.ShutdownRequest
-	20, // 29: masir.daemon.v1.DaemonService.StreamLogs:input_type -> masir.daemon.v1.StreamLogsRequest
-	27, // 30: masir.daemon.v1.DaemonService.TestLatency:input_type -> masir.daemon.v1.TestLatencyRequest
-	29, // 31: masir.daemon.v1.DaemonService.CancelLatencyTest:input_type -> masir.daemon.v1.CancelLatencyTestRequest
-	9,  // 32: masir.daemon.v1.DaemonService.GetSettings:input_type -> masir.daemon.v1.GetSettingsRequest
-	12, // 33: masir.daemon.v1.DaemonService.UpdateSettings:input_type -> masir.daemon.v1.UpdateSettingsRequest
-	14, // 34: masir.daemon.v1.DaemonService.SetPower:input_type -> masir.daemon.v1.SetPowerRequest
-	16, // 35: masir.daemon.v1.DaemonService.SetFallback:input_type -> masir.daemon.v1.SetFallbackRequest
-	18, // 36: masir.daemon.v1.DaemonService.SetTunEnabled:input_type -> masir.daemon.v1.SetTunEnabledRequest
-	32, // 37: masir.daemon.v1.DaemonService.ListRoutingRules:input_type -> masir.daemon.v1.ListRoutingRulesRequest
-	34, // 38: masir.daemon.v1.DaemonService.AddRouting:input_type -> masir.daemon.v1.AddRoutingRequest
-	36, // 39: masir.daemon.v1.DaemonService.RemoveRouting:input_type -> masir.daemon.v1.RemoveRoutingRequest
-	38, // 40: masir.daemon.v1.DaemonService.AlterRouting:input_type -> masir.daemon.v1.AlterRoutingRequest
-	40, // 41: masir.daemon.v1.DaemonService.MoveRouting:input_type -> masir.daemon.v1.MoveRoutingRequest
-	42, // 42: masir.daemon.v1.DaemonService.TestRouting:input_type -> masir.daemon.v1.TestRoutingRequest
-	45, // 43: masir.daemon.v1.DaemonService.ListInbounds:input_type -> masir.daemon.v1.ListInboundsRequest
-	49, // 44: masir.daemon.v1.DaemonService.AddInbound:input_type -> masir.daemon.v1.AddInboundRequest
-	51, // 45: masir.daemon.v1.DaemonService.RemoveInbound:input_type -> masir.daemon.v1.RemoveInboundRequest
-	53, // 46: masir.daemon.v1.DaemonService.AlterInbound:input_type -> masir.daemon.v1.AlterInboundRequest
-	47, // 47: masir.daemon.v1.DaemonService.ListOutbounds:input_type -> masir.daemon.v1.ListOutboundsRequest
-	55, // 48: masir.daemon.v1.DaemonService.AddOutbound:input_type -> masir.daemon.v1.AddOutboundRequest
-	57, // 49: masir.daemon.v1.DaemonService.RemoveOutbound:input_type -> masir.daemon.v1.RemoveOutboundRequest
-	59, // 50: masir.daemon.v1.DaemonService.AlterOutbound:input_type -> masir.daemon.v1.AlterOutboundRequest
-	65, // 51: masir.daemon.v1.DaemonService.ListSubscriptions:input_type -> masir.daemon.v1.ListSubscriptionsRequest
-	67, // 52: masir.daemon.v1.DaemonService.GetSubscription:input_type -> masir.daemon.v1.GetSubscriptionRequest
-	69, // 53: masir.daemon.v1.DaemonService.AddSubscription:input_type -> masir.daemon.v1.AddSubscriptionRequest
-	71, // 54: masir.daemon.v1.DaemonService.AlterSubscription:input_type -> masir.daemon.v1.AlterSubscriptionRequest
-	73, // 55: masir.daemon.v1.DaemonService.RemoveSubscription:input_type -> masir.daemon.v1.RemoveSubscriptionRequest
-	75, // 56: masir.daemon.v1.DaemonService.UpdateSubscription:input_type -> masir.daemon.v1.UpdateSubscriptionRequest
-	77, // 57: masir.daemon.v1.DaemonService.TestSubscriptionLatency:input_type -> masir.daemon.v1.TestSubscriptionLatencyRequest
-	79, // 58: masir.daemon.v1.DaemonService.SelectConfig:input_type -> masir.daemon.v1.SelectConfigRequest
-	81, // 59: masir.daemon.v1.DaemonService.GetActiveConfig:input_type -> masir.daemon.v1.GetActiveConfigRequest
-	24, // 60: masir.daemon.v1.DaemonService.GetXrayVersion:output_type -> masir.daemon.v1.GetXrayVersionResponse
-	26, // 61: masir.daemon.v1.DaemonService.GetXrayConfig:output_type -> masir.daemon.v1.GetXrayConfigResponse
-	3,  // 62: masir.daemon.v1.DaemonService.GetStatus:output_type -> masir.daemon.v1.GetStatusResponse
-	5,  // 63: masir.daemon.v1.DaemonService.WatchStatus:output_type -> masir.daemon.v1.WatchStatusResponse
-	7,  // 64: masir.daemon.v1.DaemonService.Shutdown:output_type -> masir.daemon.v1.ShutdownResponse
-	21, // 65: masir.daemon.v1.DaemonService.StreamLogs:output_type -> masir.daemon.v1.StreamLogsResponse
-	28, // 66: masir.daemon.v1.DaemonService.TestLatency:output_type -> masir.daemon.v1.TestLatencyResponse
-	30, // 67: masir.daemon.v1.DaemonService.CancelLatencyTest:output_type -> masir.daemon.v1.CancelLatencyTestResponse
-	10, // 68: masir.daemon.v1.DaemonService.GetSettings:output_type -> masir.daemon.v1.GetSettingsResponse
-	13, // 69: masir.daemon.v1.DaemonService.UpdateSettings:output_type -> masir.daemon.v1.UpdateSettingsResponse
-	15, // 70: masir.daemon.v1.DaemonService.SetPower:output_type -> masir.daemon.v1.SetPowerResponse
-	17, // 71: masir.daemon.v1.DaemonService.SetFallback:output_type -> masir.daemon.v1.SetFallbackResponse
-	19, // 72: masir.daemon.v1.DaemonService.SetTunEnabled:output_type -> masir.daemon.v1.SetTunEnabledResponse
-	33, // 73: masir.daemon.v1.DaemonService.ListRoutingRules:output_type -> masir.daemon.v1.ListRoutingRulesResponse
-	35, // 74: masir.daemon.v1.DaemonService.AddRouting:output_type -> masir.daemon.v1.AddRoutingResponse
-	37, // 75: masir.daemon.v1.DaemonService.RemoveRouting:output_type -> masir.daemon.v1.RemoveRoutingResponse
-	39, // 76: masir.daemon.v1.DaemonService.AlterRouting:output_type -> masir.daemon.v1.AlterRoutingResponse
-	41, // 77: masir.daemon.v1.DaemonService.MoveRouting:output_type -> masir.daemon.v1.MoveRoutingResponse
-	43, // 78: masir.daemon.v1.DaemonService.TestRouting:output_type -> masir.daemon.v1.TestRoutingResponse
-	46, // 79: masir.daemon.v1.DaemonService.ListInbounds:output_type -> masir.daemon.v1.ListInboundsResponse
-	50, // 80: masir.daemon.v1.DaemonService.AddInbound:output_type -> masir.daemon.v1.AddInboundResponse
-	52, // 81: masir.daemon.v1.DaemonService.RemoveInbound:output_type -> masir.daemon.v1.RemoveInboundResponse
-	54, // 82: masir.daemon.v1.DaemonService.AlterInbound:output_type -> masir.daemon.v1.AlterInboundResponse
-	48, // 83: masir.daemon.v1.DaemonService.ListOutbounds:output_type -> masir.daemon.v1.ListOutboundsResponse
-	56, // 84: masir.daemon.v1.DaemonService.AddOutbound:output_type -> masir.daemon.v1.AddOutboundResponse
-	58, // 85: masir.daemon.v1.DaemonService.RemoveOutbound:output_type -> masir.daemon.v1.RemoveOutboundResponse
-	60, // 86: masir.daemon.v1.DaemonService.AlterOutbound:output_type -> masir.daemon.v1.AlterOutboundResponse
-	66, // 87: masir.daemon.v1.DaemonService.ListSubscriptions:output_type -> masir.daemon.v1.ListSubscriptionsResponse
-	68, // 88: masir.daemon.v1.DaemonService.GetSubscription:output_type -> masir.daemon.v1.GetSubscriptionResponse
-	70, // 89: masir.daemon.v1.DaemonService.AddSubscription:output_type -> masir.daemon.v1.AddSubscriptionResponse
-	72, // 90: masir.daemon.v1.DaemonService.AlterSubscription:output_type -> masir.daemon.v1.AlterSubscriptionResponse
-	74, // 91: masir.daemon.v1.DaemonService.RemoveSubscription:output_type -> masir.daemon.v1.RemoveSubscriptionResponse
-	76, // 92: masir.daemon.v1.DaemonService.UpdateSubscription:output_type -> masir.daemon.v1.UpdateSubscriptionResponse
-	78, // 93: masir.daemon.v1.DaemonService.TestSubscriptionLatency:output_type -> masir.daemon.v1.TestSubscriptionLatencyResponse
-	80, // 94: masir.daemon.v1.DaemonService.SelectConfig:output_type -> masir.daemon.v1.SelectConfigResponse
-	82, // 95: masir.daemon.v1.DaemonService.GetActiveConfig:output_type -> masir.daemon.v1.GetActiveConfigResponse
-	60, // [60:96] is the sub-list for method output_type
-	24, // [24:60] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	10, // 0: masir.daemon.v1.Status.settings:type_name -> masir.daemon.v1.Settings
+	85, // 1: masir.daemon.v1.Status.latest_release:type_name -> masir.daemon.v1.ReleaseInfo
+	3,  // 2: masir.daemon.v1.GetStatusResponse.status:type_name -> masir.daemon.v1.Status
+	3,  // 3: masir.daemon.v1.WatchStatusResponse.status:type_name -> masir.daemon.v1.Status
+	0,  // 4: masir.daemon.v1.Settings.fallback:type_name -> masir.daemon.v1.Fallback
+	10, // 5: masir.daemon.v1.GetSettingsResponse.settings:type_name -> masir.daemon.v1.Settings
+	10, // 6: masir.daemon.v1.GetSettingsResponse.defaults:type_name -> masir.daemon.v1.Settings
+	13, // 7: masir.daemon.v1.UpdateSettingsRequest.dns_servers:type_name -> masir.daemon.v1.StringList
+	13, // 8: masir.daemon.v1.UpdateSettingsRequest.tun_dns:type_name -> masir.daemon.v1.StringList
+	10, // 9: masir.daemon.v1.UpdateSettingsResponse.settings:type_name -> masir.daemon.v1.Settings
+	0,  // 10: masir.daemon.v1.SetFallbackRequest.fallback:type_name -> masir.daemon.v1.Fallback
+	24, // 11: masir.daemon.v1.StreamLogsResponse.entry:type_name -> masir.daemon.v1.LogEntry
+	33, // 12: masir.daemon.v1.ListRoutingRulesResponse.rules:type_name -> masir.daemon.v1.RoutingRule
+	46, // 13: masir.daemon.v1.ListInboundsResponse.inbounds:type_name -> masir.daemon.v1.TaggedConfig
+	46, // 14: masir.daemon.v1.ListOutboundsResponse.outbounds:type_name -> masir.daemon.v1.TaggedConfig
+	64, // 15: masir.daemon.v1.Subscription.usage:type_name -> masir.daemon.v1.Usage
+	66, // 16: masir.daemon.v1.SubscriptionConfig.latency:type_name -> masir.daemon.v1.LatencyResult
+	63, // 17: masir.daemon.v1.ListSubscriptionsResponse.subscriptions:type_name -> masir.daemon.v1.Subscription
+	63, // 18: masir.daemon.v1.GetSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	65, // 19: masir.daemon.v1.GetSubscriptionResponse.configs:type_name -> masir.daemon.v1.SubscriptionConfig
+	63, // 20: masir.daemon.v1.AddSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	63, // 21: masir.daemon.v1.AlterSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	63, // 22: masir.daemon.v1.UpdateSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	66, // 23: masir.daemon.v1.TestSubscriptionLatencyResponse.result:type_name -> masir.daemon.v1.LatencyResult
+	65, // 24: masir.daemon.v1.GetActiveConfigResponse.config:type_name -> masir.daemon.v1.SubscriptionConfig
+	1,  // 25: masir.daemon.v1.UpdateJob.target:type_name -> masir.daemon.v1.UpdateTarget
+	2,  // 26: masir.daemon.v1.UpdateJob.state:type_name -> masir.daemon.v1.UpdateState
+	85, // 27: masir.daemon.v1.CheckUpdateResponse.release:type_name -> masir.daemon.v1.ReleaseInfo
+	1,  // 28: masir.daemon.v1.StartUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
+	86, // 29: masir.daemon.v1.StartUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	1,  // 30: masir.daemon.v1.PauseUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
+	86, // 31: masir.daemon.v1.PauseUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	1,  // 32: masir.daemon.v1.ResumeUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
+	86, // 33: masir.daemon.v1.ResumeUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	1,  // 34: masir.daemon.v1.StopUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
+	86, // 35: masir.daemon.v1.StopUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	1,  // 36: masir.daemon.v1.WatchUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
+	86, // 37: masir.daemon.v1.WatchUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	25, // 38: masir.daemon.v1.DaemonService.GetXrayVersion:input_type -> masir.daemon.v1.GetXrayVersionRequest
+	27, // 39: masir.daemon.v1.DaemonService.GetXrayConfig:input_type -> masir.daemon.v1.GetXrayConfigRequest
+	4,  // 40: masir.daemon.v1.DaemonService.GetStatus:input_type -> masir.daemon.v1.GetStatusRequest
+	6,  // 41: masir.daemon.v1.DaemonService.WatchStatus:input_type -> masir.daemon.v1.WatchStatusRequest
+	8,  // 42: masir.daemon.v1.DaemonService.Shutdown:input_type -> masir.daemon.v1.ShutdownRequest
+	22, // 43: masir.daemon.v1.DaemonService.StreamLogs:input_type -> masir.daemon.v1.StreamLogsRequest
+	29, // 44: masir.daemon.v1.DaemonService.TestLatency:input_type -> masir.daemon.v1.TestLatencyRequest
+	31, // 45: masir.daemon.v1.DaemonService.CancelLatencyTest:input_type -> masir.daemon.v1.CancelLatencyTestRequest
+	11, // 46: masir.daemon.v1.DaemonService.GetSettings:input_type -> masir.daemon.v1.GetSettingsRequest
+	14, // 47: masir.daemon.v1.DaemonService.UpdateSettings:input_type -> masir.daemon.v1.UpdateSettingsRequest
+	16, // 48: masir.daemon.v1.DaemonService.SetPower:input_type -> masir.daemon.v1.SetPowerRequest
+	18, // 49: masir.daemon.v1.DaemonService.SetFallback:input_type -> masir.daemon.v1.SetFallbackRequest
+	20, // 50: masir.daemon.v1.DaemonService.SetTunEnabled:input_type -> masir.daemon.v1.SetTunEnabledRequest
+	34, // 51: masir.daemon.v1.DaemonService.ListRoutingRules:input_type -> masir.daemon.v1.ListRoutingRulesRequest
+	36, // 52: masir.daemon.v1.DaemonService.AddRouting:input_type -> masir.daemon.v1.AddRoutingRequest
+	38, // 53: masir.daemon.v1.DaemonService.RemoveRouting:input_type -> masir.daemon.v1.RemoveRoutingRequest
+	40, // 54: masir.daemon.v1.DaemonService.AlterRouting:input_type -> masir.daemon.v1.AlterRoutingRequest
+	42, // 55: masir.daemon.v1.DaemonService.MoveRouting:input_type -> masir.daemon.v1.MoveRoutingRequest
+	44, // 56: masir.daemon.v1.DaemonService.TestRouting:input_type -> masir.daemon.v1.TestRoutingRequest
+	47, // 57: masir.daemon.v1.DaemonService.ListInbounds:input_type -> masir.daemon.v1.ListInboundsRequest
+	51, // 58: masir.daemon.v1.DaemonService.AddInbound:input_type -> masir.daemon.v1.AddInboundRequest
+	53, // 59: masir.daemon.v1.DaemonService.RemoveInbound:input_type -> masir.daemon.v1.RemoveInboundRequest
+	55, // 60: masir.daemon.v1.DaemonService.AlterInbound:input_type -> masir.daemon.v1.AlterInboundRequest
+	49, // 61: masir.daemon.v1.DaemonService.ListOutbounds:input_type -> masir.daemon.v1.ListOutboundsRequest
+	57, // 62: masir.daemon.v1.DaemonService.AddOutbound:input_type -> masir.daemon.v1.AddOutboundRequest
+	59, // 63: masir.daemon.v1.DaemonService.RemoveOutbound:input_type -> masir.daemon.v1.RemoveOutboundRequest
+	61, // 64: masir.daemon.v1.DaemonService.AlterOutbound:input_type -> masir.daemon.v1.AlterOutboundRequest
+	67, // 65: masir.daemon.v1.DaemonService.ListSubscriptions:input_type -> masir.daemon.v1.ListSubscriptionsRequest
+	69, // 66: masir.daemon.v1.DaemonService.GetSubscription:input_type -> masir.daemon.v1.GetSubscriptionRequest
+	71, // 67: masir.daemon.v1.DaemonService.AddSubscription:input_type -> masir.daemon.v1.AddSubscriptionRequest
+	73, // 68: masir.daemon.v1.DaemonService.AlterSubscription:input_type -> masir.daemon.v1.AlterSubscriptionRequest
+	75, // 69: masir.daemon.v1.DaemonService.RemoveSubscription:input_type -> masir.daemon.v1.RemoveSubscriptionRequest
+	77, // 70: masir.daemon.v1.DaemonService.UpdateSubscription:input_type -> masir.daemon.v1.UpdateSubscriptionRequest
+	79, // 71: masir.daemon.v1.DaemonService.TestSubscriptionLatency:input_type -> masir.daemon.v1.TestSubscriptionLatencyRequest
+	81, // 72: masir.daemon.v1.DaemonService.SelectConfig:input_type -> masir.daemon.v1.SelectConfigRequest
+	83, // 73: masir.daemon.v1.DaemonService.GetActiveConfig:input_type -> masir.daemon.v1.GetActiveConfigRequest
+	87, // 74: masir.daemon.v1.DaemonService.CheckUpdate:input_type -> masir.daemon.v1.CheckUpdateRequest
+	89, // 75: masir.daemon.v1.DaemonService.StartUpdate:input_type -> masir.daemon.v1.StartUpdateRequest
+	91, // 76: masir.daemon.v1.DaemonService.PauseUpdate:input_type -> masir.daemon.v1.PauseUpdateRequest
+	93, // 77: masir.daemon.v1.DaemonService.ResumeUpdate:input_type -> masir.daemon.v1.ResumeUpdateRequest
+	95, // 78: masir.daemon.v1.DaemonService.StopUpdate:input_type -> masir.daemon.v1.StopUpdateRequest
+	97, // 79: masir.daemon.v1.DaemonService.WatchUpdate:input_type -> masir.daemon.v1.WatchUpdateRequest
+	26, // 80: masir.daemon.v1.DaemonService.GetXrayVersion:output_type -> masir.daemon.v1.GetXrayVersionResponse
+	28, // 81: masir.daemon.v1.DaemonService.GetXrayConfig:output_type -> masir.daemon.v1.GetXrayConfigResponse
+	5,  // 82: masir.daemon.v1.DaemonService.GetStatus:output_type -> masir.daemon.v1.GetStatusResponse
+	7,  // 83: masir.daemon.v1.DaemonService.WatchStatus:output_type -> masir.daemon.v1.WatchStatusResponse
+	9,  // 84: masir.daemon.v1.DaemonService.Shutdown:output_type -> masir.daemon.v1.ShutdownResponse
+	23, // 85: masir.daemon.v1.DaemonService.StreamLogs:output_type -> masir.daemon.v1.StreamLogsResponse
+	30, // 86: masir.daemon.v1.DaemonService.TestLatency:output_type -> masir.daemon.v1.TestLatencyResponse
+	32, // 87: masir.daemon.v1.DaemonService.CancelLatencyTest:output_type -> masir.daemon.v1.CancelLatencyTestResponse
+	12, // 88: masir.daemon.v1.DaemonService.GetSettings:output_type -> masir.daemon.v1.GetSettingsResponse
+	15, // 89: masir.daemon.v1.DaemonService.UpdateSettings:output_type -> masir.daemon.v1.UpdateSettingsResponse
+	17, // 90: masir.daemon.v1.DaemonService.SetPower:output_type -> masir.daemon.v1.SetPowerResponse
+	19, // 91: masir.daemon.v1.DaemonService.SetFallback:output_type -> masir.daemon.v1.SetFallbackResponse
+	21, // 92: masir.daemon.v1.DaemonService.SetTunEnabled:output_type -> masir.daemon.v1.SetTunEnabledResponse
+	35, // 93: masir.daemon.v1.DaemonService.ListRoutingRules:output_type -> masir.daemon.v1.ListRoutingRulesResponse
+	37, // 94: masir.daemon.v1.DaemonService.AddRouting:output_type -> masir.daemon.v1.AddRoutingResponse
+	39, // 95: masir.daemon.v1.DaemonService.RemoveRouting:output_type -> masir.daemon.v1.RemoveRoutingResponse
+	41, // 96: masir.daemon.v1.DaemonService.AlterRouting:output_type -> masir.daemon.v1.AlterRoutingResponse
+	43, // 97: masir.daemon.v1.DaemonService.MoveRouting:output_type -> masir.daemon.v1.MoveRoutingResponse
+	45, // 98: masir.daemon.v1.DaemonService.TestRouting:output_type -> masir.daemon.v1.TestRoutingResponse
+	48, // 99: masir.daemon.v1.DaemonService.ListInbounds:output_type -> masir.daemon.v1.ListInboundsResponse
+	52, // 100: masir.daemon.v1.DaemonService.AddInbound:output_type -> masir.daemon.v1.AddInboundResponse
+	54, // 101: masir.daemon.v1.DaemonService.RemoveInbound:output_type -> masir.daemon.v1.RemoveInboundResponse
+	56, // 102: masir.daemon.v1.DaemonService.AlterInbound:output_type -> masir.daemon.v1.AlterInboundResponse
+	50, // 103: masir.daemon.v1.DaemonService.ListOutbounds:output_type -> masir.daemon.v1.ListOutboundsResponse
+	58, // 104: masir.daemon.v1.DaemonService.AddOutbound:output_type -> masir.daemon.v1.AddOutboundResponse
+	60, // 105: masir.daemon.v1.DaemonService.RemoveOutbound:output_type -> masir.daemon.v1.RemoveOutboundResponse
+	62, // 106: masir.daemon.v1.DaemonService.AlterOutbound:output_type -> masir.daemon.v1.AlterOutboundResponse
+	68, // 107: masir.daemon.v1.DaemonService.ListSubscriptions:output_type -> masir.daemon.v1.ListSubscriptionsResponse
+	70, // 108: masir.daemon.v1.DaemonService.GetSubscription:output_type -> masir.daemon.v1.GetSubscriptionResponse
+	72, // 109: masir.daemon.v1.DaemonService.AddSubscription:output_type -> masir.daemon.v1.AddSubscriptionResponse
+	74, // 110: masir.daemon.v1.DaemonService.AlterSubscription:output_type -> masir.daemon.v1.AlterSubscriptionResponse
+	76, // 111: masir.daemon.v1.DaemonService.RemoveSubscription:output_type -> masir.daemon.v1.RemoveSubscriptionResponse
+	78, // 112: masir.daemon.v1.DaemonService.UpdateSubscription:output_type -> masir.daemon.v1.UpdateSubscriptionResponse
+	80, // 113: masir.daemon.v1.DaemonService.TestSubscriptionLatency:output_type -> masir.daemon.v1.TestSubscriptionLatencyResponse
+	82, // 114: masir.daemon.v1.DaemonService.SelectConfig:output_type -> masir.daemon.v1.SelectConfigResponse
+	84, // 115: masir.daemon.v1.DaemonService.GetActiveConfig:output_type -> masir.daemon.v1.GetActiveConfigResponse
+	88, // 116: masir.daemon.v1.DaemonService.CheckUpdate:output_type -> masir.daemon.v1.CheckUpdateResponse
+	90, // 117: masir.daemon.v1.DaemonService.StartUpdate:output_type -> masir.daemon.v1.StartUpdateResponse
+	92, // 118: masir.daemon.v1.DaemonService.PauseUpdate:output_type -> masir.daemon.v1.PauseUpdateResponse
+	94, // 119: masir.daemon.v1.DaemonService.ResumeUpdate:output_type -> masir.daemon.v1.ResumeUpdateResponse
+	96, // 120: masir.daemon.v1.DaemonService.StopUpdate:output_type -> masir.daemon.v1.StopUpdateResponse
+	98, // 121: masir.daemon.v1.DaemonService.WatchUpdate:output_type -> masir.daemon.v1.WatchUpdateResponse
+	80, // [80:122] is the sub-list for method output_type
+	38, // [38:80] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_masir_daemon_v1_daemon_proto_init() }
@@ -4800,8 +5782,8 @@ func file_masir_daemon_v1_daemon_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_masir_daemon_v1_daemon_proto_rawDesc), len(file_masir_daemon_v1_daemon_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   82,
+			NumEnums:      3,
+			NumMessages:   96,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

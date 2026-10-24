@@ -49,6 +49,16 @@ service DaemonService {
   // active proxy
   rpc SelectConfig(SelectConfigRequest) returns (SelectConfigResponse);
   rpc GetActiveConfig(GetActiveConfigRequest) returns (GetActiveConfigResponse);
+
+  // Updates run as jobs in the daemon, one per target, so any UI can show progress
+  // and offer pause, resume and stop. CheckUpdate asks GitHub without downloading.
+  rpc CheckUpdate(CheckUpdateRequest) returns (CheckUpdateResponse);
+  rpc StartUpdate(StartUpdateRequest) returns (StartUpdateResponse);
+  rpc PauseUpdate(PauseUpdateRequest) returns (PauseUpdateResponse);
+  rpc ResumeUpdate(ResumeUpdateRequest) returns (ResumeUpdateResponse);
+  rpc StopUpdate(StopUpdateRequest) returns (StopUpdateResponse);
+  // WatchUpdate sends the job's state now and on every change, until it finishes.
+  rpc WatchUpdate(WatchUpdateRequest) returns (stream WatchUpdateResponse);
 }
 
 // Everything a UI needs to draw the daemon's state and decide what to offer,
@@ -80,6 +90,8 @@ message Status {
   string active_config_name = 18;
   bool active_stale = 19;     // the selection is gone from its subscription; its copy keeps running
   uint32 fell_back_rules = 20; // rules whose target couldn't be used (see ListRoutingRules)
+  ReleaseInfo latest_release = 21; // from the daemon's daily check; unset until it has run
+  string geo_updated_at = 22;      // RFC 3339 time geosite.dat was last written; empty if missing
 }
 
 message GetStatusRequest {}
@@ -360,3 +372,70 @@ message GetActiveConfigResponse {
   string config_id = 2;
   SubscriptionConfig config = 3;
 }
+
+// ---- Updates ----
+
+enum UpdateTarget {
+  UPDATE_TARGET_UNSPECIFIED = 0;
+  UPDATE_TARGET_MASIR = 1; // masir and masird, from this project's GitHub releases
+  UPDATE_TARGET_GEO = 2;   // geosite.dat and geoip.dat, from XTLS/Xray-rules-dat
+}
+
+enum UpdateState {
+  UPDATE_STATE_UNSPECIFIED = 0; // no job has run since the daemon started
+  UPDATE_STATE_CHECKING = 1;    // finding the latest release
+  UPDATE_STATE_DOWNLOADING = 2;
+  UPDATE_STATE_PAUSED = 3;      // the partial download is kept; ResumeUpdate continues it
+  UPDATE_STATE_VERIFYING = 4;   // checking SHA-256 sums
+  UPDATE_STATE_INSTALLING = 5;
+  UPDATE_STATE_RESTARTING = 6;  // masird is exiting to start the new version
+  UPDATE_STATE_DONE = 7;
+  UPDATE_STATE_UP_TO_DATE = 8;  // nothing newer to install
+  UPDATE_STATE_FAILED = 9;
+  UPDATE_STATE_STOPPED = 10;    // stopped by StopUpdate; the partial download is deleted
+}
+
+message ReleaseInfo {
+  string current_version = 1;
+  string latest_version = 2;
+  bool available = 3;        // latest is newer than current (never for development builds)
+  string url = 4;            // the release page
+  int64 published_at_ms = 5;
+  int64 checked_at_ms = 6;
+}
+
+message UpdateJob {
+  UpdateTarget target = 1;
+  UpdateState state = 2;
+  string version = 3;        // being installed: a release tag, or the geo data's release
+  string file = 4;           // the file downloading now
+  int64 bytes_done = 5;      // across all files of the job
+  int64 bytes_total = 6;     // 0 while unknown
+  string error = 7;          // why it failed
+  int64 started_at_ms = 8;
+  int64 finished_at_ms = 9;
+  // For a masir update: where the new binaries were unpacked, so a CLI installed
+  // somewhere masird can't write can copy its own new binary from there.
+  string staged_dir = 10;
+}
+
+message CheckUpdateRequest {}
+message CheckUpdateResponse { ReleaseInfo release = 1; }
+
+message StartUpdateRequest {
+  UpdateTarget target = 1;
+  bool force = 2; // install even when not newer, or from a development build
+}
+message StartUpdateResponse { UpdateJob job = 1; }
+
+message PauseUpdateRequest { UpdateTarget target = 1; }
+message PauseUpdateResponse { UpdateJob job = 1; }
+
+message ResumeUpdateRequest { UpdateTarget target = 1; }
+message ResumeUpdateResponse { UpdateJob job = 1; }
+
+message StopUpdateRequest { UpdateTarget target = 1; }
+message StopUpdateResponse { UpdateJob job = 1; }
+
+message WatchUpdateRequest { UpdateTarget target = 1; }
+message WatchUpdateResponse { UpdateJob job = 1; }

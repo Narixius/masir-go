@@ -7,7 +7,10 @@ require (
 	github.com/narixius/masir-go/libs/masir-proto v0.0.0
 	github.com/xtls/libxray v1.261021.0
 	github.com/xtls/xray-core v1.260327.1-0.20261021115930-1b1647cd9ddf
+	golang.org/x/mod v0.42.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941
 	google.golang.org/grpc v1.84.0
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -58,8 +61,6 @@ require (
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f // indirect
 	golang.zx2c4.com/wireguard/windows v1.1.1 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	layeh.com/gopher-luar v1.0.11 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect

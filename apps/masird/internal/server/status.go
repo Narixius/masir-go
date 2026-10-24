@@ -2,8 +2,12 @@ package server
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/narixius/masir-go/libs/masir-core/service"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
@@ -52,6 +56,12 @@ func (s *Server) status() *pb.Status {
 	}
 	if !s.id.Privileged {
 		st.TunUnavailableReason = "ROOT_REQUIRED"
+	}
+	if s.upd != nil && s.upd.release != nil {
+		st.LatestRelease = proto.Clone(s.upd.release).(*pb.ReleaseInfo)
+	}
+	if fi, err := os.Stat(filepath.Join(s.xray.AssetDir(), "geosite.dat")); err == nil {
+		st.GeoUpdatedAt = fi.ModTime().UTC().Format(time.RFC3339)
 	}
 	for _, rr := range s.resolved {
 		if rr.FellBack {

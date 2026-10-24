@@ -6,6 +6,7 @@ import (
 	"log"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/narixius/masir-go/apps/masird/internal/compose"
@@ -40,6 +41,9 @@ type Server struct {
 	logs    *hub
 	changes *signal
 	subs    *subs.Manager // set by Boot
+
+	upd     *updates    // set by Boot
+	restart atomic.Bool // the daemon stopped to start a newly installed version
 
 	stopOnce sync.Once
 	stopped  chan struct{}
@@ -83,6 +87,7 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 	m.OnChange = s.subscriptionsChanged
 	s.subs = m
 
+	s.initUpdates(dir)
 	s.mu.Lock()
 	s.dir, s.state = dir, st
 	if err := s.reconcileLocked(ctx); err != nil {
@@ -92,6 +97,7 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 
 	go m.Run(ctx)
 	go s.retryFailed(ctx)
+	go s.maintainUpdates(ctx)
 	return nil
 }
 
