@@ -39,7 +39,16 @@ type Options struct {
 	Idle bool
 	// Version is reported in status and compared against releases by the updater.
 	Version string
+	// Context stops the daemon when done, as a Windows service stop does; nil means
+	// it runs until a signal or a client stops it.
+	Context context.Context
+	// NoReexec makes Run return ErrRestart after an update instead of starting the new
+	// binary itself, for a supervisor (the Windows service manager) to restart it.
+	NoReexec bool
 }
+
+// ErrRestart means an update installed a new binary that should now be started.
+var ErrRestart = errors.New("restart into the updated binary")
 
 // Run serves until a signal or a client stops the daemon. After an update installs a
 // new binary, Run doesn't return: it starts the new binary in place of this process.
@@ -50,9 +59,16 @@ func Run(opts Options) error {
 	// Recorded now: after an update replaces the binary, Linux would report the old,
 	// deleted file instead.
 	self, _ := os.Executable()
-	restart, stillIdle, err := run(opts.User, opts.Idle)
+	parent := opts.Context
+	if parent == nil {
+		parent = context.Background()
+	}
+	restart, stillIdle, err := run(parent, opts.User, opts.Idle)
 	if err != nil || !restart {
 		return err
+	}
+	if opts.NoReexec {
+		return ErrRestart
 	}
 	log.Println("starting the new version")
 	args := os.Args
@@ -76,7 +92,7 @@ func withoutIdle(args []string) []string {
 // run serves until asked to stop. It reports whether to start the binary again, after
 // an update installed a new one (by then the TUN and proxy are torn down), and whether
 // the daemon was still idle.
-func run(userFlag string, idle bool) (restart, stillIdle bool, err error) {
+func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle bool, err error) {
 	id, err := identity.Resolve(userFlag)
 	if err != nil {
 		return false, false, err
@@ -87,7 +103,7 @@ func run(userFlag string, idle bool) (restart, stillIdle bool, err error) {
 	}
 	sock := paths.SocketPathIn(dir)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if transport.Alive(sock) {
@@ -95,7 +111,7 @@ func run(userFlag string, idle bool) (restart, stillIdle bool, err error) {
 			return false, false, err
 		}
 	}
-	lis, err := transport.Listen(sock, id.UID, id.GID)
+	lis, err := transport.Listen(sock, transport.Peer{UID: id.UID, GID: id.GID, SID: id.SID})
 	if err != nil {
 		return false, false, err
 	}
@@ -137,7 +153,9 @@ func configDir(id identity.Identity) (string, error) {
 	if !id.Privileged {
 		return paths.ConfigDir()
 	}
-	atomicfile.SetOwner(id.UID, id.GID)
+	if id.UID >= 0 { // Windows has no numeric ids; the folder's permissions carry over instead
+		atomicfile.SetOwner(id.UID, id.GID)
+	}
 	dir := paths.ConfigDirOf(id.Home)
 	return dir, atomicfile.MkdirAll(dir)
 }

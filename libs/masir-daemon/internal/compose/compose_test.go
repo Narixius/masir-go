@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -219,5 +220,22 @@ func TestBuildInbounds(t *testing.T) {
 	_, off := build(t, Input{State: st})
 	if len(off.Inbounds) != 0 {
 		t.Errorf("proxy off should have no inbounds, got %v", off.Inbounds)
+	}
+}
+
+func TestTunBlocksDNSLeaksOnWindows(t *testing.T) {
+	st := testState(t)
+	leak := func(os string) any {
+		goos = os
+		defer func() { goos = runtime.GOOS }()
+		_, c := build(t, Input{State: st, Proxy: true, Tun: true})
+		settings, _ := c.Inbounds[1]["settings"].(map[string]any)
+		return settings["autoSystemWfpBlockLeak"]
+	}
+	if got, _ := json.Marshal(leak("windows")); string(got) != `["dns"]` {
+		t.Errorf("windows: autoSystemWfpBlockLeak = %s, want [\"dns\"]", got)
+	}
+	if got := leak("darwin"); got != nil {
+		t.Errorf("the filter is Windows-only, got %v on macOS", got)
 	}
 }

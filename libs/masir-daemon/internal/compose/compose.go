@@ -160,6 +160,12 @@ func Build(in Input) (Output, error) {
 		if in.TunName != "" {
 			settings["name"] = in.TunName
 		}
+		// Windows also sends lookups to the other adapters' DNS servers, bypassing the
+		// TUN; Xray's filter keeps port 53 inside it, where it's resolved through Xray.
+		// The tun DNS servers above lie within autoSystemRoutingTable, as it requires.
+		if goos == "windows" {
+			settings["autoSystemWfpBlockLeak"] = []string{"dns"}
+		}
 		inbounds = append(inbounds, obj{"tag": TunInboundTag, "protocol": "tun", "settings": settings, "sniffing": sniffing(true)})
 	}
 	for _, it := range st.Inbounds {
@@ -234,6 +240,9 @@ func Build(in Input) (Output, error) {
 	}
 	return Output{Config: cfg, Rules: resolved}, nil
 }
+
+// goos is runtime.GOOS; tests set it to build another system's config.
+var goos = runtime.GOOS
 
 // TunName returns a free utunN on macOS, the only names it allows; elsewhere Xray picks.
 func TunName() string {

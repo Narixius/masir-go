@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -72,7 +73,7 @@ func TestAddAndList(t *testing.T) {
 		t.Fatalf("interval = %v, want the provider's 6h", s.Interval())
 	}
 	info, err := os.Stat(m.path(s.ID))
-	if err != nil || info.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("subscription file: %v, %v", info, err)
 	}
 

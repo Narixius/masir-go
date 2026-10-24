@@ -294,6 +294,7 @@ func TestTunNeedsRoot(t *testing.T) {
 func TestBootRestoresSavedState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", filepath.Join(home, "AppData")) // Windows reads its config dir from here
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	dir, err := paths.ConfigDir()
 	if err != nil {
@@ -355,6 +356,7 @@ func TestFailedChangeLeavesStateAlone(t *testing.T) {
 func TestIdleBootWaitsForPower(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", filepath.Join(home, "AppData")) // Windows reads its config dir from here
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	dir, err := paths.ConfigDir()
 	if err != nil {

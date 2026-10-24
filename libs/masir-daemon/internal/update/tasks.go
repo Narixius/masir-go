@@ -92,6 +92,11 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	if err := replaceFile(filepath.Join(staged, exe("masir")), m.Binary); err != nil {
 		return fmt.Errorf("install %s: %w", m.Binary, err)
 	}
+	for _, f := range extraFiles { // best effort: the binary is what matters
+		if src := filepath.Join(staged, f); fileSize(src) > 0 {
+			_ = replaceFile(src, filepath.Join(filepath.Dir(m.Binary), f))
+		}
+	}
 	r.State(pb.UpdateState_UPDATE_STATE_RESTARTING)
 	if m.Restart != nil {
 		m.Restart()
@@ -256,19 +261,29 @@ func prepare(workDir, tag string) error {
 	return os.MkdirAll(filepath.Join(workDir, tag), 0o755)
 }
 
-// unpack extracts the masir binary from a release archive into dir.
+// extraFiles ship beside masir in some archives and are installed with it: Windows
+// archives carry the Wintun driver Xray's TUN loads.
+var extraFiles = []string{"wintun.dll", "wintun-LICENSE.txt"}
+
+// unpack extracts the masir binary, and any extraFiles, from a release archive into dir.
 func unpack(archive, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	want := map[string]bool{exe("masir"): true}
+	for _, f := range extraFiles {
+		want[f] = false // optional
+	}
 	found := 0
 	extract := func(name string, r io.Reader) error {
 		base := filepath.Base(name)
-		if !want[base] {
+		required, ok := want[base]
+		if !ok {
 			return nil
 		}
-		found++
+		if required {
+			found++
+		}
 		f, err := os.OpenFile(filepath.Join(dir, base), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 		if err != nil {
 			return err
@@ -323,7 +338,7 @@ func unpack(archive, dir string) error {
 			}
 		}
 	}
-	if found < len(want) {
+	if found == 0 {
 		return errors.New("the release archive has no masir binary")
 	}
 	return nil
