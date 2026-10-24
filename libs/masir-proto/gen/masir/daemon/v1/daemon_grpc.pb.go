@@ -19,18 +19,94 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DaemonService_GetStatus_FullMethodName  = "/masir.daemon.v1.DaemonService/GetStatus"
-	DaemonService_SetMode_FullMethodName    = "/masir.daemon.v1.DaemonService/SetMode"
-	DaemonService_StreamLogs_FullMethodName = "/masir.daemon.v1.DaemonService/StreamLogs"
+	DaemonService_GetXrayVersion_FullMethodName          = "/masir.daemon.v1.DaemonService/GetXrayVersion"
+	DaemonService_GetXrayConfig_FullMethodName           = "/masir.daemon.v1.DaemonService/GetXrayConfig"
+	DaemonService_GetStatus_FullMethodName               = "/masir.daemon.v1.DaemonService/GetStatus"
+	DaemonService_WatchStatus_FullMethodName             = "/masir.daemon.v1.DaemonService/WatchStatus"
+	DaemonService_Shutdown_FullMethodName                = "/masir.daemon.v1.DaemonService/Shutdown"
+	DaemonService_StreamLogs_FullMethodName              = "/masir.daemon.v1.DaemonService/StreamLogs"
+	DaemonService_TestLatency_FullMethodName             = "/masir.daemon.v1.DaemonService/TestLatency"
+	DaemonService_CancelLatencyTest_FullMethodName       = "/masir.daemon.v1.DaemonService/CancelLatencyTest"
+	DaemonService_GetSettings_FullMethodName             = "/masir.daemon.v1.DaemonService/GetSettings"
+	DaemonService_UpdateSettings_FullMethodName          = "/masir.daemon.v1.DaemonService/UpdateSettings"
+	DaemonService_SetPower_FullMethodName                = "/masir.daemon.v1.DaemonService/SetPower"
+	DaemonService_SetFallback_FullMethodName             = "/masir.daemon.v1.DaemonService/SetFallback"
+	DaemonService_SetTunEnabled_FullMethodName           = "/masir.daemon.v1.DaemonService/SetTunEnabled"
+	DaemonService_ListRoutingRules_FullMethodName        = "/masir.daemon.v1.DaemonService/ListRoutingRules"
+	DaemonService_AddRouting_FullMethodName              = "/masir.daemon.v1.DaemonService/AddRouting"
+	DaemonService_RemoveRouting_FullMethodName           = "/masir.daemon.v1.DaemonService/RemoveRouting"
+	DaemonService_AlterRouting_FullMethodName            = "/masir.daemon.v1.DaemonService/AlterRouting"
+	DaemonService_MoveRouting_FullMethodName             = "/masir.daemon.v1.DaemonService/MoveRouting"
+	DaemonService_TestRouting_FullMethodName             = "/masir.daemon.v1.DaemonService/TestRouting"
+	DaemonService_ListInbounds_FullMethodName            = "/masir.daemon.v1.DaemonService/ListInbounds"
+	DaemonService_AddInbound_FullMethodName              = "/masir.daemon.v1.DaemonService/AddInbound"
+	DaemonService_RemoveInbound_FullMethodName           = "/masir.daemon.v1.DaemonService/RemoveInbound"
+	DaemonService_AlterInbound_FullMethodName            = "/masir.daemon.v1.DaemonService/AlterInbound"
+	DaemonService_ListOutbounds_FullMethodName           = "/masir.daemon.v1.DaemonService/ListOutbounds"
+	DaemonService_AddOutbound_FullMethodName             = "/masir.daemon.v1.DaemonService/AddOutbound"
+	DaemonService_RemoveOutbound_FullMethodName          = "/masir.daemon.v1.DaemonService/RemoveOutbound"
+	DaemonService_AlterOutbound_FullMethodName           = "/masir.daemon.v1.DaemonService/AlterOutbound"
+	DaemonService_ListSubscriptions_FullMethodName       = "/masir.daemon.v1.DaemonService/ListSubscriptions"
+	DaemonService_GetSubscription_FullMethodName         = "/masir.daemon.v1.DaemonService/GetSubscription"
+	DaemonService_AddSubscription_FullMethodName         = "/masir.daemon.v1.DaemonService/AddSubscription"
+	DaemonService_AlterSubscription_FullMethodName       = "/masir.daemon.v1.DaemonService/AlterSubscription"
+	DaemonService_RemoveSubscription_FullMethodName      = "/masir.daemon.v1.DaemonService/RemoveSubscription"
+	DaemonService_UpdateSubscription_FullMethodName      = "/masir.daemon.v1.DaemonService/UpdateSubscription"
+	DaemonService_TestSubscriptionLatency_FullMethodName = "/masir.daemon.v1.DaemonService/TestSubscriptionLatency"
+	DaemonService_SelectConfig_FullMethodName            = "/masir.daemon.v1.DaemonService/SelectConfig"
+	DaemonService_GetActiveConfig_FullMethodName         = "/masir.daemon.v1.DaemonService/GetActiveConfig"
 )
 
 // DaemonServiceClient is the client API for DaemonService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DaemonServiceClient interface {
+	GetXrayVersion(ctx context.Context, in *GetXrayVersionRequest, opts ...grpc.CallOption) (*GetXrayVersionResponse, error)
+	// The full Xray config as composed from the current state, for inspection.
+	GetXrayConfig(ctx context.Context, in *GetXrayConfigRequest, opts ...grpc.CallOption) (*GetXrayConfigResponse, error)
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
-	SetMode(ctx context.Context, in *SetModeRequest, opts ...grpc.CallOption) (*SetModeResponse, error)
+	// Sends the status now, then again whenever it changes.
+	WatchStatus(ctx context.Context, in *WatchStatusRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchStatusResponse], error)
+	// Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
+	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamLogsResponse], error)
+	// latency
+	TestLatency(ctx context.Context, in *TestLatencyRequest, opts ...grpc.CallOption) (*TestLatencyResponse, error)
+	CancelLatencyTest(ctx context.Context, in *CancelLatencyTestRequest, opts ...grpc.CallOption) (*CancelLatencyTestResponse, error)
+	// power, modes and settings
+	GetSettings(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*GetSettingsResponse, error)
+	UpdateSettings(ctx context.Context, in *UpdateSettingsRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
+	SetPower(ctx context.Context, in *SetPowerRequest, opts ...grpc.CallOption) (*SetPowerResponse, error)
+	SetFallback(ctx context.Context, in *SetFallbackRequest, opts ...grpc.CallOption) (*SetFallbackResponse, error)
+	SetTunEnabled(ctx context.Context, in *SetTunEnabledRequest, opts ...grpc.CallOption) (*SetTunEnabledResponse, error)
+	// routing
+	ListRoutingRules(ctx context.Context, in *ListRoutingRulesRequest, opts ...grpc.CallOption) (*ListRoutingRulesResponse, error)
+	AddRouting(ctx context.Context, in *AddRoutingRequest, opts ...grpc.CallOption) (*AddRoutingResponse, error)
+	RemoveRouting(ctx context.Context, in *RemoveRoutingRequest, opts ...grpc.CallOption) (*RemoveRoutingResponse, error)
+	AlterRouting(ctx context.Context, in *AlterRoutingRequest, opts ...grpc.CallOption) (*AlterRoutingResponse, error)
+	MoveRouting(ctx context.Context, in *MoveRoutingRequest, opts ...grpc.CallOption) (*MoveRoutingResponse, error)
+	TestRouting(ctx context.Context, in *TestRoutingRequest, opts ...grpc.CallOption) (*TestRoutingResponse, error)
+	// inbounds
+	ListInbounds(ctx context.Context, in *ListInboundsRequest, opts ...grpc.CallOption) (*ListInboundsResponse, error)
+	AddInbound(ctx context.Context, in *AddInboundRequest, opts ...grpc.CallOption) (*AddInboundResponse, error)
+	RemoveInbound(ctx context.Context, in *RemoveInboundRequest, opts ...grpc.CallOption) (*RemoveInboundResponse, error)
+	AlterInbound(ctx context.Context, in *AlterInboundRequest, opts ...grpc.CallOption) (*AlterInboundResponse, error)
+	// outbounds
+	ListOutbounds(ctx context.Context, in *ListOutboundsRequest, opts ...grpc.CallOption) (*ListOutboundsResponse, error)
+	AddOutbound(ctx context.Context, in *AddOutboundRequest, opts ...grpc.CallOption) (*AddOutboundResponse, error)
+	RemoveOutbound(ctx context.Context, in *RemoveOutboundRequest, opts ...grpc.CallOption) (*RemoveOutboundResponse, error)
+	AlterOutbound(ctx context.Context, in *AlterOutboundRequest, opts ...grpc.CallOption) (*AlterOutboundResponse, error)
+	// subscriptions
+	ListSubscriptions(ctx context.Context, in *ListSubscriptionsRequest, opts ...grpc.CallOption) (*ListSubscriptionsResponse, error)
+	GetSubscription(ctx context.Context, in *GetSubscriptionRequest, opts ...grpc.CallOption) (*GetSubscriptionResponse, error)
+	AddSubscription(ctx context.Context, in *AddSubscriptionRequest, opts ...grpc.CallOption) (*AddSubscriptionResponse, error)
+	AlterSubscription(ctx context.Context, in *AlterSubscriptionRequest, opts ...grpc.CallOption) (*AlterSubscriptionResponse, error)
+	RemoveSubscription(ctx context.Context, in *RemoveSubscriptionRequest, opts ...grpc.CallOption) (*RemoveSubscriptionResponse, error)
+	UpdateSubscription(ctx context.Context, in *UpdateSubscriptionRequest, opts ...grpc.CallOption) (*UpdateSubscriptionResponse, error)
+	TestSubscriptionLatency(ctx context.Context, in *TestSubscriptionLatencyRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TestSubscriptionLatencyResponse], error)
+	// active proxy
+	SelectConfig(ctx context.Context, in *SelectConfigRequest, opts ...grpc.CallOption) (*SelectConfigResponse, error)
+	GetActiveConfig(ctx context.Context, in *GetActiveConfigRequest, opts ...grpc.CallOption) (*GetActiveConfigResponse, error)
 }
 
 type daemonServiceClient struct {
@@ -39,6 +115,26 @@ type daemonServiceClient struct {
 
 func NewDaemonServiceClient(cc grpc.ClientConnInterface) DaemonServiceClient {
 	return &daemonServiceClient{cc}
+}
+
+func (c *daemonServiceClient) GetXrayVersion(ctx context.Context, in *GetXrayVersionRequest, opts ...grpc.CallOption) (*GetXrayVersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetXrayVersionResponse)
+	err := c.cc.Invoke(ctx, DaemonService_GetXrayVersion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) GetXrayConfig(ctx context.Context, in *GetXrayConfigRequest, opts ...grpc.CallOption) (*GetXrayConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetXrayConfigResponse)
+	err := c.cc.Invoke(ctx, DaemonService_GetXrayConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *daemonServiceClient) GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error) {
@@ -51,10 +147,29 @@ func (c *daemonServiceClient) GetStatus(ctx context.Context, in *GetStatusReques
 	return out, nil
 }
 
-func (c *daemonServiceClient) SetMode(ctx context.Context, in *SetModeRequest, opts ...grpc.CallOption) (*SetModeResponse, error) {
+func (c *daemonServiceClient) WatchStatus(ctx context.Context, in *WatchStatusRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchStatusResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SetModeResponse)
-	err := c.cc.Invoke(ctx, DaemonService_SetMode_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[0], DaemonService_WatchStatus_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchStatusRequest, WatchStatusResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_WatchStatusClient = grpc.ServerStreamingClient[WatchStatusResponse]
+
+func (c *daemonServiceClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ShutdownResponse)
+	err := c.cc.Invoke(ctx, DaemonService_Shutdown_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +178,7 @@ func (c *daemonServiceClient) SetMode(ctx context.Context, in *SetModeRequest, o
 
 func (c *daemonServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamLogsResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[0], DaemonService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[1], DaemonService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,13 +195,365 @@ func (c *daemonServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequ
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DaemonService_StreamLogsClient = grpc.ServerStreamingClient[StreamLogsResponse]
 
+func (c *daemonServiceClient) TestLatency(ctx context.Context, in *TestLatencyRequest, opts ...grpc.CallOption) (*TestLatencyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestLatencyResponse)
+	err := c.cc.Invoke(ctx, DaemonService_TestLatency_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) CancelLatencyTest(ctx context.Context, in *CancelLatencyTestRequest, opts ...grpc.CallOption) (*CancelLatencyTestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelLatencyTestResponse)
+	err := c.cc.Invoke(ctx, DaemonService_CancelLatencyTest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) GetSettings(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*GetSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSettingsResponse)
+	err := c.cc.Invoke(ctx, DaemonService_GetSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) UpdateSettings(ctx context.Context, in *UpdateSettingsRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateSettingsResponse)
+	err := c.cc.Invoke(ctx, DaemonService_UpdateSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) SetPower(ctx context.Context, in *SetPowerRequest, opts ...grpc.CallOption) (*SetPowerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetPowerResponse)
+	err := c.cc.Invoke(ctx, DaemonService_SetPower_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) SetFallback(ctx context.Context, in *SetFallbackRequest, opts ...grpc.CallOption) (*SetFallbackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetFallbackResponse)
+	err := c.cc.Invoke(ctx, DaemonService_SetFallback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) SetTunEnabled(ctx context.Context, in *SetTunEnabledRequest, opts ...grpc.CallOption) (*SetTunEnabledResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetTunEnabledResponse)
+	err := c.cc.Invoke(ctx, DaemonService_SetTunEnabled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) ListRoutingRules(ctx context.Context, in *ListRoutingRulesRequest, opts ...grpc.CallOption) (*ListRoutingRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRoutingRulesResponse)
+	err := c.cc.Invoke(ctx, DaemonService_ListRoutingRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) AddRouting(ctx context.Context, in *AddRoutingRequest, opts ...grpc.CallOption) (*AddRoutingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddRoutingResponse)
+	err := c.cc.Invoke(ctx, DaemonService_AddRouting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) RemoveRouting(ctx context.Context, in *RemoveRoutingRequest, opts ...grpc.CallOption) (*RemoveRoutingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveRoutingResponse)
+	err := c.cc.Invoke(ctx, DaemonService_RemoveRouting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) AlterRouting(ctx context.Context, in *AlterRoutingRequest, opts ...grpc.CallOption) (*AlterRoutingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AlterRoutingResponse)
+	err := c.cc.Invoke(ctx, DaemonService_AlterRouting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) MoveRouting(ctx context.Context, in *MoveRoutingRequest, opts ...grpc.CallOption) (*MoveRoutingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MoveRoutingResponse)
+	err := c.cc.Invoke(ctx, DaemonService_MoveRouting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) TestRouting(ctx context.Context, in *TestRoutingRequest, opts ...grpc.CallOption) (*TestRoutingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestRoutingResponse)
+	err := c.cc.Invoke(ctx, DaemonService_TestRouting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) ListInbounds(ctx context.Context, in *ListInboundsRequest, opts ...grpc.CallOption) (*ListInboundsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInboundsResponse)
+	err := c.cc.Invoke(ctx, DaemonService_ListInbounds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) AddInbound(ctx context.Context, in *AddInboundRequest, opts ...grpc.CallOption) (*AddInboundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddInboundResponse)
+	err := c.cc.Invoke(ctx, DaemonService_AddInbound_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) RemoveInbound(ctx context.Context, in *RemoveInboundRequest, opts ...grpc.CallOption) (*RemoveInboundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveInboundResponse)
+	err := c.cc.Invoke(ctx, DaemonService_RemoveInbound_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) AlterInbound(ctx context.Context, in *AlterInboundRequest, opts ...grpc.CallOption) (*AlterInboundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AlterInboundResponse)
+	err := c.cc.Invoke(ctx, DaemonService_AlterInbound_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) ListOutbounds(ctx context.Context, in *ListOutboundsRequest, opts ...grpc.CallOption) (*ListOutboundsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOutboundsResponse)
+	err := c.cc.Invoke(ctx, DaemonService_ListOutbounds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) AddOutbound(ctx context.Context, in *AddOutboundRequest, opts ...grpc.CallOption) (*AddOutboundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddOutboundResponse)
+	err := c.cc.Invoke(ctx, DaemonService_AddOutbound_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) RemoveOutbound(ctx context.Context, in *RemoveOutboundRequest, opts ...grpc.CallOption) (*RemoveOutboundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveOutboundResponse)
+	err := c.cc.Invoke(ctx, DaemonService_RemoveOutbound_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) AlterOutbound(ctx context.Context, in *AlterOutboundRequest, opts ...grpc.CallOption) (*AlterOutboundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AlterOutboundResponse)
+	err := c.cc.Invoke(ctx, DaemonService_AlterOutbound_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) ListSubscriptions(ctx context.Context, in *ListSubscriptionsRequest, opts ...grpc.CallOption) (*ListSubscriptionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSubscriptionsResponse)
+	err := c.cc.Invoke(ctx, DaemonService_ListSubscriptions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) GetSubscription(ctx context.Context, in *GetSubscriptionRequest, opts ...grpc.CallOption) (*GetSubscriptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSubscriptionResponse)
+	err := c.cc.Invoke(ctx, DaemonService_GetSubscription_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) AddSubscription(ctx context.Context, in *AddSubscriptionRequest, opts ...grpc.CallOption) (*AddSubscriptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddSubscriptionResponse)
+	err := c.cc.Invoke(ctx, DaemonService_AddSubscription_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) AlterSubscription(ctx context.Context, in *AlterSubscriptionRequest, opts ...grpc.CallOption) (*AlterSubscriptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AlterSubscriptionResponse)
+	err := c.cc.Invoke(ctx, DaemonService_AlterSubscription_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) RemoveSubscription(ctx context.Context, in *RemoveSubscriptionRequest, opts ...grpc.CallOption) (*RemoveSubscriptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveSubscriptionResponse)
+	err := c.cc.Invoke(ctx, DaemonService_RemoveSubscription_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) UpdateSubscription(ctx context.Context, in *UpdateSubscriptionRequest, opts ...grpc.CallOption) (*UpdateSubscriptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateSubscriptionResponse)
+	err := c.cc.Invoke(ctx, DaemonService_UpdateSubscription_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) TestSubscriptionLatency(ctx context.Context, in *TestSubscriptionLatencyRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TestSubscriptionLatencyResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[2], DaemonService_TestSubscriptionLatency_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[TestSubscriptionLatencyRequest, TestSubscriptionLatencyResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_TestSubscriptionLatencyClient = grpc.ServerStreamingClient[TestSubscriptionLatencyResponse]
+
+func (c *daemonServiceClient) SelectConfig(ctx context.Context, in *SelectConfigRequest, opts ...grpc.CallOption) (*SelectConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SelectConfigResponse)
+	err := c.cc.Invoke(ctx, DaemonService_SelectConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) GetActiveConfig(ctx context.Context, in *GetActiveConfigRequest, opts ...grpc.CallOption) (*GetActiveConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetActiveConfigResponse)
+	err := c.cc.Invoke(ctx, DaemonService_GetActiveConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DaemonServiceServer is the server API for DaemonService service.
 // All implementations must embed UnimplementedDaemonServiceServer
 // for forward compatibility.
 type DaemonServiceServer interface {
+	GetXrayVersion(context.Context, *GetXrayVersionRequest) (*GetXrayVersionResponse, error)
+	// The full Xray config as composed from the current state, for inspection.
+	GetXrayConfig(context.Context, *GetXrayConfigRequest) (*GetXrayConfigResponse, error)
 	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
-	SetMode(context.Context, *SetModeRequest) (*SetModeResponse, error)
+	// Sends the status now, then again whenever it changes.
+	WatchStatus(*WatchStatusRequest, grpc.ServerStreamingServer[WatchStatusResponse]) error
+	// Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
+	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[StreamLogsResponse]) error
+	// latency
+	TestLatency(context.Context, *TestLatencyRequest) (*TestLatencyResponse, error)
+	CancelLatencyTest(context.Context, *CancelLatencyTestRequest) (*CancelLatencyTestResponse, error)
+	// power, modes and settings
+	GetSettings(context.Context, *GetSettingsRequest) (*GetSettingsResponse, error)
+	UpdateSettings(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error)
+	SetPower(context.Context, *SetPowerRequest) (*SetPowerResponse, error)
+	SetFallback(context.Context, *SetFallbackRequest) (*SetFallbackResponse, error)
+	SetTunEnabled(context.Context, *SetTunEnabledRequest) (*SetTunEnabledResponse, error)
+	// routing
+	ListRoutingRules(context.Context, *ListRoutingRulesRequest) (*ListRoutingRulesResponse, error)
+	AddRouting(context.Context, *AddRoutingRequest) (*AddRoutingResponse, error)
+	RemoveRouting(context.Context, *RemoveRoutingRequest) (*RemoveRoutingResponse, error)
+	AlterRouting(context.Context, *AlterRoutingRequest) (*AlterRoutingResponse, error)
+	MoveRouting(context.Context, *MoveRoutingRequest) (*MoveRoutingResponse, error)
+	TestRouting(context.Context, *TestRoutingRequest) (*TestRoutingResponse, error)
+	// inbounds
+	ListInbounds(context.Context, *ListInboundsRequest) (*ListInboundsResponse, error)
+	AddInbound(context.Context, *AddInboundRequest) (*AddInboundResponse, error)
+	RemoveInbound(context.Context, *RemoveInboundRequest) (*RemoveInboundResponse, error)
+	AlterInbound(context.Context, *AlterInboundRequest) (*AlterInboundResponse, error)
+	// outbounds
+	ListOutbounds(context.Context, *ListOutboundsRequest) (*ListOutboundsResponse, error)
+	AddOutbound(context.Context, *AddOutboundRequest) (*AddOutboundResponse, error)
+	RemoveOutbound(context.Context, *RemoveOutboundRequest) (*RemoveOutboundResponse, error)
+	AlterOutbound(context.Context, *AlterOutboundRequest) (*AlterOutboundResponse, error)
+	// subscriptions
+	ListSubscriptions(context.Context, *ListSubscriptionsRequest) (*ListSubscriptionsResponse, error)
+	GetSubscription(context.Context, *GetSubscriptionRequest) (*GetSubscriptionResponse, error)
+	AddSubscription(context.Context, *AddSubscriptionRequest) (*AddSubscriptionResponse, error)
+	AlterSubscription(context.Context, *AlterSubscriptionRequest) (*AlterSubscriptionResponse, error)
+	RemoveSubscription(context.Context, *RemoveSubscriptionRequest) (*RemoveSubscriptionResponse, error)
+	UpdateSubscription(context.Context, *UpdateSubscriptionRequest) (*UpdateSubscriptionResponse, error)
+	TestSubscriptionLatency(*TestSubscriptionLatencyRequest, grpc.ServerStreamingServer[TestSubscriptionLatencyResponse]) error
+	// active proxy
+	SelectConfig(context.Context, *SelectConfigRequest) (*SelectConfigResponse, error)
+	GetActiveConfig(context.Context, *GetActiveConfigRequest) (*GetActiveConfigResponse, error)
 	mustEmbedUnimplementedDaemonServiceServer()
 }
 
@@ -97,14 +564,113 @@ type DaemonServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDaemonServiceServer struct{}
 
+func (UnimplementedDaemonServiceServer) GetXrayVersion(context.Context, *GetXrayVersionRequest) (*GetXrayVersionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetXrayVersion not implemented")
+}
+func (UnimplementedDaemonServiceServer) GetXrayConfig(context.Context, *GetXrayConfigRequest) (*GetXrayConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetXrayConfig not implemented")
+}
 func (UnimplementedDaemonServiceServer) GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetStatus not implemented")
 }
-func (UnimplementedDaemonServiceServer) SetMode(context.Context, *SetModeRequest) (*SetModeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetMode not implemented")
+func (UnimplementedDaemonServiceServer) WatchStatus(*WatchStatusRequest, grpc.ServerStreamingServer[WatchStatusResponse]) error {
+	return status.Error(codes.Unimplemented, "method WatchStatus not implemented")
+}
+func (UnimplementedDaemonServiceServer) Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Shutdown not implemented")
 }
 func (UnimplementedDaemonServiceServer) StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[StreamLogsResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
+}
+func (UnimplementedDaemonServiceServer) TestLatency(context.Context, *TestLatencyRequest) (*TestLatencyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestLatency not implemented")
+}
+func (UnimplementedDaemonServiceServer) CancelLatencyTest(context.Context, *CancelLatencyTestRequest) (*CancelLatencyTestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelLatencyTest not implemented")
+}
+func (UnimplementedDaemonServiceServer) GetSettings(context.Context, *GetSettingsRequest) (*GetSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSettings not implemented")
+}
+func (UnimplementedDaemonServiceServer) UpdateSettings(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateSettings not implemented")
+}
+func (UnimplementedDaemonServiceServer) SetPower(context.Context, *SetPowerRequest) (*SetPowerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetPower not implemented")
+}
+func (UnimplementedDaemonServiceServer) SetFallback(context.Context, *SetFallbackRequest) (*SetFallbackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetFallback not implemented")
+}
+func (UnimplementedDaemonServiceServer) SetTunEnabled(context.Context, *SetTunEnabledRequest) (*SetTunEnabledResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetTunEnabled not implemented")
+}
+func (UnimplementedDaemonServiceServer) ListRoutingRules(context.Context, *ListRoutingRulesRequest) (*ListRoutingRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRoutingRules not implemented")
+}
+func (UnimplementedDaemonServiceServer) AddRouting(context.Context, *AddRoutingRequest) (*AddRoutingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddRouting not implemented")
+}
+func (UnimplementedDaemonServiceServer) RemoveRouting(context.Context, *RemoveRoutingRequest) (*RemoveRoutingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveRouting not implemented")
+}
+func (UnimplementedDaemonServiceServer) AlterRouting(context.Context, *AlterRoutingRequest) (*AlterRoutingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AlterRouting not implemented")
+}
+func (UnimplementedDaemonServiceServer) MoveRouting(context.Context, *MoveRoutingRequest) (*MoveRoutingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MoveRouting not implemented")
+}
+func (UnimplementedDaemonServiceServer) TestRouting(context.Context, *TestRoutingRequest) (*TestRoutingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestRouting not implemented")
+}
+func (UnimplementedDaemonServiceServer) ListInbounds(context.Context, *ListInboundsRequest) (*ListInboundsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInbounds not implemented")
+}
+func (UnimplementedDaemonServiceServer) AddInbound(context.Context, *AddInboundRequest) (*AddInboundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddInbound not implemented")
+}
+func (UnimplementedDaemonServiceServer) RemoveInbound(context.Context, *RemoveInboundRequest) (*RemoveInboundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveInbound not implemented")
+}
+func (UnimplementedDaemonServiceServer) AlterInbound(context.Context, *AlterInboundRequest) (*AlterInboundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AlterInbound not implemented")
+}
+func (UnimplementedDaemonServiceServer) ListOutbounds(context.Context, *ListOutboundsRequest) (*ListOutboundsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOutbounds not implemented")
+}
+func (UnimplementedDaemonServiceServer) AddOutbound(context.Context, *AddOutboundRequest) (*AddOutboundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddOutbound not implemented")
+}
+func (UnimplementedDaemonServiceServer) RemoveOutbound(context.Context, *RemoveOutboundRequest) (*RemoveOutboundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveOutbound not implemented")
+}
+func (UnimplementedDaemonServiceServer) AlterOutbound(context.Context, *AlterOutboundRequest) (*AlterOutboundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AlterOutbound not implemented")
+}
+func (UnimplementedDaemonServiceServer) ListSubscriptions(context.Context, *ListSubscriptionsRequest) (*ListSubscriptionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSubscriptions not implemented")
+}
+func (UnimplementedDaemonServiceServer) GetSubscription(context.Context, *GetSubscriptionRequest) (*GetSubscriptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSubscription not implemented")
+}
+func (UnimplementedDaemonServiceServer) AddSubscription(context.Context, *AddSubscriptionRequest) (*AddSubscriptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddSubscription not implemented")
+}
+func (UnimplementedDaemonServiceServer) AlterSubscription(context.Context, *AlterSubscriptionRequest) (*AlterSubscriptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AlterSubscription not implemented")
+}
+func (UnimplementedDaemonServiceServer) RemoveSubscription(context.Context, *RemoveSubscriptionRequest) (*RemoveSubscriptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveSubscription not implemented")
+}
+func (UnimplementedDaemonServiceServer) UpdateSubscription(context.Context, *UpdateSubscriptionRequest) (*UpdateSubscriptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateSubscription not implemented")
+}
+func (UnimplementedDaemonServiceServer) TestSubscriptionLatency(*TestSubscriptionLatencyRequest, grpc.ServerStreamingServer[TestSubscriptionLatencyResponse]) error {
+	return status.Error(codes.Unimplemented, "method TestSubscriptionLatency not implemented")
+}
+func (UnimplementedDaemonServiceServer) SelectConfig(context.Context, *SelectConfigRequest) (*SelectConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SelectConfig not implemented")
+}
+func (UnimplementedDaemonServiceServer) GetActiveConfig(context.Context, *GetActiveConfigRequest) (*GetActiveConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetActiveConfig not implemented")
 }
 func (UnimplementedDaemonServiceServer) mustEmbedUnimplementedDaemonServiceServer() {}
 func (UnimplementedDaemonServiceServer) testEmbeddedByValue()                       {}
@@ -127,6 +693,42 @@ func RegisterDaemonServiceServer(s grpc.ServiceRegistrar, srv DaemonServiceServe
 	s.RegisterService(&DaemonService_ServiceDesc, srv)
 }
 
+func _DaemonService_GetXrayVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetXrayVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).GetXrayVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_GetXrayVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).GetXrayVersion(ctx, req.(*GetXrayVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_GetXrayConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetXrayConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).GetXrayConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_GetXrayConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).GetXrayConfig(ctx, req.(*GetXrayConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DaemonService_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetStatusRequest)
 	if err := dec(in); err != nil {
@@ -145,20 +747,31 @@ func _DaemonService_GetStatus_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DaemonService_SetMode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetModeRequest)
+func _DaemonService_WatchStatus_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchStatusRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(DaemonServiceServer).WatchStatus(m, &grpc.GenericServerStream[WatchStatusRequest, WatchStatusResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_WatchStatusServer = grpc.ServerStreamingServer[WatchStatusResponse]
+
+func _DaemonService_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShutdownRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DaemonServiceServer).SetMode(ctx, in)
+		return srv.(DaemonServiceServer).Shutdown(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DaemonService_SetMode_FullMethodName,
+		FullMethod: DaemonService_Shutdown_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DaemonServiceServer).SetMode(ctx, req.(*SetModeRequest))
+		return srv.(DaemonServiceServer).Shutdown(ctx, req.(*ShutdownRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -174,6 +787,539 @@ func _DaemonService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DaemonService_StreamLogsServer = grpc.ServerStreamingServer[StreamLogsResponse]
 
+func _DaemonService_TestLatency_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestLatencyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).TestLatency(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_TestLatency_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).TestLatency(ctx, req.(*TestLatencyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_CancelLatencyTest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelLatencyTestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).CancelLatencyTest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_CancelLatencyTest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).CancelLatencyTest(ctx, req.(*CancelLatencyTestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_GetSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).GetSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_GetSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).GetSettings(ctx, req.(*GetSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_UpdateSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).UpdateSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_UpdateSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).UpdateSettings(ctx, req.(*UpdateSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_SetPower_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPowerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).SetPower(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_SetPower_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).SetPower(ctx, req.(*SetPowerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_SetFallback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetFallbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).SetFallback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_SetFallback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).SetFallback(ctx, req.(*SetFallbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_SetTunEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTunEnabledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).SetTunEnabled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_SetTunEnabled_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).SetTunEnabled(ctx, req.(*SetTunEnabledRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_ListRoutingRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRoutingRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).ListRoutingRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_ListRoutingRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).ListRoutingRules(ctx, req.(*ListRoutingRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_AddRouting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddRoutingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).AddRouting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_AddRouting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).AddRouting(ctx, req.(*AddRoutingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_RemoveRouting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveRoutingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).RemoveRouting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_RemoveRouting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).RemoveRouting(ctx, req.(*RemoveRoutingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_AlterRouting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AlterRoutingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).AlterRouting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_AlterRouting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).AlterRouting(ctx, req.(*AlterRoutingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_MoveRouting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveRoutingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).MoveRouting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_MoveRouting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).MoveRouting(ctx, req.(*MoveRoutingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_TestRouting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestRoutingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).TestRouting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_TestRouting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).TestRouting(ctx, req.(*TestRoutingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_ListInbounds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInboundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).ListInbounds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_ListInbounds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).ListInbounds(ctx, req.(*ListInboundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_AddInbound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddInboundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).AddInbound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_AddInbound_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).AddInbound(ctx, req.(*AddInboundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_RemoveInbound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveInboundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).RemoveInbound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_RemoveInbound_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).RemoveInbound(ctx, req.(*RemoveInboundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_AlterInbound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AlterInboundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).AlterInbound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_AlterInbound_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).AlterInbound(ctx, req.(*AlterInboundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_ListOutbounds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOutboundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).ListOutbounds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_ListOutbounds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).ListOutbounds(ctx, req.(*ListOutboundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_AddOutbound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddOutboundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).AddOutbound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_AddOutbound_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).AddOutbound(ctx, req.(*AddOutboundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_RemoveOutbound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveOutboundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).RemoveOutbound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_RemoveOutbound_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).RemoveOutbound(ctx, req.(*RemoveOutboundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_AlterOutbound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AlterOutboundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).AlterOutbound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_AlterOutbound_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).AlterOutbound(ctx, req.(*AlterOutboundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_ListSubscriptions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSubscriptionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).ListSubscriptions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_ListSubscriptions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).ListSubscriptions(ctx, req.(*ListSubscriptionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_GetSubscription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSubscriptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).GetSubscription(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_GetSubscription_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).GetSubscription(ctx, req.(*GetSubscriptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_AddSubscription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddSubscriptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).AddSubscription(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_AddSubscription_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).AddSubscription(ctx, req.(*AddSubscriptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_AlterSubscription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AlterSubscriptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).AlterSubscription(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_AlterSubscription_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).AlterSubscription(ctx, req.(*AlterSubscriptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_RemoveSubscription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveSubscriptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).RemoveSubscription(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_RemoveSubscription_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).RemoveSubscription(ctx, req.(*RemoveSubscriptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_UpdateSubscription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSubscriptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).UpdateSubscription(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_UpdateSubscription_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).UpdateSubscription(ctx, req.(*UpdateSubscriptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_TestSubscriptionLatency_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(TestSubscriptionLatencyRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(DaemonServiceServer).TestSubscriptionLatency(m, &grpc.GenericServerStream[TestSubscriptionLatencyRequest, TestSubscriptionLatencyResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_TestSubscriptionLatencyServer = grpc.ServerStreamingServer[TestSubscriptionLatencyResponse]
+
+func _DaemonService_SelectConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SelectConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).SelectConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_SelectConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).SelectConfig(ctx, req.(*SelectConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_GetActiveConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetActiveConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).GetActiveConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_GetActiveConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).GetActiveConfig(ctx, req.(*GetActiveConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DaemonService_ServiceDesc is the grpc.ServiceDesc for DaemonService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -182,18 +1328,152 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*DaemonServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "GetXrayVersion",
+			Handler:    _DaemonService_GetXrayVersion_Handler,
+		},
+		{
+			MethodName: "GetXrayConfig",
+			Handler:    _DaemonService_GetXrayConfig_Handler,
+		},
+		{
 			MethodName: "GetStatus",
 			Handler:    _DaemonService_GetStatus_Handler,
 		},
 		{
-			MethodName: "SetMode",
-			Handler:    _DaemonService_SetMode_Handler,
+			MethodName: "Shutdown",
+			Handler:    _DaemonService_Shutdown_Handler,
+		},
+		{
+			MethodName: "TestLatency",
+			Handler:    _DaemonService_TestLatency_Handler,
+		},
+		{
+			MethodName: "CancelLatencyTest",
+			Handler:    _DaemonService_CancelLatencyTest_Handler,
+		},
+		{
+			MethodName: "GetSettings",
+			Handler:    _DaemonService_GetSettings_Handler,
+		},
+		{
+			MethodName: "UpdateSettings",
+			Handler:    _DaemonService_UpdateSettings_Handler,
+		},
+		{
+			MethodName: "SetPower",
+			Handler:    _DaemonService_SetPower_Handler,
+		},
+		{
+			MethodName: "SetFallback",
+			Handler:    _DaemonService_SetFallback_Handler,
+		},
+		{
+			MethodName: "SetTunEnabled",
+			Handler:    _DaemonService_SetTunEnabled_Handler,
+		},
+		{
+			MethodName: "ListRoutingRules",
+			Handler:    _DaemonService_ListRoutingRules_Handler,
+		},
+		{
+			MethodName: "AddRouting",
+			Handler:    _DaemonService_AddRouting_Handler,
+		},
+		{
+			MethodName: "RemoveRouting",
+			Handler:    _DaemonService_RemoveRouting_Handler,
+		},
+		{
+			MethodName: "AlterRouting",
+			Handler:    _DaemonService_AlterRouting_Handler,
+		},
+		{
+			MethodName: "MoveRouting",
+			Handler:    _DaemonService_MoveRouting_Handler,
+		},
+		{
+			MethodName: "TestRouting",
+			Handler:    _DaemonService_TestRouting_Handler,
+		},
+		{
+			MethodName: "ListInbounds",
+			Handler:    _DaemonService_ListInbounds_Handler,
+		},
+		{
+			MethodName: "AddInbound",
+			Handler:    _DaemonService_AddInbound_Handler,
+		},
+		{
+			MethodName: "RemoveInbound",
+			Handler:    _DaemonService_RemoveInbound_Handler,
+		},
+		{
+			MethodName: "AlterInbound",
+			Handler:    _DaemonService_AlterInbound_Handler,
+		},
+		{
+			MethodName: "ListOutbounds",
+			Handler:    _DaemonService_ListOutbounds_Handler,
+		},
+		{
+			MethodName: "AddOutbound",
+			Handler:    _DaemonService_AddOutbound_Handler,
+		},
+		{
+			MethodName: "RemoveOutbound",
+			Handler:    _DaemonService_RemoveOutbound_Handler,
+		},
+		{
+			MethodName: "AlterOutbound",
+			Handler:    _DaemonService_AlterOutbound_Handler,
+		},
+		{
+			MethodName: "ListSubscriptions",
+			Handler:    _DaemonService_ListSubscriptions_Handler,
+		},
+		{
+			MethodName: "GetSubscription",
+			Handler:    _DaemonService_GetSubscription_Handler,
+		},
+		{
+			MethodName: "AddSubscription",
+			Handler:    _DaemonService_AddSubscription_Handler,
+		},
+		{
+			MethodName: "AlterSubscription",
+			Handler:    _DaemonService_AlterSubscription_Handler,
+		},
+		{
+			MethodName: "RemoveSubscription",
+			Handler:    _DaemonService_RemoveSubscription_Handler,
+		},
+		{
+			MethodName: "UpdateSubscription",
+			Handler:    _DaemonService_UpdateSubscription_Handler,
+		},
+		{
+			MethodName: "SelectConfig",
+			Handler:    _DaemonService_SelectConfig_Handler,
+		},
+		{
+			MethodName: "GetActiveConfig",
+			Handler:    _DaemonService_GetActiveConfig_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
+			StreamName:    "WatchStatus",
+			Handler:       _DaemonService_WatchStatus_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "StreamLogs",
 			Handler:       _DaemonService_StreamLogs_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "TestSubscriptionLatency",
+			Handler:       _DaemonService_TestSubscriptionLatency_Handler,
 			ServerStreams: true,
 		},
 	},

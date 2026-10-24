@@ -21,53 +21,255 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Mode int32
+// Where traffic that matches no rule goes.
+type Fallback int32
 
 const (
-	Mode_MODE_UNSPECIFIED Mode = 0
-	Mode_MODE_DIRECT      Mode = 1
-	Mode_MODE_PROXY       Mode = 2
+	Fallback_FALLBACK_UNSPECIFIED Fallback = 0
+	Fallback_FALLBACK_DIRECT      Fallback = 1
+	Fallback_FALLBACK_PROXY       Fallback = 2
 )
 
-// Enum value maps for Mode.
+// Enum value maps for Fallback.
 var (
-	Mode_name = map[int32]string{
-		0: "MODE_UNSPECIFIED",
-		1: "MODE_DIRECT",
-		2: "MODE_PROXY",
+	Fallback_name = map[int32]string{
+		0: "FALLBACK_UNSPECIFIED",
+		1: "FALLBACK_DIRECT",
+		2: "FALLBACK_PROXY",
 	}
-	Mode_value = map[string]int32{
-		"MODE_UNSPECIFIED": 0,
-		"MODE_DIRECT":      1,
-		"MODE_PROXY":       2,
+	Fallback_value = map[string]int32{
+		"FALLBACK_UNSPECIFIED": 0,
+		"FALLBACK_DIRECT":      1,
+		"FALLBACK_PROXY":       2,
 	}
 )
 
-func (x Mode) Enum() *Mode {
-	p := new(Mode)
+func (x Fallback) Enum() *Fallback {
+	p := new(Fallback)
 	*p = x
 	return p
 }
 
-func (x Mode) String() string {
+func (x Fallback) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (Mode) Descriptor() protoreflect.EnumDescriptor {
+func (Fallback) Descriptor() protoreflect.EnumDescriptor {
 	return file_masir_daemon_v1_daemon_proto_enumTypes[0].Descriptor()
 }
 
-func (Mode) Type() protoreflect.EnumType {
+func (Fallback) Type() protoreflect.EnumType {
 	return &file_masir_daemon_v1_daemon_proto_enumTypes[0]
 }
 
-func (x Mode) Number() protoreflect.EnumNumber {
+func (x Fallback) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use Mode.Descriptor instead.
-func (Mode) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use Fallback.Descriptor instead.
+func (Fallback) EnumDescriptor() ([]byte, []int) {
 	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{0}
+}
+
+// Everything a UI needs to draw the daemon's state and decide what to offer,
+// e.g. asking for root when the user wants TUN and tun_available is false.
+type Status struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"` // daemon version
+	XrayVersion   string                 `protobuf:"bytes,2,opt,name=xray_version,json=xrayVersion,proto3" json:"xray_version,omitempty"`
+	UptimeSeconds int64                  `protobuf:"varint,3,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
+	// privileges
+	Privileged           bool   `protobuf:"varint,4,opt,name=privileged,proto3" json:"privileged,omitempty"`                                     // running as root
+	ServiceInstalled     bool   `protobuf:"varint,5,opt,name=service_installed,json=serviceInstalled,proto3" json:"service_installed,omitempty"` // installed as the OS service; false means started in the background
+	ServedUid            int64  `protobuf:"varint,6,opt,name=served_uid,json=servedUid,proto3" json:"served_uid,omitempty"`                      // the one user this daemon serves; -1 on Windows
+	ServedUser           string `protobuf:"bytes,7,opt,name=served_user,json=servedUser,proto3" json:"served_user,omitempty"`
+	TunAvailable         bool   `protobuf:"varint,8,opt,name=tun_available,json=tunAvailable,proto3" json:"tun_available,omitempty"`
+	TunUnavailableReason string `protobuf:"bytes,9,opt,name=tun_unavailable_reason,json=tunUnavailableReason,proto3" json:"tun_unavailable_reason,omitempty"` // "ROOT_REQUIRED" when tun_available is false
+	// what runs
+	XrayRunning  bool   `protobuf:"varint,10,opt,name=xray_running,json=xrayRunning,proto3" json:"xray_running,omitempty"`
+	ProxyRunning bool   `protobuf:"varint,11,opt,name=proxy_running,json=proxyRunning,proto3" json:"proxy_running,omitempty"`
+	ProxyAddress string `protobuf:"bytes,12,opt,name=proxy_address,json=proxyAddress,proto3" json:"proxy_address,omitempty"` // e.g. "0.0.0.0:7890"
+	TunRunning   bool   `protobuf:"varint,13,opt,name=tun_running,json=tunRunning,proto3" json:"tun_running,omitempty"`
+	LastError    string `protobuf:"bytes,14,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"` // why what runs doesn't match the settings; empty when it does
+	// settings and selection
+	Settings             *Settings `protobuf:"bytes,15,opt,name=settings,proto3" json:"settings,omitempty"`
+	ActiveSubscriptionId string    `protobuf:"bytes,16,opt,name=active_subscription_id,json=activeSubscriptionId,proto3" json:"active_subscription_id,omitempty"`
+	ActiveConfigId       string    `protobuf:"bytes,17,opt,name=active_config_id,json=activeConfigId,proto3" json:"active_config_id,omitempty"`
+	ActiveConfigName     string    `protobuf:"bytes,18,opt,name=active_config_name,json=activeConfigName,proto3" json:"active_config_name,omitempty"`
+	ActiveStale          bool      `protobuf:"varint,19,opt,name=active_stale,json=activeStale,proto3" json:"active_stale,omitempty"`         // the selection is gone from its subscription; its copy keeps running
+	FellBackRules        uint32    `protobuf:"varint,20,opt,name=fell_back_rules,json=fellBackRules,proto3" json:"fell_back_rules,omitempty"` // rules whose target couldn't be used (see ListRoutingRules)
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *Status) Reset() {
+	*x = Status{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Status) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Status) ProtoMessage() {}
+
+func (x *Status) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Status.ProtoReflect.Descriptor instead.
+func (*Status) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Status) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *Status) GetXrayVersion() string {
+	if x != nil {
+		return x.XrayVersion
+	}
+	return ""
+}
+
+func (x *Status) GetUptimeSeconds() int64 {
+	if x != nil {
+		return x.UptimeSeconds
+	}
+	return 0
+}
+
+func (x *Status) GetPrivileged() bool {
+	if x != nil {
+		return x.Privileged
+	}
+	return false
+}
+
+func (x *Status) GetServiceInstalled() bool {
+	if x != nil {
+		return x.ServiceInstalled
+	}
+	return false
+}
+
+func (x *Status) GetServedUid() int64 {
+	if x != nil {
+		return x.ServedUid
+	}
+	return 0
+}
+
+func (x *Status) GetServedUser() string {
+	if x != nil {
+		return x.ServedUser
+	}
+	return ""
+}
+
+func (x *Status) GetTunAvailable() bool {
+	if x != nil {
+		return x.TunAvailable
+	}
+	return false
+}
+
+func (x *Status) GetTunUnavailableReason() string {
+	if x != nil {
+		return x.TunUnavailableReason
+	}
+	return ""
+}
+
+func (x *Status) GetXrayRunning() bool {
+	if x != nil {
+		return x.XrayRunning
+	}
+	return false
+}
+
+func (x *Status) GetProxyRunning() bool {
+	if x != nil {
+		return x.ProxyRunning
+	}
+	return false
+}
+
+func (x *Status) GetProxyAddress() string {
+	if x != nil {
+		return x.ProxyAddress
+	}
+	return ""
+}
+
+func (x *Status) GetTunRunning() bool {
+	if x != nil {
+		return x.TunRunning
+	}
+	return false
+}
+
+func (x *Status) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *Status) GetSettings() *Settings {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
+func (x *Status) GetActiveSubscriptionId() string {
+	if x != nil {
+		return x.ActiveSubscriptionId
+	}
+	return ""
+}
+
+func (x *Status) GetActiveConfigId() string {
+	if x != nil {
+		return x.ActiveConfigId
+	}
+	return ""
+}
+
+func (x *Status) GetActiveConfigName() string {
+	if x != nil {
+		return x.ActiveConfigName
+	}
+	return ""
+}
+
+func (x *Status) GetActiveStale() bool {
+	if x != nil {
+		return x.ActiveStale
+	}
+	return false
+}
+
+func (x *Status) GetFellBackRules() uint32 {
+	if x != nil {
+		return x.FellBackRules
+	}
+	return 0
 }
 
 type GetStatusRequest struct {
@@ -78,7 +280,7 @@ type GetStatusRequest struct {
 
 func (x *GetStatusRequest) Reset() {
 	*x = GetStatusRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[0]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -90,7 +292,7 @@ func (x *GetStatusRequest) String() string {
 func (*GetStatusRequest) ProtoMessage() {}
 
 func (x *GetStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[0]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -103,21 +305,19 @@ func (x *GetStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetStatusRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{0}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{1}
 }
 
 type GetStatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Running       bool                   `protobuf:"varint,1,opt,name=running,proto3" json:"running,omitempty"`
-	UptimeSeconds int64                  `protobuf:"varint,2,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
-	Version       string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	Status        *Status                `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetStatusResponse) Reset() {
 	*x = GetStatusResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[1]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -129,7 +329,7 @@ func (x *GetStatusResponse) String() string {
 func (*GetStatusResponse) ProtoMessage() {}
 
 func (x *GetStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[1]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -142,52 +342,307 @@ func (x *GetStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetStatusResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{1}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *GetStatusResponse) GetRunning() bool {
+func (x *GetStatusResponse) GetStatus() *Status {
 	if x != nil {
-		return x.Running
+		return x.Status
+	}
+	return nil
+}
+
+type WatchStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchStatusRequest) Reset() {
+	*x = WatchStatusRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchStatusRequest) ProtoMessage() {}
+
+func (x *WatchStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchStatusRequest.ProtoReflect.Descriptor instead.
+func (*WatchStatusRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{3}
+}
+
+type WatchStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        *Status                `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchStatusResponse) Reset() {
+	*x = WatchStatusResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchStatusResponse) ProtoMessage() {}
+
+func (x *WatchStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchStatusResponse.ProtoReflect.Descriptor instead.
+func (*WatchStatusResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *WatchStatusResponse) GetStatus() *Status {
+	if x != nil {
+		return x.Status
+	}
+	return nil
+}
+
+type ShutdownRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShutdownRequest) Reset() {
+	*x = ShutdownRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShutdownRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShutdownRequest) ProtoMessage() {}
+
+func (x *ShutdownRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShutdownRequest.ProtoReflect.Descriptor instead.
+func (*ShutdownRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{5}
+}
+
+type ShutdownResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShutdownResponse) Reset() {
+	*x = ShutdownResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShutdownResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShutdownResponse) ProtoMessage() {}
+
+func (x *ShutdownResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShutdownResponse.ProtoReflect.Descriptor instead.
+func (*ShutdownResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{6}
+}
+
+// Xray runs while power or always_on_proxy is on. The proxy inbound runs whenever
+// Xray does; the TUN only while power and tun are on and the daemon is root.
+type Settings struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Power         bool                   `protobuf:"varint,1,opt,name=power,proto3" json:"power,omitempty"`
+	Tun           bool                   `protobuf:"varint,2,opt,name=tun,proto3" json:"tun,omitempty"`
+	AlwaysOnProxy bool                   `protobuf:"varint,3,opt,name=always_on_proxy,json=alwaysOnProxy,proto3" json:"always_on_proxy,omitempty"`
+	Fallback      Fallback               `protobuf:"varint,4,opt,name=fallback,proto3,enum=masir.daemon.v1.Fallback" json:"fallback,omitempty"`
+	AllowLan      bool                   `protobuf:"varint,5,opt,name=allow_lan,json=allowLan,proto3" json:"allow_lan,omitempty"`       // proxy listens on all interfaces, not just this machine
+	ProxyPort     uint32                 `protobuf:"varint,6,opt,name=proxy_port,json=proxyPort,proto3" json:"proxy_port,omitempty"`    // mixed SOCKS5 + HTTP; default 7890
+	DohDns        string                 `protobuf:"bytes,7,opt,name=doh_dns,json=dohDns,proto3" json:"doh_dns,omitempty"`              // DNS for everything except proxy server names; goes through the proxy
+	DnsServers    []string               `protobuf:"bytes,8,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`  // plain DNS (IPs) for proxy server names; goes direct
+	TunDns        []string               `protobuf:"bytes,9,rep,name=tun_dns,json=tunDns,proto3" json:"tun_dns,omitempty"`              // DNS the TUN interface advertises; empty means dns_servers
+	TunGateway    string                 `protobuf:"bytes,10,opt,name=tun_gateway,json=tunGateway,proto3" json:"tun_gateway,omitempty"` // IPv4 CIDR for the TUN interface
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Settings) Reset() {
+	*x = Settings{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Settings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Settings) ProtoMessage() {}
+
+func (x *Settings) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Settings.ProtoReflect.Descriptor instead.
+func (*Settings) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Settings) GetPower() bool {
+	if x != nil {
+		return x.Power
 	}
 	return false
 }
 
-func (x *GetStatusResponse) GetUptimeSeconds() int64 {
+func (x *Settings) GetTun() bool {
 	if x != nil {
-		return x.UptimeSeconds
+		return x.Tun
+	}
+	return false
+}
+
+func (x *Settings) GetAlwaysOnProxy() bool {
+	if x != nil {
+		return x.AlwaysOnProxy
+	}
+	return false
+}
+
+func (x *Settings) GetFallback() Fallback {
+	if x != nil {
+		return x.Fallback
+	}
+	return Fallback_FALLBACK_UNSPECIFIED
+}
+
+func (x *Settings) GetAllowLan() bool {
+	if x != nil {
+		return x.AllowLan
+	}
+	return false
+}
+
+func (x *Settings) GetProxyPort() uint32 {
+	if x != nil {
+		return x.ProxyPort
 	}
 	return 0
 }
 
-func (x *GetStatusResponse) GetVersion() string {
+func (x *Settings) GetDohDns() string {
 	if x != nil {
-		return x.Version
+		return x.DohDns
 	}
 	return ""
 }
 
-type SetModeRequest struct {
+func (x *Settings) GetDnsServers() []string {
+	if x != nil {
+		return x.DnsServers
+	}
+	return nil
+}
+
+func (x *Settings) GetTunDns() []string {
+	if x != nil {
+		return x.TunDns
+	}
+	return nil
+}
+
+func (x *Settings) GetTunGateway() string {
+	if x != nil {
+		return x.TunGateway
+	}
+	return ""
+}
+
+type GetSettingsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Mode          Mode                   `protobuf:"varint,1,opt,name=mode,proto3,enum=masir.daemon.v1.Mode" json:"mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SetModeRequest) Reset() {
-	*x = SetModeRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[2]
+func (x *GetSettingsRequest) Reset() {
+	*x = GetSettingsRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SetModeRequest) String() string {
+func (x *GetSettingsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SetModeRequest) ProtoMessage() {}
+func (*GetSettingsRequest) ProtoMessage() {}
 
-func (x *SetModeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[2]
+func (x *GetSettingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -198,39 +653,34 @@ func (x *SetModeRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SetModeRequest.ProtoReflect.Descriptor instead.
-func (*SetModeRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{2}
+// Deprecated: Use GetSettingsRequest.ProtoReflect.Descriptor instead.
+func (*GetSettingsRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *SetModeRequest) GetMode() Mode {
-	if x != nil {
-		return x.Mode
-	}
-	return Mode_MODE_UNSPECIFIED
-}
-
-type SetModeResponse struct {
+type GetSettingsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Settings      *Settings              `protobuf:"bytes,1,opt,name=settings,proto3" json:"settings,omitempty"`
+	Defaults      *Settings              `protobuf:"bytes,2,opt,name=defaults,proto3" json:"defaults,omitempty"` // what each setting is when not customized
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SetModeResponse) Reset() {
-	*x = SetModeResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[3]
+func (x *GetSettingsResponse) Reset() {
+	*x = GetSettingsResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SetModeResponse) String() string {
+func (x *GetSettingsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SetModeResponse) ProtoMessage() {}
+func (*GetSettingsResponse) ProtoMessage() {}
 
-func (x *SetModeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[3]
+func (x *GetSettingsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -241,9 +691,449 @@ func (x *SetModeResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SetModeResponse.ProtoReflect.Descriptor instead.
-func (*SetModeResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use GetSettingsResponse.ProtoReflect.Descriptor instead.
+func (*GetSettingsResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GetSettingsResponse) GetSettings() *Settings {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
+func (x *GetSettingsResponse) GetDefaults() *Settings {
+	if x != nil {
+		return x.Defaults
+	}
+	return nil
+}
+
+type StringList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Values        []string               `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StringList) Reset() {
+	*x = StringList{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StringList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StringList) ProtoMessage() {}
+
+func (x *StringList) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StringList.ProtoReflect.Descriptor instead.
+func (*StringList) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *StringList) GetValues() []string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+// Unset fields are left alone. Power, tun and fallback have their own RPCs because
+// they carry preconditions.
+type UpdateSettingsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AlwaysOnProxy *bool                  `protobuf:"varint,1,opt,name=always_on_proxy,json=alwaysOnProxy,proto3,oneof" json:"always_on_proxy,omitempty"`
+	AllowLan      *bool                  `protobuf:"varint,2,opt,name=allow_lan,json=allowLan,proto3,oneof" json:"allow_lan,omitempty"`
+	ProxyPort     *uint32                `protobuf:"varint,3,opt,name=proxy_port,json=proxyPort,proto3,oneof" json:"proxy_port,omitempty"`
+	DohDns        *string                `protobuf:"bytes,4,opt,name=doh_dns,json=dohDns,proto3,oneof" json:"doh_dns,omitempty"`
+	DnsServers    *StringList            `protobuf:"bytes,5,opt,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`
+	TunDns        *StringList            `protobuf:"bytes,6,opt,name=tun_dns,json=tunDns,proto3" json:"tun_dns,omitempty"`
+	TunGateway    *string                `protobuf:"bytes,7,opt,name=tun_gateway,json=tunGateway,proto3,oneof" json:"tun_gateway,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSettingsRequest) Reset() {
+	*x = UpdateSettingsRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSettingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSettingsRequest) ProtoMessage() {}
+
+func (x *UpdateSettingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSettingsRequest.ProtoReflect.Descriptor instead.
+func (*UpdateSettingsRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *UpdateSettingsRequest) GetAlwaysOnProxy() bool {
+	if x != nil && x.AlwaysOnProxy != nil {
+		return *x.AlwaysOnProxy
+	}
+	return false
+}
+
+func (x *UpdateSettingsRequest) GetAllowLan() bool {
+	if x != nil && x.AllowLan != nil {
+		return *x.AllowLan
+	}
+	return false
+}
+
+func (x *UpdateSettingsRequest) GetProxyPort() uint32 {
+	if x != nil && x.ProxyPort != nil {
+		return *x.ProxyPort
+	}
+	return 0
+}
+
+func (x *UpdateSettingsRequest) GetDohDns() string {
+	if x != nil && x.DohDns != nil {
+		return *x.DohDns
+	}
+	return ""
+}
+
+func (x *UpdateSettingsRequest) GetDnsServers() *StringList {
+	if x != nil {
+		return x.DnsServers
+	}
+	return nil
+}
+
+func (x *UpdateSettingsRequest) GetTunDns() *StringList {
+	if x != nil {
+		return x.TunDns
+	}
+	return nil
+}
+
+func (x *UpdateSettingsRequest) GetTunGateway() string {
+	if x != nil && x.TunGateway != nil {
+		return *x.TunGateway
+	}
+	return ""
+}
+
+type UpdateSettingsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Settings      *Settings              `protobuf:"bytes,1,opt,name=settings,proto3" json:"settings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSettingsResponse) Reset() {
+	*x = UpdateSettingsResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSettingsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSettingsResponse) ProtoMessage() {}
+
+func (x *UpdateSettingsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSettingsResponse.ProtoReflect.Descriptor instead.
+func (*UpdateSettingsResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateSettingsResponse) GetSettings() *Settings {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
+type SetPowerRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	On            bool                   `protobuf:"varint,1,opt,name=on,proto3" json:"on,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetPowerRequest) Reset() {
+	*x = SetPowerRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetPowerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetPowerRequest) ProtoMessage() {}
+
+func (x *SetPowerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetPowerRequest.ProtoReflect.Descriptor instead.
+func (*SetPowerRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SetPowerRequest) GetOn() bool {
+	if x != nil {
+		return x.On
+	}
+	return false
+}
+
+type SetPowerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetPowerResponse) Reset() {
+	*x = SetPowerResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetPowerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetPowerResponse) ProtoMessage() {}
+
+func (x *SetPowerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetPowerResponse.ProtoReflect.Descriptor instead.
+func (*SetPowerResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{14}
+}
+
+// FALLBACK_PROXY fails with FAILED_PRECONDITION until a config is selected.
+type SetFallbackRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Fallback      Fallback               `protobuf:"varint,1,opt,name=fallback,proto3,enum=masir.daemon.v1.Fallback" json:"fallback,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetFallbackRequest) Reset() {
+	*x = SetFallbackRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetFallbackRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetFallbackRequest) ProtoMessage() {}
+
+func (x *SetFallbackRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetFallbackRequest.ProtoReflect.Descriptor instead.
+func (*SetFallbackRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SetFallbackRequest) GetFallback() Fallback {
+	if x != nil {
+		return x.Fallback
+	}
+	return Fallback_FALLBACK_UNSPECIFIED
+}
+
+type SetFallbackResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetFallbackResponse) Reset() {
+	*x = SetFallbackResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetFallbackResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetFallbackResponse) ProtoMessage() {}
+
+func (x *SetFallbackResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetFallbackResponse.ProtoReflect.Descriptor instead.
+func (*SetFallbackResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{16}
+}
+
+// Enabling fails with FAILED_PRECONDITION when the daemon isn't root; the status
+// carries a google.rpc.ErrorInfo with domain "masir" and reason "ROOT_REQUIRED".
+// Nothing is saved in that case; elevate the daemon and call again.
+type SetTunEnabledRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetTunEnabledRequest) Reset() {
+	*x = SetTunEnabledRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetTunEnabledRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetTunEnabledRequest) ProtoMessage() {}
+
+func (x *SetTunEnabledRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetTunEnabledRequest.ProtoReflect.Descriptor instead.
+func (*SetTunEnabledRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *SetTunEnabledRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SetTunEnabledResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetTunEnabledResponse) Reset() {
+	*x = SetTunEnabledResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetTunEnabledResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetTunEnabledResponse) ProtoMessage() {}
+
+func (x *SetTunEnabledResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetTunEnabledResponse.ProtoReflect.Descriptor instead.
+func (*SetTunEnabledResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{18}
 }
 
 type StreamLogsRequest struct {
@@ -255,7 +1145,7 @@ type StreamLogsRequest struct {
 
 func (x *StreamLogsRequest) Reset() {
 	*x = StreamLogsRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[4]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -267,7 +1157,7 @@ func (x *StreamLogsRequest) String() string {
 func (*StreamLogsRequest) ProtoMessage() {}
 
 func (x *StreamLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[4]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -280,7 +1170,7 @@ func (x *StreamLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamLogsRequest.ProtoReflect.Descriptor instead.
 func (*StreamLogsRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{4}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *StreamLogsRequest) GetFollow() bool {
@@ -299,7 +1189,7 @@ type StreamLogsResponse struct {
 
 func (x *StreamLogsResponse) Reset() {
 	*x = StreamLogsResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[5]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -311,7 +1201,7 @@ func (x *StreamLogsResponse) String() string {
 func (*StreamLogsResponse) ProtoMessage() {}
 
 func (x *StreamLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[5]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -324,7 +1214,7 @@ func (x *StreamLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamLogsResponse.ProtoReflect.Descriptor instead.
 func (*StreamLogsResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{5}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *StreamLogsResponse) GetEntry() *LogEntry {
@@ -345,7 +1235,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[6]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -357,7 +1247,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[6]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -370,7 +1260,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{6}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *LogEntry) GetTimestampMs() int64 {
@@ -394,19 +1284,3076 @@ func (x *LogEntry) GetMessage() string {
 	return ""
 }
 
+type GetXrayVersionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetXrayVersionRequest) Reset() {
+	*x = GetXrayVersionRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetXrayVersionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetXrayVersionRequest) ProtoMessage() {}
+
+func (x *GetXrayVersionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetXrayVersionRequest.ProtoReflect.Descriptor instead.
+func (*GetXrayVersionRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{22}
+}
+
+type GetXrayVersionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetXrayVersionResponse) Reset() {
+	*x = GetXrayVersionResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetXrayVersionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetXrayVersionResponse) ProtoMessage() {}
+
+func (x *GetXrayVersionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetXrayVersionResponse.ProtoReflect.Descriptor instead.
+func (*GetXrayVersionResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetXrayVersionResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+type GetXrayConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetXrayConfigRequest) Reset() {
+	*x = GetXrayConfigRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetXrayConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetXrayConfigRequest) ProtoMessage() {}
+
+func (x *GetXrayConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetXrayConfigRequest.ProtoReflect.Descriptor instead.
+func (*GetXrayConfigRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{24}
+}
+
+type GetXrayConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Json          string                 `protobuf:"bytes,1,opt,name=json,proto3" json:"json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetXrayConfigResponse) Reset() {
+	*x = GetXrayConfigResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetXrayConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetXrayConfigResponse) ProtoMessage() {}
+
+func (x *GetXrayConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetXrayConfigResponse.ProtoReflect.Descriptor instead.
+func (*GetXrayConfigResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *GetXrayConfigResponse) GetJson() string {
+	if x != nil {
+		return x.Json
+	}
+	return ""
+}
+
+type TestLatencyRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	XrayConfigJson string                 `protobuf:"bytes,1,opt,name=xray_config_json,json=xrayConfigJson,proto3" json:"xray_config_json,omitempty"`
+	ProbeUrl       string                 `protobuf:"bytes,2,opt,name=probe_url,json=probeUrl,proto3" json:"probe_url,omitempty"`
+	TestId         string                 `protobuf:"bytes,3,opt,name=test_id,json=testId,proto3" json:"test_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TestLatencyRequest) Reset() {
+	*x = TestLatencyRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestLatencyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestLatencyRequest) ProtoMessage() {}
+
+func (x *TestLatencyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestLatencyRequest.ProtoReflect.Descriptor instead.
+func (*TestLatencyRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *TestLatencyRequest) GetXrayConfigJson() string {
+	if x != nil {
+		return x.XrayConfigJson
+	}
+	return ""
+}
+
+func (x *TestLatencyRequest) GetProbeUrl() string {
+	if x != nil {
+		return x.ProbeUrl
+	}
+	return ""
+}
+
+func (x *TestLatencyRequest) GetTestId() string {
+	if x != nil {
+		return x.TestId
+	}
+	return ""
+}
+
+type TestLatencyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	LatencyMs     int64                  `protobuf:"varint,1,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestLatencyResponse) Reset() {
+	*x = TestLatencyResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestLatencyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestLatencyResponse) ProtoMessage() {}
+
+func (x *TestLatencyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestLatencyResponse.ProtoReflect.Descriptor instead.
+func (*TestLatencyResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *TestLatencyResponse) GetLatencyMs() int64 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+func (x *TestLatencyResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type CancelLatencyTestRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TestId        string                 `protobuf:"bytes,1,opt,name=test_id,json=testId,proto3" json:"test_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelLatencyTestRequest) Reset() {
+	*x = CancelLatencyTestRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelLatencyTestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelLatencyTestRequest) ProtoMessage() {}
+
+func (x *CancelLatencyTestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelLatencyTestRequest.ProtoReflect.Descriptor instead.
+func (*CancelLatencyTestRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *CancelLatencyTestRequest) GetTestId() string {
+	if x != nil {
+		return x.TestId
+	}
+	return ""
+}
+
+type CancelLatencyTestResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelLatencyTestResponse) Reset() {
+	*x = CancelLatencyTestResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelLatencyTestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelLatencyTestResponse) ProtoMessage() {}
+
+func (x *CancelLatencyTestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelLatencyTestResponse.ProtoReflect.Descriptor instead.
+func (*CancelLatencyTestResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{29}
+}
+
+// A rule's target is one of:
+//
+//	"direct" | "block" | "proxy"     built-in outbounds ("proxy" is the selected config)
+//	"config:<subscription_id>/<config_id>"  a config pinned from any subscription
+//	"outbound:<tag>"                 a custom outbound
+//
+// A pinned config that disappears (or whose subscription is removed) falls back to "proxy".
+type RoutingRule struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	RuleTag             string                 `protobuf:"bytes,1,opt,name=rule_tag,json=ruleTag,proto3" json:"rule_tag,omitempty"`
+	RuleJson            string                 `protobuf:"bytes,2,opt,name=rule_json,json=ruleJson,proto3" json:"rule_json,omitempty"` // the match part; never contains outboundTag
+	Target              string                 `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	ResolvedOutboundTag string                 `protobuf:"bytes,4,opt,name=resolved_outbound_tag,json=resolvedOutboundTag,proto3" json:"resolved_outbound_tag,omitempty"` // what the running config uses
+	FellBack            bool                   `protobuf:"varint,5,opt,name=fell_back,json=fellBack,proto3" json:"fell_back,omitempty"`                                   // the target couldn't be used; resolved_outbound_tag is the fallback
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *RoutingRule) Reset() {
+	*x = RoutingRule{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RoutingRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoutingRule) ProtoMessage() {}
+
+func (x *RoutingRule) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoutingRule.ProtoReflect.Descriptor instead.
+func (*RoutingRule) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *RoutingRule) GetRuleTag() string {
+	if x != nil {
+		return x.RuleTag
+	}
+	return ""
+}
+
+func (x *RoutingRule) GetRuleJson() string {
+	if x != nil {
+		return x.RuleJson
+	}
+	return ""
+}
+
+func (x *RoutingRule) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *RoutingRule) GetResolvedOutboundTag() string {
+	if x != nil {
+		return x.ResolvedOutboundTag
+	}
+	return ""
+}
+
+func (x *RoutingRule) GetFellBack() bool {
+	if x != nil {
+		return x.FellBack
+	}
+	return false
+}
+
+type ListRoutingRulesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRoutingRulesRequest) Reset() {
+	*x = ListRoutingRulesRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRoutingRulesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRoutingRulesRequest) ProtoMessage() {}
+
+func (x *ListRoutingRulesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRoutingRulesRequest.ProtoReflect.Descriptor instead.
+func (*ListRoutingRulesRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{31}
+}
+
+type ListRoutingRulesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rules         []*RoutingRule         `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRoutingRulesResponse) Reset() {
+	*x = ListRoutingRulesResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRoutingRulesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRoutingRulesResponse) ProtoMessage() {}
+
+func (x *ListRoutingRulesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRoutingRulesResponse.ProtoReflect.Descriptor instead.
+func (*ListRoutingRulesResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ListRoutingRulesResponse) GetRules() []*RoutingRule {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+// rule_json is an xray field rule without outboundTag/balancerTag; the target picks the outbound.
+type AddRoutingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleJson      string                 `protobuf:"bytes,1,opt,name=rule_json,json=ruleJson,proto3" json:"rule_json,omitempty"`
+	RuleTag       string                 `protobuf:"bytes,2,opt,name=rule_tag,json=ruleTag,proto3" json:"rule_tag,omitempty"`
+	Prepend       bool                   `protobuf:"varint,3,opt,name=prepend,proto3" json:"prepend,omitempty"`
+	Target        string                 `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddRoutingRequest) Reset() {
+	*x = AddRoutingRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddRoutingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddRoutingRequest) ProtoMessage() {}
+
+func (x *AddRoutingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddRoutingRequest.ProtoReflect.Descriptor instead.
+func (*AddRoutingRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *AddRoutingRequest) GetRuleJson() string {
+	if x != nil {
+		return x.RuleJson
+	}
+	return ""
+}
+
+func (x *AddRoutingRequest) GetRuleTag() string {
+	if x != nil {
+		return x.RuleTag
+	}
+	return ""
+}
+
+func (x *AddRoutingRequest) GetPrepend() bool {
+	if x != nil {
+		return x.Prepend
+	}
+	return false
+}
+
+func (x *AddRoutingRequest) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+type AddRoutingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddRoutingResponse) Reset() {
+	*x = AddRoutingResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddRoutingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddRoutingResponse) ProtoMessage() {}
+
+func (x *AddRoutingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddRoutingResponse.ProtoReflect.Descriptor instead.
+func (*AddRoutingResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{34}
+}
+
+type RemoveRoutingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleTag       string                 `protobuf:"bytes,1,opt,name=rule_tag,json=ruleTag,proto3" json:"rule_tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveRoutingRequest) Reset() {
+	*x = RemoveRoutingRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveRoutingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveRoutingRequest) ProtoMessage() {}
+
+func (x *RemoveRoutingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveRoutingRequest.ProtoReflect.Descriptor instead.
+func (*RemoveRoutingRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *RemoveRoutingRequest) GetRuleTag() string {
+	if x != nil {
+		return x.RuleTag
+	}
+	return ""
+}
+
+type RemoveRoutingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveRoutingResponse) Reset() {
+	*x = RemoveRoutingResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveRoutingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveRoutingResponse) ProtoMessage() {}
+
+func (x *RemoveRoutingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveRoutingResponse.ProtoReflect.Descriptor instead.
+func (*RemoveRoutingResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{36}
+}
+
+// Unset fields are left alone; the rule keeps its position.
+type AlterRoutingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleTag       string                 `protobuf:"bytes,1,opt,name=rule_tag,json=ruleTag,proto3" json:"rule_tag,omitempty"`
+	RuleJson      *string                `protobuf:"bytes,2,opt,name=rule_json,json=ruleJson,proto3,oneof" json:"rule_json,omitempty"`
+	Target        *string                `protobuf:"bytes,3,opt,name=target,proto3,oneof" json:"target,omitempty"`
+	NewRuleTag    *string                `protobuf:"bytes,4,opt,name=new_rule_tag,json=newRuleTag,proto3,oneof" json:"new_rule_tag,omitempty"` // rename
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlterRoutingRequest) Reset() {
+	*x = AlterRoutingRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlterRoutingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlterRoutingRequest) ProtoMessage() {}
+
+func (x *AlterRoutingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlterRoutingRequest.ProtoReflect.Descriptor instead.
+func (*AlterRoutingRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *AlterRoutingRequest) GetRuleTag() string {
+	if x != nil {
+		return x.RuleTag
+	}
+	return ""
+}
+
+func (x *AlterRoutingRequest) GetRuleJson() string {
+	if x != nil && x.RuleJson != nil {
+		return *x.RuleJson
+	}
+	return ""
+}
+
+func (x *AlterRoutingRequest) GetTarget() string {
+	if x != nil && x.Target != nil {
+		return *x.Target
+	}
+	return ""
+}
+
+func (x *AlterRoutingRequest) GetNewRuleTag() string {
+	if x != nil && x.NewRuleTag != nil {
+		return *x.NewRuleTag
+	}
+	return ""
+}
+
+type AlterRoutingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlterRoutingResponse) Reset() {
+	*x = AlterRoutingResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlterRoutingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlterRoutingResponse) ProtoMessage() {}
+
+func (x *AlterRoutingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlterRoutingResponse.ProtoReflect.Descriptor instead.
+func (*AlterRoutingResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{38}
+}
+
+// Moves the rule so it ends up at index (0 is first); an index past the end makes it last.
+type MoveRoutingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleTag       string                 `protobuf:"bytes,1,opt,name=rule_tag,json=ruleTag,proto3" json:"rule_tag,omitempty"`
+	Index         uint32                 `protobuf:"varint,2,opt,name=index,proto3" json:"index,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MoveRoutingRequest) Reset() {
+	*x = MoveRoutingRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MoveRoutingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MoveRoutingRequest) ProtoMessage() {}
+
+func (x *MoveRoutingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MoveRoutingRequest.ProtoReflect.Descriptor instead.
+func (*MoveRoutingRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *MoveRoutingRequest) GetRuleTag() string {
+	if x != nil {
+		return x.RuleTag
+	}
+	return ""
+}
+
+func (x *MoveRoutingRequest) GetIndex() uint32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+type MoveRoutingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MoveRoutingResponse) Reset() {
+	*x = MoveRoutingResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MoveRoutingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MoveRoutingResponse) ProtoMessage() {}
+
+func (x *MoveRoutingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MoveRoutingResponse.ProtoReflect.Descriptor instead.
+func (*MoveRoutingResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{40}
+}
+
+type TestRoutingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Domain        string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	Ip            string                 `protobuf:"bytes,2,opt,name=ip,proto3" json:"ip,omitempty"`
+	Port          uint32                 `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
+	Network       string                 `protobuf:"bytes,4,opt,name=network,proto3" json:"network,omitempty"`
+	InboundTag    string                 `protobuf:"bytes,5,opt,name=inbound_tag,json=inboundTag,proto3" json:"inbound_tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestRoutingRequest) Reset() {
+	*x = TestRoutingRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestRoutingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestRoutingRequest) ProtoMessage() {}
+
+func (x *TestRoutingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestRoutingRequest.ProtoReflect.Descriptor instead.
+func (*TestRoutingRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *TestRoutingRequest) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *TestRoutingRequest) GetIp() string {
+	if x != nil {
+		return x.Ip
+	}
+	return ""
+}
+
+func (x *TestRoutingRequest) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *TestRoutingRequest) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
+func (x *TestRoutingRequest) GetInboundTag() string {
+	if x != nil {
+		return x.InboundTag
+	}
+	return ""
+}
+
+// matched is false when no rule applies and xray falls back to the first outbound.
+type TestRoutingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OutboundTag   string                 `protobuf:"bytes,1,opt,name=outbound_tag,json=outboundTag,proto3" json:"outbound_tag,omitempty"`
+	Matched       bool                   `protobuf:"varint,2,opt,name=matched,proto3" json:"matched,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestRoutingResponse) Reset() {
+	*x = TestRoutingResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestRoutingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestRoutingResponse) ProtoMessage() {}
+
+func (x *TestRoutingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestRoutingResponse.ProtoReflect.Descriptor instead.
+func (*TestRoutingResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *TestRoutingResponse) GetOutboundTag() string {
+	if x != nil {
+		return x.OutboundTag
+	}
+	return ""
+}
+
+func (x *TestRoutingResponse) GetMatched() bool {
+	if x != nil {
+		return x.Matched
+	}
+	return false
+}
+
+type TaggedConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tag           string                 `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
+	Json          string                 `protobuf:"bytes,2,opt,name=json,proto3" json:"json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaggedConfig) Reset() {
+	*x = TaggedConfig{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaggedConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaggedConfig) ProtoMessage() {}
+
+func (x *TaggedConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaggedConfig.ProtoReflect.Descriptor instead.
+func (*TaggedConfig) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *TaggedConfig) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *TaggedConfig) GetJson() string {
+	if x != nil {
+		return x.Json
+	}
+	return ""
+}
+
+type ListInboundsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInboundsRequest) Reset() {
+	*x = ListInboundsRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInboundsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInboundsRequest) ProtoMessage() {}
+
+func (x *ListInboundsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInboundsRequest.ProtoReflect.Descriptor instead.
+func (*ListInboundsRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{44}
+}
+
+type ListInboundsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Inbounds      []*TaggedConfig        `protobuf:"bytes,1,rep,name=inbounds,proto3" json:"inbounds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInboundsResponse) Reset() {
+	*x = ListInboundsResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInboundsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInboundsResponse) ProtoMessage() {}
+
+func (x *ListInboundsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInboundsResponse.ProtoReflect.Descriptor instead.
+func (*ListInboundsResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *ListInboundsResponse) GetInbounds() []*TaggedConfig {
+	if x != nil {
+		return x.Inbounds
+	}
+	return nil
+}
+
+type ListOutboundsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOutboundsRequest) Reset() {
+	*x = ListOutboundsRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOutboundsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOutboundsRequest) ProtoMessage() {}
+
+func (x *ListOutboundsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOutboundsRequest.ProtoReflect.Descriptor instead.
+func (*ListOutboundsRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{46}
+}
+
+type ListOutboundsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Outbounds     []*TaggedConfig        `protobuf:"bytes,1,rep,name=outbounds,proto3" json:"outbounds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOutboundsResponse) Reset() {
+	*x = ListOutboundsResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOutboundsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOutboundsResponse) ProtoMessage() {}
+
+func (x *ListOutboundsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOutboundsResponse.ProtoReflect.Descriptor instead.
+func (*ListOutboundsResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ListOutboundsResponse) GetOutbounds() []*TaggedConfig {
+	if x != nil {
+		return x.Outbounds
+	}
+	return nil
+}
+
+// inbounds
+type AddInboundRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tag           string                 `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
+	InboundJson   string                 `protobuf:"bytes,2,opt,name=inbound_json,json=inboundJson,proto3" json:"inbound_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddInboundRequest) Reset() {
+	*x = AddInboundRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddInboundRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddInboundRequest) ProtoMessage() {}
+
+func (x *AddInboundRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddInboundRequest.ProtoReflect.Descriptor instead.
+func (*AddInboundRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *AddInboundRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *AddInboundRequest) GetInboundJson() string {
+	if x != nil {
+		return x.InboundJson
+	}
+	return ""
+}
+
+type AddInboundResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddInboundResponse) Reset() {
+	*x = AddInboundResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddInboundResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddInboundResponse) ProtoMessage() {}
+
+func (x *AddInboundResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddInboundResponse.ProtoReflect.Descriptor instead.
+func (*AddInboundResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{49}
+}
+
+type RemoveInboundRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tag           string                 `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveInboundRequest) Reset() {
+	*x = RemoveInboundRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveInboundRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveInboundRequest) ProtoMessage() {}
+
+func (x *RemoveInboundRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveInboundRequest.ProtoReflect.Descriptor instead.
+func (*RemoveInboundRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *RemoveInboundRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+type RemoveInboundResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveInboundResponse) Reset() {
+	*x = RemoveInboundResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveInboundResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveInboundResponse) ProtoMessage() {}
+
+func (x *RemoveInboundResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveInboundResponse.ProtoReflect.Descriptor instead.
+func (*RemoveInboundResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{51}
+}
+
+type AlterInboundRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tag           string                 `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
+	InboundJson   string                 `protobuf:"bytes,2,opt,name=inbound_json,json=inboundJson,proto3" json:"inbound_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlterInboundRequest) Reset() {
+	*x = AlterInboundRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlterInboundRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlterInboundRequest) ProtoMessage() {}
+
+func (x *AlterInboundRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlterInboundRequest.ProtoReflect.Descriptor instead.
+func (*AlterInboundRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *AlterInboundRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *AlterInboundRequest) GetInboundJson() string {
+	if x != nil {
+		return x.InboundJson
+	}
+	return ""
+}
+
+type AlterInboundResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlterInboundResponse) Reset() {
+	*x = AlterInboundResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlterInboundResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlterInboundResponse) ProtoMessage() {}
+
+func (x *AlterInboundResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlterInboundResponse.ProtoReflect.Descriptor instead.
+func (*AlterInboundResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{53}
+}
+
+// outbounds
+type AddOutboundRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tag           string                 `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
+	OutboundJson  string                 `protobuf:"bytes,2,opt,name=outbound_json,json=outboundJson,proto3" json:"outbound_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddOutboundRequest) Reset() {
+	*x = AddOutboundRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddOutboundRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddOutboundRequest) ProtoMessage() {}
+
+func (x *AddOutboundRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddOutboundRequest.ProtoReflect.Descriptor instead.
+func (*AddOutboundRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *AddOutboundRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *AddOutboundRequest) GetOutboundJson() string {
+	if x != nil {
+		return x.OutboundJson
+	}
+	return ""
+}
+
+type AddOutboundResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddOutboundResponse) Reset() {
+	*x = AddOutboundResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddOutboundResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddOutboundResponse) ProtoMessage() {}
+
+func (x *AddOutboundResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddOutboundResponse.ProtoReflect.Descriptor instead.
+func (*AddOutboundResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{55}
+}
+
+type RemoveOutboundRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tag           string                 `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveOutboundRequest) Reset() {
+	*x = RemoveOutboundRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveOutboundRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveOutboundRequest) ProtoMessage() {}
+
+func (x *RemoveOutboundRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveOutboundRequest.ProtoReflect.Descriptor instead.
+func (*RemoveOutboundRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *RemoveOutboundRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+type RemoveOutboundResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveOutboundResponse) Reset() {
+	*x = RemoveOutboundResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveOutboundResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveOutboundResponse) ProtoMessage() {}
+
+func (x *RemoveOutboundResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveOutboundResponse.ProtoReflect.Descriptor instead.
+func (*RemoveOutboundResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{57}
+}
+
+type AlterOutboundRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tag           string                 `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
+	OutboundJson  string                 `protobuf:"bytes,2,opt,name=outbound_json,json=outboundJson,proto3" json:"outbound_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlterOutboundRequest) Reset() {
+	*x = AlterOutboundRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlterOutboundRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlterOutboundRequest) ProtoMessage() {}
+
+func (x *AlterOutboundRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlterOutboundRequest.ProtoReflect.Descriptor instead.
+func (*AlterOutboundRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *AlterOutboundRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *AlterOutboundRequest) GetOutboundJson() string {
+	if x != nil {
+		return x.OutboundJson
+	}
+	return ""
+}
+
+type AlterOutboundResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlterOutboundResponse) Reset() {
+	*x = AlterOutboundResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlterOutboundResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlterOutboundResponse) ProtoMessage() {}
+
+func (x *AlterOutboundResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlterOutboundResponse.ProtoReflect.Descriptor instead.
+func (*AlterOutboundResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{59}
+}
+
+type Subscription struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	Id                          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Url                         string                 `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
+	CreatedAtMs                 int64                  `protobuf:"varint,4,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	UpdatedAtMs                 int64                  `protobuf:"varint,5,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`                                                   // last successful fetch; 0 if never
+	CheckedAtMs                 int64                  `protobuf:"varint,6,opt,name=checked_at_ms,json=checkedAtMs,proto3" json:"checked_at_ms,omitempty"`                                                   // last fetch attempt
+	LastError                   string                 `protobuf:"bytes,7,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`                                                            // empty when the last fetch succeeded
+	UpdateIntervalMinutes       uint32                 `protobuf:"varint,8,opt,name=update_interval_minutes,json=updateIntervalMinutes,proto3" json:"update_interval_minutes,omitempty"`                     // in effect: custom, else the provider's, else the default
+	CustomUpdateIntervalMinutes uint32                 `protobuf:"varint,9,opt,name=custom_update_interval_minutes,json=customUpdateIntervalMinutes,proto3" json:"custom_update_interval_minutes,omitempty"` // 0 means automatic
+	Usage                       *Usage                 `protobuf:"bytes,10,opt,name=usage,proto3" json:"usage,omitempty"`                                                                                    // unset if the provider doesn't report it
+	ConfigCount                 uint32                 `protobuf:"varint,11,opt,name=config_count,json=configCount,proto3" json:"config_count,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *Subscription) Reset() {
+	*x = Subscription{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Subscription) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Subscription) ProtoMessage() {}
+
+func (x *Subscription) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Subscription.ProtoReflect.Descriptor instead.
+func (*Subscription) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *Subscription) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Subscription) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Subscription) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *Subscription) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+func (x *Subscription) GetUpdatedAtMs() int64 {
+	if x != nil {
+		return x.UpdatedAtMs
+	}
+	return 0
+}
+
+func (x *Subscription) GetCheckedAtMs() int64 {
+	if x != nil {
+		return x.CheckedAtMs
+	}
+	return 0
+}
+
+func (x *Subscription) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *Subscription) GetUpdateIntervalMinutes() uint32 {
+	if x != nil {
+		return x.UpdateIntervalMinutes
+	}
+	return 0
+}
+
+func (x *Subscription) GetCustomUpdateIntervalMinutes() uint32 {
+	if x != nil {
+		return x.CustomUpdateIntervalMinutes
+	}
+	return 0
+}
+
+func (x *Subscription) GetUsage() *Usage {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+func (x *Subscription) GetConfigCount() uint32 {
+	if x != nil {
+		return x.ConfigCount
+	}
+	return 0
+}
+
+// Traffic and expiry from the provider's subscription-userinfo header.
+type Usage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UploadBytes   int64                  `protobuf:"varint,1,opt,name=upload_bytes,json=uploadBytes,proto3" json:"upload_bytes,omitempty"`
+	DownloadBytes int64                  `protobuf:"varint,2,opt,name=download_bytes,json=downloadBytes,proto3" json:"download_bytes,omitempty"`
+	TotalBytes    int64                  `protobuf:"varint,3,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`   // 0 means unlimited
+	ExpireAtMs    int64                  `protobuf:"varint,4,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"` // 0 means never
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Usage) Reset() {
+	*x = Usage{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Usage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Usage) ProtoMessage() {}
+
+func (x *Usage) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Usage.ProtoReflect.Descriptor instead.
+func (*Usage) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *Usage) GetUploadBytes() int64 {
+	if x != nil {
+		return x.UploadBytes
+	}
+	return 0
+}
+
+func (x *Usage) GetDownloadBytes() int64 {
+	if x != nil {
+		return x.DownloadBytes
+	}
+	return 0
+}
+
+func (x *Usage) GetTotalBytes() int64 {
+	if x != nil {
+		return x.TotalBytes
+	}
+	return 0
+}
+
+func (x *Usage) GetExpireAtMs() int64 {
+	if x != nil {
+		return x.ExpireAtMs
+	}
+	return 0
+}
+
+type SubscriptionConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // stable across refreshes while the server's settings don't change
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Protocol      string                 `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	Address       string                 `protobuf:"bytes,4,opt,name=address,proto3" json:"address,omitempty"`
+	Port          uint32                 `protobuf:"varint,5,opt,name=port,proto3" json:"port,omitempty"`
+	Network       string                 `protobuf:"bytes,6,opt,name=network,proto3" json:"network,omitempty"`   // transport, e.g. tcp, ws, grpc, xhttp
+	Security      string                 `protobuf:"bytes,7,opt,name=security,proto3" json:"security,omitempty"` // e.g. tls, reality, none
+	OutboundJson  string                 `protobuf:"bytes,8,opt,name=outbound_json,json=outboundJson,proto3" json:"outbound_json,omitempty"`
+	Latency       *LatencyResult         `protobuf:"bytes,9,opt,name=latency,proto3" json:"latency,omitempty"` // unset if never tested
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscriptionConfig) Reset() {
+	*x = SubscriptionConfig{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscriptionConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscriptionConfig) ProtoMessage() {}
+
+func (x *SubscriptionConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscriptionConfig.ProtoReflect.Descriptor instead.
+func (*SubscriptionConfig) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *SubscriptionConfig) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SubscriptionConfig) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SubscriptionConfig) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+func (x *SubscriptionConfig) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *SubscriptionConfig) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *SubscriptionConfig) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
+func (x *SubscriptionConfig) GetSecurity() string {
+	if x != nil {
+		return x.Security
+	}
+	return ""
+}
+
+func (x *SubscriptionConfig) GetOutboundJson() string {
+	if x != nil {
+		return x.OutboundJson
+	}
+	return ""
+}
+
+func (x *SubscriptionConfig) GetLatency() *LatencyResult {
+	if x != nil {
+		return x.Latency
+	}
+	return nil
+}
+
+type LatencyResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	LatencyMs     int64                  `protobuf:"varint,1,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // set when the probe failed
+	TestedAtMs    int64                  `protobuf:"varint,3,opt,name=tested_at_ms,json=testedAtMs,proto3" json:"tested_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LatencyResult) Reset() {
+	*x = LatencyResult{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LatencyResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LatencyResult) ProtoMessage() {}
+
+func (x *LatencyResult) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LatencyResult.ProtoReflect.Descriptor instead.
+func (*LatencyResult) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *LatencyResult) GetLatencyMs() int64 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+func (x *LatencyResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *LatencyResult) GetTestedAtMs() int64 {
+	if x != nil {
+		return x.TestedAtMs
+	}
+	return 0
+}
+
+type ListSubscriptionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSubscriptionsRequest) Reset() {
+	*x = ListSubscriptionsRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSubscriptionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSubscriptionsRequest) ProtoMessage() {}
+
+func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSubscriptionsRequest.ProtoReflect.Descriptor instead.
+func (*ListSubscriptionsRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{64}
+}
+
+type ListSubscriptionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Subscriptions []*Subscription        `protobuf:"bytes,1,rep,name=subscriptions,proto3" json:"subscriptions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSubscriptionsResponse) Reset() {
+	*x = ListSubscriptionsResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSubscriptionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSubscriptionsResponse) ProtoMessage() {}
+
+func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSubscriptionsResponse.ProtoReflect.Descriptor instead.
+func (*ListSubscriptionsResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *ListSubscriptionsResponse) GetSubscriptions() []*Subscription {
+	if x != nil {
+		return x.Subscriptions
+	}
+	return nil
+}
+
+type GetSubscriptionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSubscriptionRequest) Reset() {
+	*x = GetSubscriptionRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSubscriptionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSubscriptionRequest) ProtoMessage() {}
+
+func (x *GetSubscriptionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSubscriptionRequest.ProtoReflect.Descriptor instead.
+func (*GetSubscriptionRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *GetSubscriptionRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type GetSubscriptionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Subscription  *Subscription          `protobuf:"bytes,1,opt,name=subscription,proto3" json:"subscription,omitempty"`
+	Configs       []*SubscriptionConfig  `protobuf:"bytes,2,rep,name=configs,proto3" json:"configs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSubscriptionResponse) Reset() {
+	*x = GetSubscriptionResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSubscriptionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSubscriptionResponse) ProtoMessage() {}
+
+func (x *GetSubscriptionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSubscriptionResponse.ProtoReflect.Descriptor instead.
+func (*GetSubscriptionResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *GetSubscriptionResponse) GetSubscription() *Subscription {
+	if x != nil {
+		return x.Subscription
+	}
+	return nil
+}
+
+func (x *GetSubscriptionResponse) GetConfigs() []*SubscriptionConfig {
+	if x != nil {
+		return x.Configs
+	}
+	return nil
+}
+
+// Fetches immediately; nothing is saved if the fetch or parse fails.
+// An empty name falls back to the provider's profile-title, then the URL host.
+type AddSubscriptionRequest struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	Url                         string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Name                        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	CustomUpdateIntervalMinutes uint32                 `protobuf:"varint,3,opt,name=custom_update_interval_minutes,json=customUpdateIntervalMinutes,proto3" json:"custom_update_interval_minutes,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *AddSubscriptionRequest) Reset() {
+	*x = AddSubscriptionRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddSubscriptionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddSubscriptionRequest) ProtoMessage() {}
+
+func (x *AddSubscriptionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddSubscriptionRequest.ProtoReflect.Descriptor instead.
+func (*AddSubscriptionRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *AddSubscriptionRequest) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *AddSubscriptionRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AddSubscriptionRequest) GetCustomUpdateIntervalMinutes() uint32 {
+	if x != nil {
+		return x.CustomUpdateIntervalMinutes
+	}
+	return 0
+}
+
+type AddSubscriptionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Subscription  *Subscription          `protobuf:"bytes,1,opt,name=subscription,proto3" json:"subscription,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddSubscriptionResponse) Reset() {
+	*x = AddSubscriptionResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddSubscriptionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddSubscriptionResponse) ProtoMessage() {}
+
+func (x *AddSubscriptionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddSubscriptionResponse.ProtoReflect.Descriptor instead.
+func (*AddSubscriptionResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *AddSubscriptionResponse) GetSubscription() *Subscription {
+	if x != nil {
+		return x.Subscription
+	}
+	return nil
+}
+
+// Unset fields are left alone. A new url is fetched before it's saved.
+type AlterSubscriptionRequest struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	Id                          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                        *string                `protobuf:"bytes,2,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	Url                         *string                `protobuf:"bytes,3,opt,name=url,proto3,oneof" json:"url,omitempty"`
+	CustomUpdateIntervalMinutes *uint32                `protobuf:"varint,4,opt,name=custom_update_interval_minutes,json=customUpdateIntervalMinutes,proto3,oneof" json:"custom_update_interval_minutes,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *AlterSubscriptionRequest) Reset() {
+	*x = AlterSubscriptionRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlterSubscriptionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlterSubscriptionRequest) ProtoMessage() {}
+
+func (x *AlterSubscriptionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlterSubscriptionRequest.ProtoReflect.Descriptor instead.
+func (*AlterSubscriptionRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *AlterSubscriptionRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AlterSubscriptionRequest) GetName() string {
+	if x != nil && x.Name != nil {
+		return *x.Name
+	}
+	return ""
+}
+
+func (x *AlterSubscriptionRequest) GetUrl() string {
+	if x != nil && x.Url != nil {
+		return *x.Url
+	}
+	return ""
+}
+
+func (x *AlterSubscriptionRequest) GetCustomUpdateIntervalMinutes() uint32 {
+	if x != nil && x.CustomUpdateIntervalMinutes != nil {
+		return *x.CustomUpdateIntervalMinutes
+	}
+	return 0
+}
+
+type AlterSubscriptionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Subscription  *Subscription          `protobuf:"bytes,1,opt,name=subscription,proto3" json:"subscription,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlterSubscriptionResponse) Reset() {
+	*x = AlterSubscriptionResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlterSubscriptionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlterSubscriptionResponse) ProtoMessage() {}
+
+func (x *AlterSubscriptionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlterSubscriptionResponse.ProtoReflect.Descriptor instead.
+func (*AlterSubscriptionResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *AlterSubscriptionResponse) GetSubscription() *Subscription {
+	if x != nil {
+		return x.Subscription
+	}
+	return nil
+}
+
+type RemoveSubscriptionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveSubscriptionRequest) Reset() {
+	*x = RemoveSubscriptionRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveSubscriptionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveSubscriptionRequest) ProtoMessage() {}
+
+func (x *RemoveSubscriptionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveSubscriptionRequest.ProtoReflect.Descriptor instead.
+func (*RemoveSubscriptionRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *RemoveSubscriptionRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type RemoveSubscriptionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveSubscriptionResponse) Reset() {
+	*x = RemoveSubscriptionResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveSubscriptionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveSubscriptionResponse) ProtoMessage() {}
+
+func (x *RemoveSubscriptionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveSubscriptionResponse.ProtoReflect.Descriptor instead.
+func (*RemoveSubscriptionResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{73}
+}
+
+// Re-fetches now. On failure the old configs are kept and last_error is set.
+type UpdateSubscriptionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSubscriptionRequest) Reset() {
+	*x = UpdateSubscriptionRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[74]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSubscriptionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSubscriptionRequest) ProtoMessage() {}
+
+func (x *UpdateSubscriptionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[74]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSubscriptionRequest.ProtoReflect.Descriptor instead.
+func (*UpdateSubscriptionRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{74}
+}
+
+func (x *UpdateSubscriptionRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type UpdateSubscriptionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Subscription  *Subscription          `protobuf:"bytes,1,opt,name=subscription,proto3" json:"subscription,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSubscriptionResponse) Reset() {
+	*x = UpdateSubscriptionResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[75]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSubscriptionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSubscriptionResponse) ProtoMessage() {}
+
+func (x *UpdateSubscriptionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[75]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSubscriptionResponse.ProtoReflect.Descriptor instead.
+func (*UpdateSubscriptionResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{75}
+}
+
+func (x *UpdateSubscriptionResponse) GetSubscription() *Subscription {
+	if x != nil {
+		return x.Subscription
+	}
+	return nil
+}
+
+// Streams one result per config as each finishes; results are also saved.
+// Empty config_ids tests every config. Cancel the stream to stop early.
+type TestSubscriptionLatencyRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	ConfigIds      []string               `protobuf:"bytes,2,rep,name=config_ids,json=configIds,proto3" json:"config_ids,omitempty"`
+	ProbeUrl       string                 `protobuf:"bytes,3,opt,name=probe_url,json=probeUrl,proto3" json:"probe_url,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TestSubscriptionLatencyRequest) Reset() {
+	*x = TestSubscriptionLatencyRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[76]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestSubscriptionLatencyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestSubscriptionLatencyRequest) ProtoMessage() {}
+
+func (x *TestSubscriptionLatencyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[76]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestSubscriptionLatencyRequest.ProtoReflect.Descriptor instead.
+func (*TestSubscriptionLatencyRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{76}
+}
+
+func (x *TestSubscriptionLatencyRequest) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *TestSubscriptionLatencyRequest) GetConfigIds() []string {
+	if x != nil {
+		return x.ConfigIds
+	}
+	return nil
+}
+
+func (x *TestSubscriptionLatencyRequest) GetProbeUrl() string {
+	if x != nil {
+		return x.ProbeUrl
+	}
+	return ""
+}
+
+type TestSubscriptionLatencyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ConfigId      string                 `protobuf:"bytes,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	Result        *LatencyResult         `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestSubscriptionLatencyResponse) Reset() {
+	*x = TestSubscriptionLatencyResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[77]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestSubscriptionLatencyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestSubscriptionLatencyResponse) ProtoMessage() {}
+
+func (x *TestSubscriptionLatencyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[77]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestSubscriptionLatencyResponse.ProtoReflect.Descriptor instead.
+func (*TestSubscriptionLatencyResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{77}
+}
+
+func (x *TestSubscriptionLatencyResponse) GetConfigId() string {
+	if x != nil {
+		return x.ConfigId
+	}
+	return ""
+}
+
+func (x *TestSubscriptionLatencyResponse) GetResult() *LatencyResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+// Makes the config the "proxy" outbound. A copy is kept, so it keeps working
+// if the subscription later drops it or is removed.
+// It doesn't change power or fallback; call SetFallback(FALLBACK_PROXY) to send
+// unruled traffic through it.
+type SelectConfigRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	ConfigId       string                 `protobuf:"bytes,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SelectConfigRequest) Reset() {
+	*x = SelectConfigRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[78]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelectConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelectConfigRequest) ProtoMessage() {}
+
+func (x *SelectConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[78]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelectConfigRequest.ProtoReflect.Descriptor instead.
+func (*SelectConfigRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{78}
+}
+
+func (x *SelectConfigRequest) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *SelectConfigRequest) GetConfigId() string {
+	if x != nil {
+		return x.ConfigId
+	}
+	return ""
+}
+
+type SelectConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelectConfigResponse) Reset() {
+	*x = SelectConfigResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[79]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelectConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelectConfigResponse) ProtoMessage() {}
+
+func (x *SelectConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[79]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelectConfigResponse.ProtoReflect.Descriptor instead.
+func (*SelectConfigResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{79}
+}
+
+type GetActiveConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetActiveConfigRequest) Reset() {
+	*x = GetActiveConfigRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetActiveConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetActiveConfigRequest) ProtoMessage() {}
+
+func (x *GetActiveConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetActiveConfigRequest.ProtoReflect.Descriptor instead.
+func (*GetActiveConfigRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{80}
+}
+
+// Empty ids mean nothing was selected from a subscription. config is unset
+// when the selection no longer exists in its subscription (it keeps running).
+type GetActiveConfigResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	ConfigId       string                 `protobuf:"bytes,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	Config         *SubscriptionConfig    `protobuf:"bytes,3,opt,name=config,proto3" json:"config,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetActiveConfigResponse) Reset() {
+	*x = GetActiveConfigResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetActiveConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetActiveConfigResponse) ProtoMessage() {}
+
+func (x *GetActiveConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetActiveConfigResponse.ProtoReflect.Descriptor instead.
+func (*GetActiveConfigResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *GetActiveConfigResponse) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *GetActiveConfigResponse) GetConfigId() string {
+	if x != nil {
+		return x.ConfigId
+	}
+	return ""
+}
+
+func (x *GetActiveConfigResponse) GetConfig() *SubscriptionConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
 var File_masir_daemon_v1_daemon_proto protoreflect.FileDescriptor
 
 const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\n" +
-	"\x1cmasir/daemon/v1/daemon.proto\x12\x0fmasir.daemon.v1\"\x12\n" +
-	"\x10GetStatusRequest\"n\n" +
-	"\x11GetStatusResponse\x12\x18\n" +
-	"\arunning\x18\x01 \x01(\bR\arunning\x12%\n" +
-	"\x0euptime_seconds\x18\x02 \x01(\x03R\ruptimeSeconds\x12\x18\n" +
-	"\aversion\x18\x03 \x01(\tR\aversion\";\n" +
-	"\x0eSetModeRequest\x12)\n" +
-	"\x04mode\x18\x01 \x01(\x0e2\x15.masir.daemon.v1.ModeR\x04mode\"\x11\n" +
-	"\x0fSetModeResponse\"+\n" +
+	"\x1cmasir/daemon/v1/daemon.proto\x12\x0fmasir.daemon.v1\"\x91\x06\n" +
+	"\x06Status\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12!\n" +
+	"\fxray_version\x18\x02 \x01(\tR\vxrayVersion\x12%\n" +
+	"\x0euptime_seconds\x18\x03 \x01(\x03R\ruptimeSeconds\x12\x1e\n" +
+	"\n" +
+	"privileged\x18\x04 \x01(\bR\n" +
+	"privileged\x12+\n" +
+	"\x11service_installed\x18\x05 \x01(\bR\x10serviceInstalled\x12\x1d\n" +
+	"\n" +
+	"served_uid\x18\x06 \x01(\x03R\tservedUid\x12\x1f\n" +
+	"\vserved_user\x18\a \x01(\tR\n" +
+	"servedUser\x12#\n" +
+	"\rtun_available\x18\b \x01(\bR\ftunAvailable\x124\n" +
+	"\x16tun_unavailable_reason\x18\t \x01(\tR\x14tunUnavailableReason\x12!\n" +
+	"\fxray_running\x18\n" +
+	" \x01(\bR\vxrayRunning\x12#\n" +
+	"\rproxy_running\x18\v \x01(\bR\fproxyRunning\x12#\n" +
+	"\rproxy_address\x18\f \x01(\tR\fproxyAddress\x12\x1f\n" +
+	"\vtun_running\x18\r \x01(\bR\n" +
+	"tunRunning\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\x0e \x01(\tR\tlastError\x125\n" +
+	"\bsettings\x18\x0f \x01(\v2\x19.masir.daemon.v1.SettingsR\bsettings\x124\n" +
+	"\x16active_subscription_id\x18\x10 \x01(\tR\x14activeSubscriptionId\x12(\n" +
+	"\x10active_config_id\x18\x11 \x01(\tR\x0eactiveConfigId\x12,\n" +
+	"\x12active_config_name\x18\x12 \x01(\tR\x10activeConfigName\x12!\n" +
+	"\factive_stale\x18\x13 \x01(\bR\vactiveStale\x12&\n" +
+	"\x0ffell_back_rules\x18\x14 \x01(\rR\rfellBackRules\"\x12\n" +
+	"\x10GetStatusRequest\"D\n" +
+	"\x11GetStatusResponse\x12/\n" +
+	"\x06status\x18\x01 \x01(\v2\x17.masir.daemon.v1.StatusR\x06status\"\x14\n" +
+	"\x12WatchStatusRequest\"F\n" +
+	"\x13WatchStatusResponse\x12/\n" +
+	"\x06status\x18\x01 \x01(\v2\x17.masir.daemon.v1.StatusR\x06status\"\x11\n" +
+	"\x0fShutdownRequest\"\x12\n" +
+	"\x10ShutdownResponse\"\xc1\x02\n" +
+	"\bSettings\x12\x14\n" +
+	"\x05power\x18\x01 \x01(\bR\x05power\x12\x10\n" +
+	"\x03tun\x18\x02 \x01(\bR\x03tun\x12&\n" +
+	"\x0falways_on_proxy\x18\x03 \x01(\bR\ralwaysOnProxy\x125\n" +
+	"\bfallback\x18\x04 \x01(\x0e2\x19.masir.daemon.v1.FallbackR\bfallback\x12\x1b\n" +
+	"\tallow_lan\x18\x05 \x01(\bR\ballowLan\x12\x1d\n" +
+	"\n" +
+	"proxy_port\x18\x06 \x01(\rR\tproxyPort\x12\x17\n" +
+	"\adoh_dns\x18\a \x01(\tR\x06dohDns\x12\x1f\n" +
+	"\vdns_servers\x18\b \x03(\tR\n" +
+	"dnsServers\x12\x17\n" +
+	"\atun_dns\x18\t \x03(\tR\x06tunDns\x12\x1f\n" +
+	"\vtun_gateway\x18\n" +
+	" \x01(\tR\n" +
+	"tunGateway\"\x14\n" +
+	"\x12GetSettingsRequest\"\x83\x01\n" +
+	"\x13GetSettingsResponse\x125\n" +
+	"\bsettings\x18\x01 \x01(\v2\x19.masir.daemon.v1.SettingsR\bsettings\x125\n" +
+	"\bdefaults\x18\x02 \x01(\v2\x19.masir.daemon.v1.SettingsR\bdefaults\"$\n" +
+	"\n" +
+	"StringList\x12\x16\n" +
+	"\x06values\x18\x01 \x03(\tR\x06values\"\x8f\x03\n" +
+	"\x15UpdateSettingsRequest\x12+\n" +
+	"\x0falways_on_proxy\x18\x01 \x01(\bH\x00R\ralwaysOnProxy\x88\x01\x01\x12 \n" +
+	"\tallow_lan\x18\x02 \x01(\bH\x01R\ballowLan\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"proxy_port\x18\x03 \x01(\rH\x02R\tproxyPort\x88\x01\x01\x12\x1c\n" +
+	"\adoh_dns\x18\x04 \x01(\tH\x03R\x06dohDns\x88\x01\x01\x12<\n" +
+	"\vdns_servers\x18\x05 \x01(\v2\x1b.masir.daemon.v1.StringListR\n" +
+	"dnsServers\x124\n" +
+	"\atun_dns\x18\x06 \x01(\v2\x1b.masir.daemon.v1.StringListR\x06tunDns\x12$\n" +
+	"\vtun_gateway\x18\a \x01(\tH\x04R\n" +
+	"tunGateway\x88\x01\x01B\x12\n" +
+	"\x10_always_on_proxyB\f\n" +
+	"\n" +
+	"_allow_lanB\r\n" +
+	"\v_proxy_portB\n" +
+	"\n" +
+	"\b_doh_dnsB\x0e\n" +
+	"\f_tun_gateway\"O\n" +
+	"\x16UpdateSettingsResponse\x125\n" +
+	"\bsettings\x18\x01 \x01(\v2\x19.masir.daemon.v1.SettingsR\bsettings\"!\n" +
+	"\x0fSetPowerRequest\x12\x0e\n" +
+	"\x02on\x18\x01 \x01(\bR\x02on\"\x12\n" +
+	"\x10SetPowerResponse\"K\n" +
+	"\x12SetFallbackRequest\x125\n" +
+	"\bfallback\x18\x01 \x01(\x0e2\x19.masir.daemon.v1.FallbackR\bfallback\"\x15\n" +
+	"\x13SetFallbackResponse\"0\n" +
+	"\x14SetTunEnabledRequest\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\"\x17\n" +
+	"\x15SetTunEnabledResponse\"+\n" +
 	"\x11StreamLogsRequest\x12\x16\n" +
 	"\x06follow\x18\x01 \x01(\bR\x06follow\"E\n" +
 	"\x12StreamLogsResponse\x12/\n" +
@@ -414,17 +4361,227 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\bLogEntry\x12!\n" +
 	"\ftimestamp_ms\x18\x01 \x01(\x03R\vtimestampMs\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage*=\n" +
-	"\x04Mode\x12\x14\n" +
-	"\x10MODE_UNSPECIFIED\x10\x00\x12\x0f\n" +
-	"\vMODE_DIRECT\x10\x01\x12\x0e\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\x17\n" +
+	"\x15GetXrayVersionRequest\"2\n" +
+	"\x16GetXrayVersionResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\"\x16\n" +
+	"\x14GetXrayConfigRequest\"+\n" +
+	"\x15GetXrayConfigResponse\x12\x12\n" +
+	"\x04json\x18\x01 \x01(\tR\x04json\"t\n" +
+	"\x12TestLatencyRequest\x12(\n" +
+	"\x10xray_config_json\x18\x01 \x01(\tR\x0exrayConfigJson\x12\x1b\n" +
+	"\tprobe_url\x18\x02 \x01(\tR\bprobeUrl\x12\x17\n" +
+	"\atest_id\x18\x03 \x01(\tR\x06testId\"J\n" +
+	"\x13TestLatencyResponse\x12\x1d\n" +
 	"\n" +
-	"MODE_PROXY\x10\x022\x8a\x02\n" +
-	"\rDaemonService\x12R\n" +
-	"\tGetStatus\x12!.masir.daemon.v1.GetStatusRequest\x1a\".masir.daemon.v1.GetStatusResponse\x12L\n" +
-	"\aSetMode\x12\x1f.masir.daemon.v1.SetModeRequest\x1a .masir.daemon.v1.SetModeResponse\x12W\n" +
+	"latency_ms\x18\x01 \x01(\x03R\tlatencyMs\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"3\n" +
+	"\x18CancelLatencyTestRequest\x12\x17\n" +
+	"\atest_id\x18\x01 \x01(\tR\x06testId\"\x1b\n" +
+	"\x19CancelLatencyTestResponse\"\xae\x01\n" +
+	"\vRoutingRule\x12\x19\n" +
+	"\brule_tag\x18\x01 \x01(\tR\aruleTag\x12\x1b\n" +
+	"\trule_json\x18\x02 \x01(\tR\bruleJson\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x122\n" +
+	"\x15resolved_outbound_tag\x18\x04 \x01(\tR\x13resolvedOutboundTag\x12\x1b\n" +
+	"\tfell_back\x18\x05 \x01(\bR\bfellBack\"\x19\n" +
+	"\x17ListRoutingRulesRequest\"N\n" +
+	"\x18ListRoutingRulesResponse\x122\n" +
+	"\x05rules\x18\x01 \x03(\v2\x1c.masir.daemon.v1.RoutingRuleR\x05rules\"}\n" +
+	"\x11AddRoutingRequest\x12\x1b\n" +
+	"\trule_json\x18\x01 \x01(\tR\bruleJson\x12\x19\n" +
+	"\brule_tag\x18\x02 \x01(\tR\aruleTag\x12\x18\n" +
+	"\aprepend\x18\x03 \x01(\bR\aprepend\x12\x16\n" +
+	"\x06target\x18\x04 \x01(\tR\x06target\"\x14\n" +
+	"\x12AddRoutingResponse\"1\n" +
+	"\x14RemoveRoutingRequest\x12\x19\n" +
+	"\brule_tag\x18\x01 \x01(\tR\aruleTag\"\x17\n" +
+	"\x15RemoveRoutingResponse\"\xc0\x01\n" +
+	"\x13AlterRoutingRequest\x12\x19\n" +
+	"\brule_tag\x18\x01 \x01(\tR\aruleTag\x12 \n" +
+	"\trule_json\x18\x02 \x01(\tH\x00R\bruleJson\x88\x01\x01\x12\x1b\n" +
+	"\x06target\x18\x03 \x01(\tH\x01R\x06target\x88\x01\x01\x12%\n" +
+	"\fnew_rule_tag\x18\x04 \x01(\tH\x02R\n" +
+	"newRuleTag\x88\x01\x01B\f\n" +
 	"\n" +
-	"StreamLogs\x12\".masir.daemon.v1.StreamLogsRequest\x1a#.masir.daemon.v1.StreamLogsResponse0\x01B\xc4\x01\n" +
+	"_rule_jsonB\t\n" +
+	"\a_targetB\x0f\n" +
+	"\r_new_rule_tag\"\x16\n" +
+	"\x14AlterRoutingResponse\"E\n" +
+	"\x12MoveRoutingRequest\x12\x19\n" +
+	"\brule_tag\x18\x01 \x01(\tR\aruleTag\x12\x14\n" +
+	"\x05index\x18\x02 \x01(\rR\x05index\"\x15\n" +
+	"\x13MoveRoutingResponse\"\x8b\x01\n" +
+	"\x12TestRoutingRequest\x12\x16\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x0e\n" +
+	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x12\n" +
+	"\x04port\x18\x03 \x01(\rR\x04port\x12\x18\n" +
+	"\anetwork\x18\x04 \x01(\tR\anetwork\x12\x1f\n" +
+	"\vinbound_tag\x18\x05 \x01(\tR\n" +
+	"inboundTag\"R\n" +
+	"\x13TestRoutingResponse\x12!\n" +
+	"\foutbound_tag\x18\x01 \x01(\tR\voutboundTag\x12\x18\n" +
+	"\amatched\x18\x02 \x01(\bR\amatched\"4\n" +
+	"\fTaggedConfig\x12\x10\n" +
+	"\x03tag\x18\x01 \x01(\tR\x03tag\x12\x12\n" +
+	"\x04json\x18\x02 \x01(\tR\x04json\"\x15\n" +
+	"\x13ListInboundsRequest\"Q\n" +
+	"\x14ListInboundsResponse\x129\n" +
+	"\binbounds\x18\x01 \x03(\v2\x1d.masir.daemon.v1.TaggedConfigR\binbounds\"\x16\n" +
+	"\x14ListOutboundsRequest\"T\n" +
+	"\x15ListOutboundsResponse\x12;\n" +
+	"\toutbounds\x18\x01 \x03(\v2\x1d.masir.daemon.v1.TaggedConfigR\toutbounds\"H\n" +
+	"\x11AddInboundRequest\x12\x10\n" +
+	"\x03tag\x18\x01 \x01(\tR\x03tag\x12!\n" +
+	"\finbound_json\x18\x02 \x01(\tR\vinboundJson\"\x14\n" +
+	"\x12AddInboundResponse\"(\n" +
+	"\x14RemoveInboundRequest\x12\x10\n" +
+	"\x03tag\x18\x01 \x01(\tR\x03tag\"\x17\n" +
+	"\x15RemoveInboundResponse\"J\n" +
+	"\x13AlterInboundRequest\x12\x10\n" +
+	"\x03tag\x18\x01 \x01(\tR\x03tag\x12!\n" +
+	"\finbound_json\x18\x02 \x01(\tR\vinboundJson\"\x16\n" +
+	"\x14AlterInboundResponse\"K\n" +
+	"\x12AddOutboundRequest\x12\x10\n" +
+	"\x03tag\x18\x01 \x01(\tR\x03tag\x12#\n" +
+	"\routbound_json\x18\x02 \x01(\tR\foutboundJson\"\x15\n" +
+	"\x13AddOutboundResponse\")\n" +
+	"\x15RemoveOutboundRequest\x12\x10\n" +
+	"\x03tag\x18\x01 \x01(\tR\x03tag\"\x18\n" +
+	"\x16RemoveOutboundResponse\"M\n" +
+	"\x14AlterOutboundRequest\x12\x10\n" +
+	"\x03tag\x18\x01 \x01(\tR\x03tag\x12#\n" +
+	"\routbound_json\x18\x02 \x01(\tR\foutboundJson\"\x17\n" +
+	"\x15AlterOutboundResponse\"\x9d\x03\n" +
+	"\fSubscription\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
+	"\x03url\x18\x03 \x01(\tR\x03url\x12\"\n" +
+	"\rcreated_at_ms\x18\x04 \x01(\x03R\vcreatedAtMs\x12\"\n" +
+	"\rupdated_at_ms\x18\x05 \x01(\x03R\vupdatedAtMs\x12\"\n" +
+	"\rchecked_at_ms\x18\x06 \x01(\x03R\vcheckedAtMs\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\a \x01(\tR\tlastError\x126\n" +
+	"\x17update_interval_minutes\x18\b \x01(\rR\x15updateIntervalMinutes\x12C\n" +
+	"\x1ecustom_update_interval_minutes\x18\t \x01(\rR\x1bcustomUpdateIntervalMinutes\x12,\n" +
+	"\x05usage\x18\n" +
+	" \x01(\v2\x16.masir.daemon.v1.UsageR\x05usage\x12!\n" +
+	"\fconfig_count\x18\v \x01(\rR\vconfigCount\"\x94\x01\n" +
+	"\x05Usage\x12!\n" +
+	"\fupload_bytes\x18\x01 \x01(\x03R\vuploadBytes\x12%\n" +
+	"\x0edownload_bytes\x18\x02 \x01(\x03R\rdownloadBytes\x12\x1f\n" +
+	"\vtotal_bytes\x18\x03 \x01(\x03R\n" +
+	"totalBytes\x12 \n" +
+	"\fexpire_at_ms\x18\x04 \x01(\x03R\n" +
+	"expireAtMs\"\x97\x02\n" +
+	"\x12SubscriptionConfig\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
+	"\bprotocol\x18\x03 \x01(\tR\bprotocol\x12\x18\n" +
+	"\aaddress\x18\x04 \x01(\tR\aaddress\x12\x12\n" +
+	"\x04port\x18\x05 \x01(\rR\x04port\x12\x18\n" +
+	"\anetwork\x18\x06 \x01(\tR\anetwork\x12\x1a\n" +
+	"\bsecurity\x18\a \x01(\tR\bsecurity\x12#\n" +
+	"\routbound_json\x18\b \x01(\tR\foutboundJson\x128\n" +
+	"\alatency\x18\t \x01(\v2\x1e.masir.daemon.v1.LatencyResultR\alatency\"f\n" +
+	"\rLatencyResult\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\x01 \x01(\x03R\tlatencyMs\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12 \n" +
+	"\ftested_at_ms\x18\x03 \x01(\x03R\n" +
+	"testedAtMs\"\x1a\n" +
+	"\x18ListSubscriptionsRequest\"`\n" +
+	"\x19ListSubscriptionsResponse\x12C\n" +
+	"\rsubscriptions\x18\x01 \x03(\v2\x1d.masir.daemon.v1.SubscriptionR\rsubscriptions\"(\n" +
+	"\x16GetSubscriptionRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x9b\x01\n" +
+	"\x17GetSubscriptionResponse\x12A\n" +
+	"\fsubscription\x18\x01 \x01(\v2\x1d.masir.daemon.v1.SubscriptionR\fsubscription\x12=\n" +
+	"\aconfigs\x18\x02 \x03(\v2#.masir.daemon.v1.SubscriptionConfigR\aconfigs\"\x83\x01\n" +
+	"\x16AddSubscriptionRequest\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12C\n" +
+	"\x1ecustom_update_interval_minutes\x18\x03 \x01(\rR\x1bcustomUpdateIntervalMinutes\"\\\n" +
+	"\x17AddSubscriptionResponse\x12A\n" +
+	"\fsubscription\x18\x01 \x01(\v2\x1d.masir.daemon.v1.SubscriptionR\fsubscription\"\xd8\x01\n" +
+	"\x18AlterSubscriptionRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\x04name\x18\x02 \x01(\tH\x00R\x04name\x88\x01\x01\x12\x15\n" +
+	"\x03url\x18\x03 \x01(\tH\x01R\x03url\x88\x01\x01\x12H\n" +
+	"\x1ecustom_update_interval_minutes\x18\x04 \x01(\rH\x02R\x1bcustomUpdateIntervalMinutes\x88\x01\x01B\a\n" +
+	"\x05_nameB\x06\n" +
+	"\x04_urlB!\n" +
+	"\x1f_custom_update_interval_minutes\"^\n" +
+	"\x19AlterSubscriptionResponse\x12A\n" +
+	"\fsubscription\x18\x01 \x01(\v2\x1d.masir.daemon.v1.SubscriptionR\fsubscription\"+\n" +
+	"\x19RemoveSubscriptionRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x1c\n" +
+	"\x1aRemoveSubscriptionResponse\"+\n" +
+	"\x19UpdateSubscriptionRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"_\n" +
+	"\x1aUpdateSubscriptionResponse\x12A\n" +
+	"\fsubscription\x18\x01 \x01(\v2\x1d.masir.daemon.v1.SubscriptionR\fsubscription\"\x85\x01\n" +
+	"\x1eTestSubscriptionLatencyRequest\x12'\n" +
+	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1d\n" +
+	"\n" +
+	"config_ids\x18\x02 \x03(\tR\tconfigIds\x12\x1b\n" +
+	"\tprobe_url\x18\x03 \x01(\tR\bprobeUrl\"v\n" +
+	"\x1fTestSubscriptionLatencyResponse\x12\x1b\n" +
+	"\tconfig_id\x18\x01 \x01(\tR\bconfigId\x126\n" +
+	"\x06result\x18\x02 \x01(\v2\x1e.masir.daemon.v1.LatencyResultR\x06result\"[\n" +
+	"\x13SelectConfigRequest\x12'\n" +
+	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
+	"\tconfig_id\x18\x02 \x01(\tR\bconfigId\"\x16\n" +
+	"\x14SelectConfigResponse\"\x18\n" +
+	"\x16GetActiveConfigRequest\"\x9c\x01\n" +
+	"\x17GetActiveConfigResponse\x12'\n" +
+	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
+	"\tconfig_id\x18\x02 \x01(\tR\bconfigId\x12;\n" +
+	"\x06config\x18\x03 \x01(\v2#.masir.daemon.v1.SubscriptionConfigR\x06config*M\n" +
+	"\bFallback\x12\x18\n" +
+	"\x14FALLBACK_UNSPECIFIED\x10\x00\x12\x13\n" +
+	"\x0fFALLBACK_DIRECT\x10\x01\x12\x12\n" +
+	"\x0eFALLBACK_PROXY\x10\x022\x9e\x1b\n" +
+	"\rDaemonService\x12a\n" +
+	"\x0eGetXrayVersion\x12&.masir.daemon.v1.GetXrayVersionRequest\x1a'.masir.daemon.v1.GetXrayVersionResponse\x12^\n" +
+	"\rGetXrayConfig\x12%.masir.daemon.v1.GetXrayConfigRequest\x1a&.masir.daemon.v1.GetXrayConfigResponse\x12R\n" +
+	"\tGetStatus\x12!.masir.daemon.v1.GetStatusRequest\x1a\".masir.daemon.v1.GetStatusResponse\x12Z\n" +
+	"\vWatchStatus\x12#.masir.daemon.v1.WatchStatusRequest\x1a$.masir.daemon.v1.WatchStatusResponse0\x01\x12O\n" +
+	"\bShutdown\x12 .masir.daemon.v1.ShutdownRequest\x1a!.masir.daemon.v1.ShutdownResponse\x12W\n" +
+	"\n" +
+	"StreamLogs\x12\".masir.daemon.v1.StreamLogsRequest\x1a#.masir.daemon.v1.StreamLogsResponse0\x01\x12X\n" +
+	"\vTestLatency\x12#.masir.daemon.v1.TestLatencyRequest\x1a$.masir.daemon.v1.TestLatencyResponse\x12j\n" +
+	"\x11CancelLatencyTest\x12).masir.daemon.v1.CancelLatencyTestRequest\x1a*.masir.daemon.v1.CancelLatencyTestResponse\x12X\n" +
+	"\vGetSettings\x12#.masir.daemon.v1.GetSettingsRequest\x1a$.masir.daemon.v1.GetSettingsResponse\x12a\n" +
+	"\x0eUpdateSettings\x12&.masir.daemon.v1.UpdateSettingsRequest\x1a'.masir.daemon.v1.UpdateSettingsResponse\x12O\n" +
+	"\bSetPower\x12 .masir.daemon.v1.SetPowerRequest\x1a!.masir.daemon.v1.SetPowerResponse\x12X\n" +
+	"\vSetFallback\x12#.masir.daemon.v1.SetFallbackRequest\x1a$.masir.daemon.v1.SetFallbackResponse\x12^\n" +
+	"\rSetTunEnabled\x12%.masir.daemon.v1.SetTunEnabledRequest\x1a&.masir.daemon.v1.SetTunEnabledResponse\x12g\n" +
+	"\x10ListRoutingRules\x12(.masir.daemon.v1.ListRoutingRulesRequest\x1a).masir.daemon.v1.ListRoutingRulesResponse\x12U\n" +
+	"\n" +
+	"AddRouting\x12\".masir.daemon.v1.AddRoutingRequest\x1a#.masir.daemon.v1.AddRoutingResponse\x12^\n" +
+	"\rRemoveRouting\x12%.masir.daemon.v1.RemoveRoutingRequest\x1a&.masir.daemon.v1.RemoveRoutingResponse\x12[\n" +
+	"\fAlterRouting\x12$.masir.daemon.v1.AlterRoutingRequest\x1a%.masir.daemon.v1.AlterRoutingResponse\x12X\n" +
+	"\vMoveRouting\x12#.masir.daemon.v1.MoveRoutingRequest\x1a$.masir.daemon.v1.MoveRoutingResponse\x12X\n" +
+	"\vTestRouting\x12#.masir.daemon.v1.TestRoutingRequest\x1a$.masir.daemon.v1.TestRoutingResponse\x12[\n" +
+	"\fListInbounds\x12$.masir.daemon.v1.ListInboundsRequest\x1a%.masir.daemon.v1.ListInboundsResponse\x12U\n" +
+	"\n" +
+	"AddInbound\x12\".masir.daemon.v1.AddInboundRequest\x1a#.masir.daemon.v1.AddInboundResponse\x12^\n" +
+	"\rRemoveInbound\x12%.masir.daemon.v1.RemoveInboundRequest\x1a&.masir.daemon.v1.RemoveInboundResponse\x12[\n" +
+	"\fAlterInbound\x12$.masir.daemon.v1.AlterInboundRequest\x1a%.masir.daemon.v1.AlterInboundResponse\x12^\n" +
+	"\rListOutbounds\x12%.masir.daemon.v1.ListOutboundsRequest\x1a&.masir.daemon.v1.ListOutboundsResponse\x12X\n" +
+	"\vAddOutbound\x12#.masir.daemon.v1.AddOutboundRequest\x1a$.masir.daemon.v1.AddOutboundResponse\x12a\n" +
+	"\x0eRemoveOutbound\x12&.masir.daemon.v1.RemoveOutboundRequest\x1a'.masir.daemon.v1.RemoveOutboundResponse\x12^\n" +
+	"\rAlterOutbound\x12%.masir.daemon.v1.AlterOutboundRequest\x1a&.masir.daemon.v1.AlterOutboundResponse\x12j\n" +
+	"\x11ListSubscriptions\x12).masir.daemon.v1.ListSubscriptionsRequest\x1a*.masir.daemon.v1.ListSubscriptionsResponse\x12d\n" +
+	"\x0fGetSubscription\x12'.masir.daemon.v1.GetSubscriptionRequest\x1a(.masir.daemon.v1.GetSubscriptionResponse\x12d\n" +
+	"\x0fAddSubscription\x12'.masir.daemon.v1.AddSubscriptionRequest\x1a(.masir.daemon.v1.AddSubscriptionResponse\x12j\n" +
+	"\x11AlterSubscription\x12).masir.daemon.v1.AlterSubscriptionRequest\x1a*.masir.daemon.v1.AlterSubscriptionResponse\x12m\n" +
+	"\x12RemoveSubscription\x12*.masir.daemon.v1.RemoveSubscriptionRequest\x1a+.masir.daemon.v1.RemoveSubscriptionResponse\x12m\n" +
+	"\x12UpdateSubscription\x12*.masir.daemon.v1.UpdateSubscriptionRequest\x1a+.masir.daemon.v1.UpdateSubscriptionResponse\x12~\n" +
+	"\x17TestSubscriptionLatency\x12/.masir.daemon.v1.TestSubscriptionLatencyRequest\x1a0.masir.daemon.v1.TestSubscriptionLatencyResponse0\x01\x12[\n" +
+	"\fSelectConfig\x12$.masir.daemon.v1.SelectConfigRequest\x1a%.masir.daemon.v1.SelectConfigResponse\x12d\n" +
+	"\x0fGetActiveConfig\x12'.masir.daemon.v1.GetActiveConfigRequest\x1a(.masir.daemon.v1.GetActiveConfigResponseB\xc4\x01\n" +
 	"\x13com.masir.daemon.v1B\vDaemonProtoP\x01ZBgithub.com/you/masir/libs/masir-proto/gen/masir/daemon/v1;daemonv1\xa2\x02\x03MDX\xaa\x02\x0fMasir.Daemon.V1\xca\x02\x0fMasir\\Daemon\\V1\xe2\x02\x1bMasir\\Daemon\\V1\\GPBMetadata\xea\x02\x11Masir::Daemon::V1b\x06proto3"
 
 var (
@@ -440,31 +4597,194 @@ func file_masir_daemon_v1_daemon_proto_rawDescGZIP() []byte {
 }
 
 var file_masir_daemon_v1_daemon_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_masir_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_masir_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 82)
 var file_masir_daemon_v1_daemon_proto_goTypes = []any{
-	(Mode)(0),                  // 0: masir.daemon.v1.Mode
-	(*GetStatusRequest)(nil),   // 1: masir.daemon.v1.GetStatusRequest
-	(*GetStatusResponse)(nil),  // 2: masir.daemon.v1.GetStatusResponse
-	(*SetModeRequest)(nil),     // 3: masir.daemon.v1.SetModeRequest
-	(*SetModeResponse)(nil),    // 4: masir.daemon.v1.SetModeResponse
-	(*StreamLogsRequest)(nil),  // 5: masir.daemon.v1.StreamLogsRequest
-	(*StreamLogsResponse)(nil), // 6: masir.daemon.v1.StreamLogsResponse
-	(*LogEntry)(nil),           // 7: masir.daemon.v1.LogEntry
+	(Fallback)(0),                           // 0: masir.daemon.v1.Fallback
+	(*Status)(nil),                          // 1: masir.daemon.v1.Status
+	(*GetStatusRequest)(nil),                // 2: masir.daemon.v1.GetStatusRequest
+	(*GetStatusResponse)(nil),               // 3: masir.daemon.v1.GetStatusResponse
+	(*WatchStatusRequest)(nil),              // 4: masir.daemon.v1.WatchStatusRequest
+	(*WatchStatusResponse)(nil),             // 5: masir.daemon.v1.WatchStatusResponse
+	(*ShutdownRequest)(nil),                 // 6: masir.daemon.v1.ShutdownRequest
+	(*ShutdownResponse)(nil),                // 7: masir.daemon.v1.ShutdownResponse
+	(*Settings)(nil),                        // 8: masir.daemon.v1.Settings
+	(*GetSettingsRequest)(nil),              // 9: masir.daemon.v1.GetSettingsRequest
+	(*GetSettingsResponse)(nil),             // 10: masir.daemon.v1.GetSettingsResponse
+	(*StringList)(nil),                      // 11: masir.daemon.v1.StringList
+	(*UpdateSettingsRequest)(nil),           // 12: masir.daemon.v1.UpdateSettingsRequest
+	(*UpdateSettingsResponse)(nil),          // 13: masir.daemon.v1.UpdateSettingsResponse
+	(*SetPowerRequest)(nil),                 // 14: masir.daemon.v1.SetPowerRequest
+	(*SetPowerResponse)(nil),                // 15: masir.daemon.v1.SetPowerResponse
+	(*SetFallbackRequest)(nil),              // 16: masir.daemon.v1.SetFallbackRequest
+	(*SetFallbackResponse)(nil),             // 17: masir.daemon.v1.SetFallbackResponse
+	(*SetTunEnabledRequest)(nil),            // 18: masir.daemon.v1.SetTunEnabledRequest
+	(*SetTunEnabledResponse)(nil),           // 19: masir.daemon.v1.SetTunEnabledResponse
+	(*StreamLogsRequest)(nil),               // 20: masir.daemon.v1.StreamLogsRequest
+	(*StreamLogsResponse)(nil),              // 21: masir.daemon.v1.StreamLogsResponse
+	(*LogEntry)(nil),                        // 22: masir.daemon.v1.LogEntry
+	(*GetXrayVersionRequest)(nil),           // 23: masir.daemon.v1.GetXrayVersionRequest
+	(*GetXrayVersionResponse)(nil),          // 24: masir.daemon.v1.GetXrayVersionResponse
+	(*GetXrayConfigRequest)(nil),            // 25: masir.daemon.v1.GetXrayConfigRequest
+	(*GetXrayConfigResponse)(nil),           // 26: masir.daemon.v1.GetXrayConfigResponse
+	(*TestLatencyRequest)(nil),              // 27: masir.daemon.v1.TestLatencyRequest
+	(*TestLatencyResponse)(nil),             // 28: masir.daemon.v1.TestLatencyResponse
+	(*CancelLatencyTestRequest)(nil),        // 29: masir.daemon.v1.CancelLatencyTestRequest
+	(*CancelLatencyTestResponse)(nil),       // 30: masir.daemon.v1.CancelLatencyTestResponse
+	(*RoutingRule)(nil),                     // 31: masir.daemon.v1.RoutingRule
+	(*ListRoutingRulesRequest)(nil),         // 32: masir.daemon.v1.ListRoutingRulesRequest
+	(*ListRoutingRulesResponse)(nil),        // 33: masir.daemon.v1.ListRoutingRulesResponse
+	(*AddRoutingRequest)(nil),               // 34: masir.daemon.v1.AddRoutingRequest
+	(*AddRoutingResponse)(nil),              // 35: masir.daemon.v1.AddRoutingResponse
+	(*RemoveRoutingRequest)(nil),            // 36: masir.daemon.v1.RemoveRoutingRequest
+	(*RemoveRoutingResponse)(nil),           // 37: masir.daemon.v1.RemoveRoutingResponse
+	(*AlterRoutingRequest)(nil),             // 38: masir.daemon.v1.AlterRoutingRequest
+	(*AlterRoutingResponse)(nil),            // 39: masir.daemon.v1.AlterRoutingResponse
+	(*MoveRoutingRequest)(nil),              // 40: masir.daemon.v1.MoveRoutingRequest
+	(*MoveRoutingResponse)(nil),             // 41: masir.daemon.v1.MoveRoutingResponse
+	(*TestRoutingRequest)(nil),              // 42: masir.daemon.v1.TestRoutingRequest
+	(*TestRoutingResponse)(nil),             // 43: masir.daemon.v1.TestRoutingResponse
+	(*TaggedConfig)(nil),                    // 44: masir.daemon.v1.TaggedConfig
+	(*ListInboundsRequest)(nil),             // 45: masir.daemon.v1.ListInboundsRequest
+	(*ListInboundsResponse)(nil),            // 46: masir.daemon.v1.ListInboundsResponse
+	(*ListOutboundsRequest)(nil),            // 47: masir.daemon.v1.ListOutboundsRequest
+	(*ListOutboundsResponse)(nil),           // 48: masir.daemon.v1.ListOutboundsResponse
+	(*AddInboundRequest)(nil),               // 49: masir.daemon.v1.AddInboundRequest
+	(*AddInboundResponse)(nil),              // 50: masir.daemon.v1.AddInboundResponse
+	(*RemoveInboundRequest)(nil),            // 51: masir.daemon.v1.RemoveInboundRequest
+	(*RemoveInboundResponse)(nil),           // 52: masir.daemon.v1.RemoveInboundResponse
+	(*AlterInboundRequest)(nil),             // 53: masir.daemon.v1.AlterInboundRequest
+	(*AlterInboundResponse)(nil),            // 54: masir.daemon.v1.AlterInboundResponse
+	(*AddOutboundRequest)(nil),              // 55: masir.daemon.v1.AddOutboundRequest
+	(*AddOutboundResponse)(nil),             // 56: masir.daemon.v1.AddOutboundResponse
+	(*RemoveOutboundRequest)(nil),           // 57: masir.daemon.v1.RemoveOutboundRequest
+	(*RemoveOutboundResponse)(nil),          // 58: masir.daemon.v1.RemoveOutboundResponse
+	(*AlterOutboundRequest)(nil),            // 59: masir.daemon.v1.AlterOutboundRequest
+	(*AlterOutboundResponse)(nil),           // 60: masir.daemon.v1.AlterOutboundResponse
+	(*Subscription)(nil),                    // 61: masir.daemon.v1.Subscription
+	(*Usage)(nil),                           // 62: masir.daemon.v1.Usage
+	(*SubscriptionConfig)(nil),              // 63: masir.daemon.v1.SubscriptionConfig
+	(*LatencyResult)(nil),                   // 64: masir.daemon.v1.LatencyResult
+	(*ListSubscriptionsRequest)(nil),        // 65: masir.daemon.v1.ListSubscriptionsRequest
+	(*ListSubscriptionsResponse)(nil),       // 66: masir.daemon.v1.ListSubscriptionsResponse
+	(*GetSubscriptionRequest)(nil),          // 67: masir.daemon.v1.GetSubscriptionRequest
+	(*GetSubscriptionResponse)(nil),         // 68: masir.daemon.v1.GetSubscriptionResponse
+	(*AddSubscriptionRequest)(nil),          // 69: masir.daemon.v1.AddSubscriptionRequest
+	(*AddSubscriptionResponse)(nil),         // 70: masir.daemon.v1.AddSubscriptionResponse
+	(*AlterSubscriptionRequest)(nil),        // 71: masir.daemon.v1.AlterSubscriptionRequest
+	(*AlterSubscriptionResponse)(nil),       // 72: masir.daemon.v1.AlterSubscriptionResponse
+	(*RemoveSubscriptionRequest)(nil),       // 73: masir.daemon.v1.RemoveSubscriptionRequest
+	(*RemoveSubscriptionResponse)(nil),      // 74: masir.daemon.v1.RemoveSubscriptionResponse
+	(*UpdateSubscriptionRequest)(nil),       // 75: masir.daemon.v1.UpdateSubscriptionRequest
+	(*UpdateSubscriptionResponse)(nil),      // 76: masir.daemon.v1.UpdateSubscriptionResponse
+	(*TestSubscriptionLatencyRequest)(nil),  // 77: masir.daemon.v1.TestSubscriptionLatencyRequest
+	(*TestSubscriptionLatencyResponse)(nil), // 78: masir.daemon.v1.TestSubscriptionLatencyResponse
+	(*SelectConfigRequest)(nil),             // 79: masir.daemon.v1.SelectConfigRequest
+	(*SelectConfigResponse)(nil),            // 80: masir.daemon.v1.SelectConfigResponse
+	(*GetActiveConfigRequest)(nil),          // 81: masir.daemon.v1.GetActiveConfigRequest
+	(*GetActiveConfigResponse)(nil),         // 82: masir.daemon.v1.GetActiveConfigResponse
 }
 var file_masir_daemon_v1_daemon_proto_depIdxs = []int32{
-	0, // 0: masir.daemon.v1.SetModeRequest.mode:type_name -> masir.daemon.v1.Mode
-	7, // 1: masir.daemon.v1.StreamLogsResponse.entry:type_name -> masir.daemon.v1.LogEntry
-	1, // 2: masir.daemon.v1.DaemonService.GetStatus:input_type -> masir.daemon.v1.GetStatusRequest
-	3, // 3: masir.daemon.v1.DaemonService.SetMode:input_type -> masir.daemon.v1.SetModeRequest
-	5, // 4: masir.daemon.v1.DaemonService.StreamLogs:input_type -> masir.daemon.v1.StreamLogsRequest
-	2, // 5: masir.daemon.v1.DaemonService.GetStatus:output_type -> masir.daemon.v1.GetStatusResponse
-	4, // 6: masir.daemon.v1.DaemonService.SetMode:output_type -> masir.daemon.v1.SetModeResponse
-	6, // 7: masir.daemon.v1.DaemonService.StreamLogs:output_type -> masir.daemon.v1.StreamLogsResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	8,  // 0: masir.daemon.v1.Status.settings:type_name -> masir.daemon.v1.Settings
+	1,  // 1: masir.daemon.v1.GetStatusResponse.status:type_name -> masir.daemon.v1.Status
+	1,  // 2: masir.daemon.v1.WatchStatusResponse.status:type_name -> masir.daemon.v1.Status
+	0,  // 3: masir.daemon.v1.Settings.fallback:type_name -> masir.daemon.v1.Fallback
+	8,  // 4: masir.daemon.v1.GetSettingsResponse.settings:type_name -> masir.daemon.v1.Settings
+	8,  // 5: masir.daemon.v1.GetSettingsResponse.defaults:type_name -> masir.daemon.v1.Settings
+	11, // 6: masir.daemon.v1.UpdateSettingsRequest.dns_servers:type_name -> masir.daemon.v1.StringList
+	11, // 7: masir.daemon.v1.UpdateSettingsRequest.tun_dns:type_name -> masir.daemon.v1.StringList
+	8,  // 8: masir.daemon.v1.UpdateSettingsResponse.settings:type_name -> masir.daemon.v1.Settings
+	0,  // 9: masir.daemon.v1.SetFallbackRequest.fallback:type_name -> masir.daemon.v1.Fallback
+	22, // 10: masir.daemon.v1.StreamLogsResponse.entry:type_name -> masir.daemon.v1.LogEntry
+	31, // 11: masir.daemon.v1.ListRoutingRulesResponse.rules:type_name -> masir.daemon.v1.RoutingRule
+	44, // 12: masir.daemon.v1.ListInboundsResponse.inbounds:type_name -> masir.daemon.v1.TaggedConfig
+	44, // 13: masir.daemon.v1.ListOutboundsResponse.outbounds:type_name -> masir.daemon.v1.TaggedConfig
+	62, // 14: masir.daemon.v1.Subscription.usage:type_name -> masir.daemon.v1.Usage
+	64, // 15: masir.daemon.v1.SubscriptionConfig.latency:type_name -> masir.daemon.v1.LatencyResult
+	61, // 16: masir.daemon.v1.ListSubscriptionsResponse.subscriptions:type_name -> masir.daemon.v1.Subscription
+	61, // 17: masir.daemon.v1.GetSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	63, // 18: masir.daemon.v1.GetSubscriptionResponse.configs:type_name -> masir.daemon.v1.SubscriptionConfig
+	61, // 19: masir.daemon.v1.AddSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	61, // 20: masir.daemon.v1.AlterSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	61, // 21: masir.daemon.v1.UpdateSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	64, // 22: masir.daemon.v1.TestSubscriptionLatencyResponse.result:type_name -> masir.daemon.v1.LatencyResult
+	63, // 23: masir.daemon.v1.GetActiveConfigResponse.config:type_name -> masir.daemon.v1.SubscriptionConfig
+	23, // 24: masir.daemon.v1.DaemonService.GetXrayVersion:input_type -> masir.daemon.v1.GetXrayVersionRequest
+	25, // 25: masir.daemon.v1.DaemonService.GetXrayConfig:input_type -> masir.daemon.v1.GetXrayConfigRequest
+	2,  // 26: masir.daemon.v1.DaemonService.GetStatus:input_type -> masir.daemon.v1.GetStatusRequest
+	4,  // 27: masir.daemon.v1.DaemonService.WatchStatus:input_type -> masir.daemon.v1.WatchStatusRequest
+	6,  // 28: masir.daemon.v1.DaemonService.Shutdown:input_type -> masir.daemon.v1.ShutdownRequest
+	20, // 29: masir.daemon.v1.DaemonService.StreamLogs:input_type -> masir.daemon.v1.StreamLogsRequest
+	27, // 30: masir.daemon.v1.DaemonService.TestLatency:input_type -> masir.daemon.v1.TestLatencyRequest
+	29, // 31: masir.daemon.v1.DaemonService.CancelLatencyTest:input_type -> masir.daemon.v1.CancelLatencyTestRequest
+	9,  // 32: masir.daemon.v1.DaemonService.GetSettings:input_type -> masir.daemon.v1.GetSettingsRequest
+	12, // 33: masir.daemon.v1.DaemonService.UpdateSettings:input_type -> masir.daemon.v1.UpdateSettingsRequest
+	14, // 34: masir.daemon.v1.DaemonService.SetPower:input_type -> masir.daemon.v1.SetPowerRequest
+	16, // 35: masir.daemon.v1.DaemonService.SetFallback:input_type -> masir.daemon.v1.SetFallbackRequest
+	18, // 36: masir.daemon.v1.DaemonService.SetTunEnabled:input_type -> masir.daemon.v1.SetTunEnabledRequest
+	32, // 37: masir.daemon.v1.DaemonService.ListRoutingRules:input_type -> masir.daemon.v1.ListRoutingRulesRequest
+	34, // 38: masir.daemon.v1.DaemonService.AddRouting:input_type -> masir.daemon.v1.AddRoutingRequest
+	36, // 39: masir.daemon.v1.DaemonService.RemoveRouting:input_type -> masir.daemon.v1.RemoveRoutingRequest
+	38, // 40: masir.daemon.v1.DaemonService.AlterRouting:input_type -> masir.daemon.v1.AlterRoutingRequest
+	40, // 41: masir.daemon.v1.DaemonService.MoveRouting:input_type -> masir.daemon.v1.MoveRoutingRequest
+	42, // 42: masir.daemon.v1.DaemonService.TestRouting:input_type -> masir.daemon.v1.TestRoutingRequest
+	45, // 43: masir.daemon.v1.DaemonService.ListInbounds:input_type -> masir.daemon.v1.ListInboundsRequest
+	49, // 44: masir.daemon.v1.DaemonService.AddInbound:input_type -> masir.daemon.v1.AddInboundRequest
+	51, // 45: masir.daemon.v1.DaemonService.RemoveInbound:input_type -> masir.daemon.v1.RemoveInboundRequest
+	53, // 46: masir.daemon.v1.DaemonService.AlterInbound:input_type -> masir.daemon.v1.AlterInboundRequest
+	47, // 47: masir.daemon.v1.DaemonService.ListOutbounds:input_type -> masir.daemon.v1.ListOutboundsRequest
+	55, // 48: masir.daemon.v1.DaemonService.AddOutbound:input_type -> masir.daemon.v1.AddOutboundRequest
+	57, // 49: masir.daemon.v1.DaemonService.RemoveOutbound:input_type -> masir.daemon.v1.RemoveOutboundRequest
+	59, // 50: masir.daemon.v1.DaemonService.AlterOutbound:input_type -> masir.daemon.v1.AlterOutboundRequest
+	65, // 51: masir.daemon.v1.DaemonService.ListSubscriptions:input_type -> masir.daemon.v1.ListSubscriptionsRequest
+	67, // 52: masir.daemon.v1.DaemonService.GetSubscription:input_type -> masir.daemon.v1.GetSubscriptionRequest
+	69, // 53: masir.daemon.v1.DaemonService.AddSubscription:input_type -> masir.daemon.v1.AddSubscriptionRequest
+	71, // 54: masir.daemon.v1.DaemonService.AlterSubscription:input_type -> masir.daemon.v1.AlterSubscriptionRequest
+	73, // 55: masir.daemon.v1.DaemonService.RemoveSubscription:input_type -> masir.daemon.v1.RemoveSubscriptionRequest
+	75, // 56: masir.daemon.v1.DaemonService.UpdateSubscription:input_type -> masir.daemon.v1.UpdateSubscriptionRequest
+	77, // 57: masir.daemon.v1.DaemonService.TestSubscriptionLatency:input_type -> masir.daemon.v1.TestSubscriptionLatencyRequest
+	79, // 58: masir.daemon.v1.DaemonService.SelectConfig:input_type -> masir.daemon.v1.SelectConfigRequest
+	81, // 59: masir.daemon.v1.DaemonService.GetActiveConfig:input_type -> masir.daemon.v1.GetActiveConfigRequest
+	24, // 60: masir.daemon.v1.DaemonService.GetXrayVersion:output_type -> masir.daemon.v1.GetXrayVersionResponse
+	26, // 61: masir.daemon.v1.DaemonService.GetXrayConfig:output_type -> masir.daemon.v1.GetXrayConfigResponse
+	3,  // 62: masir.daemon.v1.DaemonService.GetStatus:output_type -> masir.daemon.v1.GetStatusResponse
+	5,  // 63: masir.daemon.v1.DaemonService.WatchStatus:output_type -> masir.daemon.v1.WatchStatusResponse
+	7,  // 64: masir.daemon.v1.DaemonService.Shutdown:output_type -> masir.daemon.v1.ShutdownResponse
+	21, // 65: masir.daemon.v1.DaemonService.StreamLogs:output_type -> masir.daemon.v1.StreamLogsResponse
+	28, // 66: masir.daemon.v1.DaemonService.TestLatency:output_type -> masir.daemon.v1.TestLatencyResponse
+	30, // 67: masir.daemon.v1.DaemonService.CancelLatencyTest:output_type -> masir.daemon.v1.CancelLatencyTestResponse
+	10, // 68: masir.daemon.v1.DaemonService.GetSettings:output_type -> masir.daemon.v1.GetSettingsResponse
+	13, // 69: masir.daemon.v1.DaemonService.UpdateSettings:output_type -> masir.daemon.v1.UpdateSettingsResponse
+	15, // 70: masir.daemon.v1.DaemonService.SetPower:output_type -> masir.daemon.v1.SetPowerResponse
+	17, // 71: masir.daemon.v1.DaemonService.SetFallback:output_type -> masir.daemon.v1.SetFallbackResponse
+	19, // 72: masir.daemon.v1.DaemonService.SetTunEnabled:output_type -> masir.daemon.v1.SetTunEnabledResponse
+	33, // 73: masir.daemon.v1.DaemonService.ListRoutingRules:output_type -> masir.daemon.v1.ListRoutingRulesResponse
+	35, // 74: masir.daemon.v1.DaemonService.AddRouting:output_type -> masir.daemon.v1.AddRoutingResponse
+	37, // 75: masir.daemon.v1.DaemonService.RemoveRouting:output_type -> masir.daemon.v1.RemoveRoutingResponse
+	39, // 76: masir.daemon.v1.DaemonService.AlterRouting:output_type -> masir.daemon.v1.AlterRoutingResponse
+	41, // 77: masir.daemon.v1.DaemonService.MoveRouting:output_type -> masir.daemon.v1.MoveRoutingResponse
+	43, // 78: masir.daemon.v1.DaemonService.TestRouting:output_type -> masir.daemon.v1.TestRoutingResponse
+	46, // 79: masir.daemon.v1.DaemonService.ListInbounds:output_type -> masir.daemon.v1.ListInboundsResponse
+	50, // 80: masir.daemon.v1.DaemonService.AddInbound:output_type -> masir.daemon.v1.AddInboundResponse
+	52, // 81: masir.daemon.v1.DaemonService.RemoveInbound:output_type -> masir.daemon.v1.RemoveInboundResponse
+	54, // 82: masir.daemon.v1.DaemonService.AlterInbound:output_type -> masir.daemon.v1.AlterInboundResponse
+	48, // 83: masir.daemon.v1.DaemonService.ListOutbounds:output_type -> masir.daemon.v1.ListOutboundsResponse
+	56, // 84: masir.daemon.v1.DaemonService.AddOutbound:output_type -> masir.daemon.v1.AddOutboundResponse
+	58, // 85: masir.daemon.v1.DaemonService.RemoveOutbound:output_type -> masir.daemon.v1.RemoveOutboundResponse
+	60, // 86: masir.daemon.v1.DaemonService.AlterOutbound:output_type -> masir.daemon.v1.AlterOutboundResponse
+	66, // 87: masir.daemon.v1.DaemonService.ListSubscriptions:output_type -> masir.daemon.v1.ListSubscriptionsResponse
+	68, // 88: masir.daemon.v1.DaemonService.GetSubscription:output_type -> masir.daemon.v1.GetSubscriptionResponse
+	70, // 89: masir.daemon.v1.DaemonService.AddSubscription:output_type -> masir.daemon.v1.AddSubscriptionResponse
+	72, // 90: masir.daemon.v1.DaemonService.AlterSubscription:output_type -> masir.daemon.v1.AlterSubscriptionResponse
+	74, // 91: masir.daemon.v1.DaemonService.RemoveSubscription:output_type -> masir.daemon.v1.RemoveSubscriptionResponse
+	76, // 92: masir.daemon.v1.DaemonService.UpdateSubscription:output_type -> masir.daemon.v1.UpdateSubscriptionResponse
+	78, // 93: masir.daemon.v1.DaemonService.TestSubscriptionLatency:output_type -> masir.daemon.v1.TestSubscriptionLatencyResponse
+	80, // 94: masir.daemon.v1.DaemonService.SelectConfig:output_type -> masir.daemon.v1.SelectConfigResponse
+	82, // 95: masir.daemon.v1.DaemonService.GetActiveConfig:output_type -> masir.daemon.v1.GetActiveConfigResponse
+	60, // [60:96] is the sub-list for method output_type
+	24, // [24:60] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_masir_daemon_v1_daemon_proto_init() }
@@ -472,13 +4792,16 @@ func file_masir_daemon_v1_daemon_proto_init() {
 	if File_masir_daemon_v1_daemon_proto != nil {
 		return
 	}
+	file_masir_daemon_v1_daemon_proto_msgTypes[11].OneofWrappers = []any{}
+	file_masir_daemon_v1_daemon_proto_msgTypes[37].OneofWrappers = []any{}
+	file_masir_daemon_v1_daemon_proto_msgTypes[70].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_masir_daemon_v1_daemon_proto_rawDesc), len(file_masir_daemon_v1_daemon_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   82,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

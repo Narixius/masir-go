@@ -3,25 +3,151 @@ syntax = "proto3";
 package masir.daemon.v1;
 
 service DaemonService {
+  rpc GetXrayVersion(GetXrayVersionRequest) returns (GetXrayVersionResponse);
+  // The full Xray config as composed from the current state, for inspection.
+  rpc GetXrayConfig(GetXrayConfigRequest) returns (GetXrayConfigResponse);
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
-  rpc SetMode(SetModeRequest) returns (SetModeResponse);
+  // Sends the status now, then again whenever it changes.
+  rpc WatchStatus(WatchStatusRequest) returns (stream WatchStatusResponse);
+  // Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
   rpc StreamLogs(StreamLogsRequest) returns (stream StreamLogsResponse);
+  // latency
+  rpc TestLatency(TestLatencyRequest) returns (TestLatencyResponse);
+  rpc CancelLatencyTest(CancelLatencyTestRequest) returns (CancelLatencyTestResponse);
+  // power, modes and settings
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+  rpc SetPower(SetPowerRequest) returns (SetPowerResponse);
+  rpc SetFallback(SetFallbackRequest) returns (SetFallbackResponse);
+  rpc SetTunEnabled(SetTunEnabledRequest) returns (SetTunEnabledResponse);
+  // routing
+  rpc ListRoutingRules(ListRoutingRulesRequest) returns (ListRoutingRulesResponse);
+  rpc AddRouting(AddRoutingRequest) returns (AddRoutingResponse);
+  rpc RemoveRouting(RemoveRoutingRequest) returns (RemoveRoutingResponse);
+  rpc AlterRouting(AlterRoutingRequest) returns (AlterRoutingResponse);
+  rpc MoveRouting(MoveRoutingRequest) returns (MoveRoutingResponse);
+  rpc TestRouting(TestRoutingRequest) returns (TestRoutingResponse);
+  // inbounds
+  rpc ListInbounds(ListInboundsRequest) returns (ListInboundsResponse);
+  rpc AddInbound(AddInboundRequest) returns (AddInboundResponse);
+  rpc RemoveInbound(RemoveInboundRequest) returns (RemoveInboundResponse);
+  rpc AlterInbound(AlterInboundRequest) returns (AlterInboundResponse);
+  // outbounds
+  rpc ListOutbounds(ListOutboundsRequest) returns (ListOutboundsResponse);
+  rpc AddOutbound(AddOutboundRequest) returns (AddOutboundResponse);
+  rpc RemoveOutbound(RemoveOutboundRequest) returns (RemoveOutboundResponse);
+  rpc AlterOutbound(AlterOutboundRequest) returns (AlterOutboundResponse);
+  // subscriptions
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+  rpc GetSubscription(GetSubscriptionRequest) returns (GetSubscriptionResponse);
+  rpc AddSubscription(AddSubscriptionRequest) returns (AddSubscriptionResponse);
+  rpc AlterSubscription(AlterSubscriptionRequest) returns (AlterSubscriptionResponse);
+  rpc RemoveSubscription(RemoveSubscriptionRequest) returns (RemoveSubscriptionResponse);
+  rpc UpdateSubscription(UpdateSubscriptionRequest) returns (UpdateSubscriptionResponse);
+  rpc TestSubscriptionLatency(TestSubscriptionLatencyRequest) returns (stream TestSubscriptionLatencyResponse);
+  // active proxy
+  rpc SelectConfig(SelectConfigRequest) returns (SelectConfigResponse);
+  rpc GetActiveConfig(GetActiveConfigRequest) returns (GetActiveConfigResponse);
+}
+
+// Everything a UI needs to draw the daemon's state and decide what to offer,
+// e.g. asking for root when the user wants TUN and tun_available is false.
+message Status {
+  string version = 1;      // daemon version
+  string xray_version = 2;
+  int64 uptime_seconds = 3;
+
+  // privileges
+  bool privileged = 4;        // running as root
+  bool service_installed = 5; // installed as the OS service; false means started in the background
+  int64 served_uid = 6;       // the one user this daemon serves; -1 on Windows
+  string served_user = 7;
+  bool tun_available = 8;
+  string tun_unavailable_reason = 9; // "ROOT_REQUIRED" when tun_available is false
+
+  // what runs
+  bool xray_running = 10;
+  bool proxy_running = 11;
+  string proxy_address = 12; // e.g. "0.0.0.0:7890"
+  bool tun_running = 13;
+  string last_error = 14;    // why what runs doesn't match the settings; empty when it does
+
+  // settings and selection
+  Settings settings = 15;
+  string active_subscription_id = 16;
+  string active_config_id = 17;
+  string active_config_name = 18;
+  bool active_stale = 19;     // the selection is gone from its subscription; its copy keeps running
+  uint32 fell_back_rules = 20; // rules whose target couldn't be used (see ListRoutingRules)
 }
 
 message GetStatusRequest {}
-message GetStatusResponse {
-  bool running = 1;
-  int64 uptime_seconds = 2;
-  string version = 3;
+message GetStatusResponse { Status status = 1; }
+
+message WatchStatusRequest {}
+message WatchStatusResponse { Status status = 1; }
+
+message ShutdownRequest {}
+message ShutdownResponse {}
+
+// power, modes and settings
+
+// Where traffic that matches no rule goes.
+enum Fallback {
+  FALLBACK_UNSPECIFIED = 0;
+  FALLBACK_DIRECT = 1;
+  FALLBACK_PROXY = 2;
 }
 
-enum Mode {
-  MODE_UNSPECIFIED = 0;
-  MODE_DIRECT = 1;
-  MODE_PROXY = 2;
+// Xray runs while power or always_on_proxy is on. The proxy inbound runs whenever
+// Xray does; the TUN only while power and tun are on and the daemon is root.
+message Settings {
+  bool power = 1;
+  bool tun = 2;
+  bool always_on_proxy = 3;
+  Fallback fallback = 4;
+  bool allow_lan = 5;           // proxy listens on all interfaces, not just this machine
+  uint32 proxy_port = 6;        // mixed SOCKS5 + HTTP; default 7890
+  string doh_dns = 7;           // DNS for everything except proxy server names; goes through the proxy
+  repeated string dns_servers = 8; // plain DNS (IPs) for proxy server names; goes direct
+  repeated string tun_dns = 9;     // DNS the TUN interface advertises; empty means dns_servers
+  string tun_gateway = 10;         // IPv4 CIDR for the TUN interface
 }
-message SetModeRequest { Mode mode = 1; }
-message SetModeResponse {}
+
+message GetSettingsRequest {}
+message GetSettingsResponse {
+  Settings settings = 1;
+  Settings defaults = 2; // what each setting is when not customized
+}
+
+message StringList { repeated string values = 1; }
+
+// Unset fields are left alone. Power, tun and fallback have their own RPCs because
+// they carry preconditions.
+message UpdateSettingsRequest {
+  optional bool always_on_proxy = 1;
+  optional bool allow_lan = 2;
+  optional uint32 proxy_port = 3;
+  optional string doh_dns = 4;
+  StringList dns_servers = 5;
+  StringList tun_dns = 6;
+  optional string tun_gateway = 7;
+}
+message UpdateSettingsResponse { Settings settings = 1; }
+
+message SetPowerRequest { bool on = 1; }
+message SetPowerResponse {}
+
+// FALLBACK_PROXY fails with FAILED_PRECONDITION until a config is selected.
+message SetFallbackRequest { Fallback fallback = 1; }
+message SetFallbackResponse {}
+
+// Enabling fails with FAILED_PRECONDITION when the daemon isn't root; the status
+// carries a google.rpc.ErrorInfo with domain "masir" and reason "ROOT_REQUIRED".
+// Nothing is saved in that case; elevate the daemon and call again.
+message SetTunEnabledRequest { bool enabled = 1; }
+message SetTunEnabledResponse {}
 
 message StreamLogsRequest { bool follow = 1; }
 message StreamLogsResponse { LogEntry entry = 1; }
@@ -30,4 +156,207 @@ message LogEntry {
   int64 timestamp_ms = 1;
   string level = 2;
   string message = 3;
+}
+
+message GetXrayVersionRequest {}
+message GetXrayVersionResponse {
+  string version = 1;
+}
+
+message GetXrayConfigRequest {}
+message GetXrayConfigResponse { string json = 1; }
+
+message TestLatencyRequest { string xray_config_json = 1; string probe_url = 2; string test_id = 3; }
+message TestLatencyResponse { int64 latency_ms = 1; string error = 2; }
+
+message CancelLatencyTestRequest  { string test_id = 1; }
+message CancelLatencyTestResponse {}
+
+// Mutations report failure through gRPC status codes: INVALID_ARGUMENT, NOT_FOUND,
+// ALREADY_EXISTS, FAILED_PRECONDITION (e.g. an outbound still used by a rule).
+// A tag left empty is taken from the JSON ("tag", or "ruleTag" for rules).
+// Tags starting with "masir-" are reserved.
+
+// routing
+
+// A rule's target is one of:
+//   "direct" | "block" | "proxy"     built-in outbounds ("proxy" is the selected config)
+//   "config:<subscription_id>/<config_id>"  a config pinned from any subscription
+//   "outbound:<tag>"                 a custom outbound
+// A pinned config that disappears (or whose subscription is removed) falls back to "proxy".
+message RoutingRule {
+  string rule_tag = 1;
+  string rule_json = 2;              // the match part; never contains outboundTag
+  string target = 3;
+  string resolved_outbound_tag = 4;  // what the running config uses
+  bool fell_back = 5;                // the target couldn't be used; resolved_outbound_tag is the fallback
+}
+
+message ListRoutingRulesRequest {}
+message ListRoutingRulesResponse { repeated RoutingRule rules = 1; }
+
+// rule_json is an xray field rule without outboundTag/balancerTag; the target picks the outbound.
+message AddRoutingRequest { string rule_json = 1; string rule_tag = 2; bool prepend = 3; string target = 4; }
+message AddRoutingResponse {}
+
+message RemoveRoutingRequest { string rule_tag = 1; }
+message RemoveRoutingResponse {}
+
+// Unset fields are left alone; the rule keeps its position.
+message AlterRoutingRequest {
+  string rule_tag = 1;
+  optional string rule_json = 2;
+  optional string target = 3;
+  optional string new_rule_tag = 4; // rename
+}
+message AlterRoutingResponse {}
+
+// Moves the rule so it ends up at index (0 is first); an index past the end makes it last.
+message MoveRoutingRequest { string rule_tag = 1; uint32 index = 2; }
+message MoveRoutingResponse {}
+
+message TestRoutingRequest { string domain = 1; string ip = 2; uint32 port = 3; string network = 4; string inbound_tag = 5; }
+// matched is false when no rule applies and xray falls back to the first outbound.
+message TestRoutingResponse { string outbound_tag = 1; bool matched = 2; }
+
+// inbounds and outbounds: custom ones only; the built-ins come from settings.
+
+message TaggedConfig {
+  string tag = 1;
+  string json = 2;
+}
+
+message ListInboundsRequest {}
+message ListInboundsResponse { repeated TaggedConfig inbounds = 1; }
+
+message ListOutboundsRequest {}
+message ListOutboundsResponse { repeated TaggedConfig outbounds = 1; }
+
+// inbounds
+message AddInboundRequest { string tag = 1; string inbound_json = 2; }
+message AddInboundResponse {}
+
+message RemoveInboundRequest { string tag = 1; }
+message RemoveInboundResponse {}
+
+message AlterInboundRequest { string tag = 1; string inbound_json = 2; }
+message AlterInboundResponse {}
+
+// outbounds
+message AddOutboundRequest { string tag = 1; string outbound_json = 2; }
+message AddOutboundResponse {}
+
+message RemoveOutboundRequest { string tag = 1; }
+message RemoveOutboundResponse {}
+
+message AlterOutboundRequest { string tag = 1; string outbound_json = 2; }
+message AlterOutboundResponse {}
+
+// subscriptions
+
+message Subscription {
+  string id = 1;
+  string name = 2;
+  string url = 3;
+  int64 created_at_ms = 4;
+  int64 updated_at_ms = 5; // last successful fetch; 0 if never
+  int64 checked_at_ms = 6; // last fetch attempt
+  string last_error = 7;   // empty when the last fetch succeeded
+  uint32 update_interval_minutes = 8;        // in effect: custom, else the provider's, else the default
+  uint32 custom_update_interval_minutes = 9; // 0 means automatic
+  Usage usage = 10;                          // unset if the provider doesn't report it
+  uint32 config_count = 11;
+}
+
+// Traffic and expiry from the provider's subscription-userinfo header.
+message Usage {
+  int64 upload_bytes = 1;
+  int64 download_bytes = 2;
+  int64 total_bytes = 3;  // 0 means unlimited
+  int64 expire_at_ms = 4; // 0 means never
+}
+
+message SubscriptionConfig {
+  string id = 1; // stable across refreshes while the server's settings don't change
+  string name = 2;
+  string protocol = 3;
+  string address = 4;
+  uint32 port = 5;
+  string network = 6;  // transport, e.g. tcp, ws, grpc, xhttp
+  string security = 7; // e.g. tls, reality, none
+  string outbound_json = 8;
+  LatencyResult latency = 9; // unset if never tested
+}
+
+message LatencyResult {
+  int64 latency_ms = 1;
+  string error = 2; // set when the probe failed
+  int64 tested_at_ms = 3;
+}
+
+message ListSubscriptionsRequest {}
+message ListSubscriptionsResponse { repeated Subscription subscriptions = 1; }
+
+message GetSubscriptionRequest { string id = 1; }
+message GetSubscriptionResponse {
+  Subscription subscription = 1;
+  repeated SubscriptionConfig configs = 2;
+}
+
+// Fetches immediately; nothing is saved if the fetch or parse fails.
+// An empty name falls back to the provider's profile-title, then the URL host.
+message AddSubscriptionRequest {
+  string url = 1;
+  string name = 2;
+  uint32 custom_update_interval_minutes = 3;
+}
+message AddSubscriptionResponse { Subscription subscription = 1; }
+
+// Unset fields are left alone. A new url is fetched before it's saved.
+message AlterSubscriptionRequest {
+  string id = 1;
+  optional string name = 2;
+  optional string url = 3;
+  optional uint32 custom_update_interval_minutes = 4;
+}
+message AlterSubscriptionResponse { Subscription subscription = 1; }
+
+message RemoveSubscriptionRequest { string id = 1; }
+message RemoveSubscriptionResponse {}
+
+// Re-fetches now. On failure the old configs are kept and last_error is set.
+message UpdateSubscriptionRequest { string id = 1; }
+message UpdateSubscriptionResponse { Subscription subscription = 1; }
+
+// Streams one result per config as each finishes; results are also saved.
+// Empty config_ids tests every config. Cancel the stream to stop early.
+message TestSubscriptionLatencyRequest {
+  string subscription_id = 1;
+  repeated string config_ids = 2;
+  string probe_url = 3;
+}
+message TestSubscriptionLatencyResponse {
+  string config_id = 1;
+  LatencyResult result = 2;
+}
+
+// active proxy
+
+// Makes the config the "proxy" outbound. A copy is kept, so it keeps working
+// if the subscription later drops it or is removed.
+// It doesn't change power or fallback; call SetFallback(FALLBACK_PROXY) to send
+// unruled traffic through it.
+message SelectConfigRequest {
+  string subscription_id = 1;
+  string config_id = 2;
+}
+message SelectConfigResponse {}
+
+message GetActiveConfigRequest {}
+// Empty ids mean nothing was selected from a subscription. config is unset
+// when the selection no longer exists in its subscription (it keeps running).
+message GetActiveConfigResponse {
+  string subscription_id = 1;
+  string config_id = 2;
+  SubscriptionConfig config = 3;
 }
