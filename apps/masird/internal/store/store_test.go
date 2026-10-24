@@ -1,0 +1,202 @@
+package store
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestParseTarget(t *testing.T) {
+	for in, want := range map[string]Target{
+		"direct":         {Kind: TargetDirect},
+		"proxy":          {Kind: TargetProxy},
+		"config:s1/c1":   {Kind: TargetConfig, SubscriptionID: "s1", ConfigID: "c1"},
+		"outbound:my-wg": {Kind: TargetOutbound, Tag: "my-wg"},
+	} {
+		got, err := ParseTarget(in)
+		if err != nil || got != want || got.String() != in {
+			t.Errorf("ParseTarget(%q) = %+v, %v", in, got, err)
+		}
+	}
+	for _, bad := range []string{"", "Direct", "config:", "config:s1", "config:/c1", "outbound:", "sub-x"} {
+		if _, err := ParseTarget(bad); !errors.Is(err, ErrInvalid) {
+			t.Errorf("ParseTarget(%q) = %v, want ErrInvalid", bad, err)
+		}
+	}
+}
+
+func TestRules(t *testing.T) {
+	var st State
+	direct := Target{Kind: TargetDirect}
+	if err := st.AddRule("", []byte(`{"ruleTag":"from-json","domain":["full:a.com"]}`), direct, false); err != nil {
+		t.Fatal(err)
+	}
+	if st.Rules[0].Tag != "from-json" || string(st.Rules[0].Match) != `{"domain":["full:a.com"]}` {
+		t.Fatalf("rule = %+v", st.Rules[0])
+	}
+	if err := st.AddRule("first", []byte(`{"domain":["full:b.com"]}`), direct, true); err != nil || st.Rules[0].Tag != "first" {
+		t.Fatalf("prepend: %v %+v", err, st.Rules)
+	}
+
+	for name, tc := range map[string]struct {
+		tag, json string
+		target    Target
+		want      error
+	}{
+		"duplicate":        {"first", `{"domain":["full:c.com"]}`, direct, ErrExists},
+		"outboundTag":      {"x", `{"domain":["full:c.com"],"outboundTag":"direct"}`, direct, ErrInvalid},
+		"reserved tag":     {"masir-x", `{"domain":["full:c.com"]}`, direct, ErrInvalid},
+		"no tag":           {"", `{"domain":["full:c.com"]}`, direct, ErrInvalid},
+		"bad match":        {"x", `{"port":"not-a-port"}`, direct, ErrInvalid},
+		"unknown outbound": {"x", `{"domain":["full:c.com"]}`, Target{Kind: TargetOutbound, Tag: "nope"}, ErrNotFound},
+	} {
+		if err := st.AddRule(tc.tag, []byte(tc.json), tc.target, false); !errors.Is(err, tc.want) {
+			t.Errorf("%s: got %v, want %v", name, err, tc.want)
+		}
+	}
+
+	block := Target{Kind: TargetBlock}
+	if err := st.AlterRule("first", nil, &block); err != nil || st.Rules[0].Target != block || st.Rules[0].Tag != "first" {
+		t.Fatalf("alter target: %v %+v", err, st.Rules[0])
+	}
+	if err := st.RemoveRule("first"); err != nil || len(st.Rules) != 1 {
+		t.Fatalf("remove: %v %+v", err, st.Rules)
+	}
+}
+
+func TestOutboundsAndInbounds(t *testing.T) {
+	var st State
+	if err := st.AddOutbound("wg", []byte(`{"protocol":"freedom"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if string(st.Outbounds[0].Config) != `{"protocol":"freedom","tag":"wg"}` {
+		t.Fatalf("tag should be written into the config: %s", st.Outbounds[0].Config)
+	}
+	for _, tag := range []string{"proxy", "direct", "dns-out", "masir-x", "sub-abc-def"} {
+		if err := st.AddOutbound(tag, []byte(`{"protocol":"freedom"}`)); !errors.Is(err, ErrInvalid) {
+			t.Errorf("AddOutbound(%q) = %v, want ErrInvalid", tag, err)
+		}
+	}
+	if err := st.AddOutbound("bad", []byte(`{"protocol":"nope"}`)); !errors.Is(err, ErrInvalid) {
+		t.Errorf("unknown protocol: %v", err)
+	}
+
+	_ = st.AddRule("to-wg", []byte(`{"domain":["full:a.com"]}`), Target{Kind: TargetOutbound, Tag: "wg"}, false)
+	if err := st.RemoveOutbound("wg"); !errors.Is(err, ErrInUse) {
+		t.Fatalf("removing a rule's target: %v", err)
+	}
+	_ = st.RemoveRule("to-wg")
+	if err := st.RemoveOutbound("wg"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.AddInbound("tun-in", []byte(`{"protocol":"socks","port":1080}`)); !errors.Is(err, ErrInvalid) {
+		t.Errorf("reserved inbound: %v", err)
+	}
+	if err := st.AddInbound("extra", []byte(`{"protocol":"socks","listen":"127.0.0.1","port":1080}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AlterInbound("missing", []byte(`{"protocol":"socks","listen":"127.0.0.1","port":1}`)); !errors.Is(err, ErrNotFound) {
+		t.Errorf("alter missing: %v", err)
+	}
+}
+
+func TestLoadSave(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Settings.AllowLAN || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackDirect {
+		t.Fatalf("defaults = %+v", st.Settings)
+	}
+
+	st.Settings.Power = true
+	_ = st.AddRule("r", []byte(`{"domain":["full:a.com"]}`), Target{Kind: TargetConfig, SubscriptionID: "s", ConfigID: "c", Name: "n"}, false)
+	_ = st.AddOutbound("wg", []byte(`{"protocol":"freedom"}`))
+	if err := Save(dir, st); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dir, settingsFile))
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("settings file: %v %v", info, err)
+	}
+
+	back, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !back.Settings.Power || len(back.Rules) != 1 || back.Rules[0].Target.Name != "n" || len(back.Outbounds) != 1 {
+		t.Fatalf("round trip = %+v", back)
+	}
+
+	// A settings file from an older version keeps defaults for what it doesn't mention.
+	if err := os.WriteFile(filepath.Join(dir, settingsFile), []byte(`{"power":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old, err := Load(dir)
+	if err != nil || !old.Settings.AllowLAN || old.Settings.ProxyPort != 7890 {
+		t.Fatalf("partial settings = %+v, %v", old.Settings, err)
+	}
+}
+
+func TestSettingsValidate(t *testing.T) {
+	for name, mutate := range map[string]func(*Settings){
+		"port":     func(s *Settings) { s.ProxyPort = 0 },
+		"fallback": func(s *Settings) { s.Fallback = "sideways" },
+		"doh":      func(s *Settings) { s.DoHDNS = "http://1.1.1.1/dns-query" },
+		"dns":      func(s *Settings) { s.DNSServers = []string{"dns.google"} },
+		"no dns":   func(s *Settings) { s.DNSServers = nil },
+		"gateway":  func(s *Settings) { s.TunGateway = "fd00::1/64" },
+	} {
+		s := DefaultSettings()
+		mutate(&s)
+		if err := s.Validate(); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: got %v, want ErrInvalid", name, err)
+		}
+	}
+	if err := DefaultSettings().Validate(); err != nil {
+		t.Fatalf("defaults invalid: %v", err)
+	}
+}
+
+func TestRenameAndMoveRules(t *testing.T) {
+	var st State
+	for _, n := range []string{"a", "b", "c"} {
+		if err := st.AddRule(n, []byte(`{"domain":["full:`+n+`.com"]}`), Target{Kind: TargetDirect}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	order := func() string {
+		s := ""
+		for _, r := range st.Rules {
+			s += r.Tag
+		}
+		return s
+	}
+	if err := st.MoveRule("c", 0); err != nil || order() != "cab" {
+		t.Fatalf("move first: %v %s", err, order())
+	}
+	if err := st.MoveRule("c", 99); err != nil || order() != "abc" {
+		t.Fatalf("move past the end: %v %s", err, order())
+	}
+	if err := st.RenameRule("b", "bee"); err != nil || st.Rules[1].Tag != "bee" {
+		t.Fatalf("rename: %v %+v", err, st.Rules)
+	}
+	for name, tc := range map[string]struct {
+		from, to string
+		want     error
+	}{
+		"taken":    {"a", "c", ErrExists},
+		"reserved": {"a", "masir-x", ErrInvalid},
+		"missing":  {"zz", "y", ErrNotFound},
+	} {
+		if err := st.RenameRule(tc.from, tc.to); !errors.Is(err, tc.want) {
+			t.Errorf("%s: got %v, want %v", name, err, tc.want)
+		}
+	}
+	if err := st.MoveRule("zz", 0); !errors.Is(err, ErrNotFound) {
+		t.Errorf("move missing: %v", err)
+	}
+}
