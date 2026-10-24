@@ -81,3 +81,18 @@ func TestRuleMatchFlags(t *testing.T) {
 		t.Error("an out-of-range port should fail")
 	}
 }
+
+// liteGeoIP is every category in XTLS/Xray-rules-dat's geoip-lite.dat (what masir
+// installs as geoip.dat). The wizard must only offer these.
+var liteGeoIP = []string{
+	"blacklist-ir", "blacklist-ru", "cloudflare", "cloudfront", "cn", "facebook", "fastly", "google",
+	"in-cn", "in-ir", "in-ru", "ir", "netflix", "private", "ru", "telegram", "tor", "twitter",
+}
+
+func TestIPCatalogMatchesGeoData(t *testing.T) {
+	for _, e := range append(slices.Clone(ipCountries), ipOther...) {
+		if !slices.Contains(liteGeoIP, strings.TrimPrefix(e.value, "geoip:")) {
+			t.Errorf("%s (%s) isn't in the installed geoip.dat", e.value, e.label)
+		}
+	}
+}
