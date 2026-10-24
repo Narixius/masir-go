@@ -1,0 +1,56 @@
+# Builds masir and masird for each OS and architecture and publishes them, bundled
+# with geo data, as a GitHub release. masird's updater picks archives by these names
+# (see apps/masird/internal/update).
+version: 2
+project_name: masir
+dist: build/release
+
+before:
+  hooks:
+    - sh scripts/fetch-geo.sh
+
+builds:
+  - id: masir
+    dir: apps/masir
+    binary: masir
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+  - id: masird
+    dir: apps/masird
+    binary: masird
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X github.com/narixius/masir-go/apps/masird/internal/server.Version={{ .Version }}"]
+
+archives:
+  - id: masir
+    ids: [masir, masird]
+    name_template: "masir_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - src: build/geo/*.dat
+        strip_parent: true
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev"
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^Merge ", "^chore"]
+
+release:
+  github:
+    owner: Narixius
+    name: masir-go

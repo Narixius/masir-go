@@ -1,4 +1,4 @@
-.PHONY: proto proto-lint build
+.PHONY: proto proto-lint build snapshot
 
 proto:
 	cd libs/masir-proto && buf generate
@@ -9,3 +9,7 @@ proto-lint:
 build:
 	go build -o ./dist/masird ./apps/masird
 	go build -o ./dist/masir ./apps/masir
+
+# All release archives, as CI builds them, into build/release (needs network for geo data).
+snapshot:
+	go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
