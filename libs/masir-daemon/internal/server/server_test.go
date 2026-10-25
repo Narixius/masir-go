@@ -157,6 +157,15 @@ func TestPowerAndAlwaysOnProxy(t *testing.T) {
 	if _, err := s.UpdateSettings(ctx, &pb.UpdateSettingsRequest{XrayLogLevel: &loud}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("bad log level: %v", err)
 	}
+
+	off := false
+	if _, err := s.UpdateSettings(ctx, &pb.UpdateSettingsRequest{Analytics: &off}); err != nil {
+		t.Fatal(err)
+	}
+	saved, err = store.Load(s.dir)
+	if err != nil || saved.Settings.Analytics {
+		t.Fatalf("analytics setting = %+v, %v", saved.Settings, err)
+	}
 }
 
 func TestRulesTargetCustomOutbounds(t *testing.T) {

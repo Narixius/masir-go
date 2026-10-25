@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/analytics"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/compose"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/identity"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
@@ -37,12 +38,18 @@ type Server struct {
 	testMu sync.Mutex
 	tests  map[string]context.CancelFunc // test ID -> its cancel function
 
+	analytics *analytics.Client
+	xrayLogs  *xrayLogTracker
+
 	logs    *hub
 	changes *signal
 	subs    *subs.Manager // set by Boot
 
-	upd     *updates    // set by Boot
-	restart atomic.Bool // the daemon stopped to start a newly installed version
+	upd          *updates    // set by Boot
+	restart      atomic.Bool // the daemon stopped to start a newly installed version
+	stopTracked  sync.Once   // daemon_stopped is recorded once
+	subCount     atomic.Int64
+	totalConfigs atomic.Int64
 	// idle keeps Xray down, power and always-on proxy alike, until a client turns
 	// masir on: a daemon the CLI started for other work (subscriptions, rules,
 	// updates) shouldn't start proxying.
@@ -67,12 +74,16 @@ func New(xc *xray.Core, id identity.Identity) *Server {
 		id:        id,
 		startedAt: time.Now(),
 		state:     store.State{Settings: store.DefaultSettings()},
+		xrayLogs:  newXrayLogTracker(),
 		logs:      newHub(),
 		changes:   newSignal(),
 		tests:     map[string]context.CancelFunc{},
 		stopped:   make(chan struct{}),
 	}
-	xray.SetLogSink(s.Log)
+	xray.SetLogSink(func(level, msg string) {
+		s.Log(level, msg)
+		s.trackXrayLog(level, msg)
+	})
 	return s
 }
 
@@ -90,8 +101,10 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 	}
 	m.Log = s.Log
 	m.OnChange = s.subscriptionsChanged
+	m.OnRefresh = s.trackSubscriptionRefresh
 	m.SetInterval(time.Duration(st.Settings.SubIntervalMinutes) * time.Minute)
 	s.subs = m
+	s.refreshSubscriptionCounts()
 
 	if s.idle.Load() && st.Settings.Power { // masir is off while the daemon is idle
 		st.Settings.Power = false
@@ -102,14 +115,25 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 	s.initUpdates(dir)
 	s.mu.Lock()
 	s.dir, s.state = dir, st
+	s.analytics = analytics.New(analytics.Options{
+		Dir:     dir,
+		Version: Version,
+		Enabled: st.Settings.Analytics,
+		Proxy:   s.xray,
+	})
 	if err := s.reconcileLocked(ctx); err != nil {
 		log.Printf("start xray: %v", err)
 	}
 	s.mu.Unlock()
+	s.trackWithActive("daemon_started", map[string]any{
+		"idle":       s.idle.Load(),
+		"privileged": s.id.Privileged,
+	})
 
 	go m.Run(ctx)
 	go s.retryFailed(ctx)
 	go s.maintainUpdates(ctx)
+	go s.analyticsLoop(ctx)
 	return nil
 }
 
@@ -125,6 +149,7 @@ func (s *Server) Stopped() <-chan struct{} { return s.stopped }
 
 func (s *Server) Shutdown(ctx context.Context, _ *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	s.Log("info", "shutdown requested")
+	s.TrackDaemonStopped("client")
 	s.stopOnce.Do(func() { close(s.stopped) })
 	return &pb.ShutdownResponse{}, nil
 }

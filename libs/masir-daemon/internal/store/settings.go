@@ -31,6 +31,8 @@ type Settings struct {
 	SubIntervalMinutes int `json:"subIntervalMinutes"`
 	// XrayLogLevel is Xray's own log level: debug, info, warning, error, or none.
 	XrayLogLevel string `json:"xrayLogLevel"`
+	// Analytics sends anonymous usage and error events to PostHog.
+	Analytics bool `json:"analytics"`
 }
 
 // Bounds for subscription refresh intervals, in minutes: the daemon looks for due
@@ -62,6 +64,7 @@ func DefaultSettings() Settings {
 
 		SubIntervalMinutes: 12 * 60,
 		XrayLogLevel:       "warning",
+		Analytics:          true,
 	}
 }
 

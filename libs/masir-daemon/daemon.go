@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -131,12 +132,19 @@ func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle
 	if idle {
 		daemon.StartIdle()
 	}
+	defer daemon.CloseAnalytics()
+	defer func() {
+		if r := recover(); r != nil {
+			daemon.TrackPanic(r, debug.Stack())
+			panic(r)
+		}
+	}()
 	if err := daemon.Boot(ctx, dir); err != nil {
 		lis.Close()
 		return false, false, err
 	}
 
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(grpc.UnaryInterceptor(daemon.UnaryInterceptor()))
 	pb.RegisterDaemonServiceServer(srv, daemon)
 	healthpb.RegisterHealthServer(srv, health.NewServer())
 	reflection.Register(srv)
@@ -151,8 +159,15 @@ func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle
 
 	log.Printf("serving %s (uid %d, root: %v) on %s", id.Name, id.UID, id.Privileged, sock)
 	if err := srv.Serve(lis); err != nil {
+		daemon.TrackDaemonError("serve", err)
+		daemon.TrackDaemonStopped("error")
 		return false, false, err
 	}
+	reason := "signal"
+	if daemon.RestartRequested() {
+		reason = "update"
+	}
+	daemon.TrackDaemonStopped(reason)
 	return daemon.RestartRequested(), daemon.Idle(), nil
 }
 

@@ -32,10 +32,13 @@ require (
 	github.com/clipperhouse/displaywidth v0.4.1 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344 // indirect
 	github.com/go-typeset/bidi v0.3.1 // indirect
+	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.1.0 // indirect
@@ -64,6 +67,7 @@ require (
 	github.com/pion/transport/v4 v4.1.1 // indirect
 	github.com/pion/transport/v5 v5.1.1 // indirect
 	github.com/pires/go-proxyproto v0.15.0 // indirect
+	github.com/posthog/posthog-go v1.37.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/refraction-networking/utls v1.8.3-0.20260301010127-aa6edf4b11af // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

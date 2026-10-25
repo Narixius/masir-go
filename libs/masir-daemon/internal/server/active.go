@@ -32,6 +32,13 @@ func (s *Server) SelectConfig(ctx context.Context, req *pb.SelectConfigRequest) 
 		return nil, err
 	}
 	s.Log("info", "proxy set to "+c.Name)
+	reason := req.Reason
+	if reason == "" {
+		reason = "api"
+	}
+	props := map[string]any{"selection": reason}
+	addActiveProps(props, activeInfoFromConfig(c))
+	s.trackLocked(s.state, "proxy_selected", props)
 	return &pb.SelectConfigResponse{}, nil
 }
 

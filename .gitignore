@@ -6,3 +6,6 @@ apps/masir/masir
 *.exe
 build
 go-clack
+
+# local analytics key for builds
+.env

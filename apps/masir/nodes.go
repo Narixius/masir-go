@@ -256,7 +256,7 @@ func (p *prober) startLocked(v string) {
 		}
 		sub, cfg := splitKey(v)
 		var text string
-		err := probe(ctx, p.c, sub, []string{cfg}, func(_ string, l *pb.LatencyResult) { text = latencyText(l) })
+		err := probe(ctx, p.c, sub, []string{cfg}, "picker", func(_ string, l *pb.LatencyResult) { text = latencyText(l) })
 		if ctx.Err() != nil {
 			return // scrolled away, retested, or the app is quitting
 		}
@@ -287,8 +287,8 @@ func (p *prober) stopLocked(v string) {
 }
 
 // probe latency-tests configs of one subscription, reporting each as it finishes.
-func probe(ctx context.Context, c pb.DaemonServiceClient, subID string, cfgIDs []string, report func(cfgID string, l *pb.LatencyResult)) error {
-	stream, err := c.TestSubscriptionLatency(ctx, &pb.TestSubscriptionLatencyRequest{SubscriptionId: subID, ConfigIds: cfgIDs})
+func probe(ctx context.Context, c pb.DaemonServiceClient, subID string, cfgIDs []string, reason string, report func(cfgID string, l *pb.LatencyResult)) error {
+	stream, err := c.TestSubscriptionLatency(ctx, &pb.TestSubscriptionLatencyRequest{SubscriptionId: subID, ConfigIds: cfgIDs, Reason: reason})
 	if err != nil {
 		return err
 	}

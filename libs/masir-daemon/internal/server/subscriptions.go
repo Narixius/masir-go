@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"time"
 
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/analytics"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
@@ -52,6 +54,11 @@ func (s *Server) AddSubscription(ctx context.Context, req *pb.AddSubscriptionReq
 	if err != nil {
 		return nil, toStatus(err)
 	}
+	s.track("subscription_added", map[string]any{
+		"config_count":        len(sub.Configs),
+		"protocols":           configProtocols(sub.Configs),
+		"countries_available": len(configCountries(sub.Configs)),
+	})
 	return &pb.AddSubscriptionResponse{Subscription: s.toPBSubscription(sub)}, nil
 }
 
@@ -66,6 +73,13 @@ func (s *Server) AlterSubscription(ctx context.Context, req *pb.AlterSubscriptio
 		return nil, toStatus(err)
 	}
 	s.Log("info", "subscription altered: "+sub.Name)
+	s.refreshSubscriptionCounts()
+	s.track("subscription_altered", map[string]any{
+		"name_changed":     req.Name != nil,
+		"url_changed":      req.Url != nil,
+		"interval_changed": req.CustomUpdateIntervalMinutes != nil,
+		"config_count":     len(sub.Configs),
+	})
 	return &pb.AlterSubscriptionResponse{Subscription: s.toPBSubscription(sub)}, nil
 }
 
@@ -74,29 +88,76 @@ func (s *Server) RemoveSubscription(ctx context.Context, req *pb.RemoveSubscript
 		return nil, toStatus(err)
 	}
 	s.Log("info", "subscription removed: "+req.Id)
+	s.refreshSubscriptionCounts()
+	s.track("subscription_removed", map[string]any{})
 	return &pb.RemoveSubscriptionResponse{}, nil
 }
 
 func (s *Server) UpdateSubscription(ctx context.Context, req *pb.UpdateSubscriptionRequest) (*pb.UpdateSubscriptionResponse, error) {
+	start := time.Now()
 	sub, err := s.subs.Update(ctx, req.Id)
+	props := map[string]any{"trigger": "user", "duration_ms": time.Since(start).Milliseconds()}
 	if err != nil {
+		s.trackError("subscription_refreshed", err, props, false)
 		return nil, toStatus(err)
 	}
+	props["success"] = true
+	props["config_count"] = len(sub.Configs)
+	props["protocols"] = configProtocols(sub.Configs)
+	s.refreshSubscriptionCounts()
+	s.track("subscription_refreshed", props)
 	return &pb.UpdateSubscriptionResponse{Subscription: s.toPBSubscription(sub)}, nil
 }
 
 func (s *Server) TestSubscriptionLatency(req *pb.TestSubscriptionLatencyRequest, stream pb.DaemonService_TestSubscriptionLatencyServer) error {
 	ctx := stream.Context()
+	names := map[string]string{}
+	if sub, err := s.subs.Get(req.SubscriptionId); err == nil {
+		for _, c := range sub.Configs {
+			names[c.ID] = c.Name
+		}
+	}
+	tested, succeeded, failed := 0, 0, 0
+	var fastest int64 = -1
+	fastestCountry := ""
 	err := s.subs.TestLatency(ctx, req.SubscriptionId, req.ConfigIds, req.ProbeUrl, func(id string, l subs.Latency) {
+		tested++
+		if l.Error == "" {
+			succeeded++
+			if fastest < 0 || l.Ms < fastest {
+				fastest = l.Ms
+				fastestCountry = analytics.CountryFromName(names[id])
+			}
+		} else {
+			failed++
+		}
 		// A send fails only once the client is gone, which also cancels ctx and stops the test.
 		_ = stream.Send(&pb.TestSubscriptionLatencyResponse{ConfigId: id, Result: toPBLatency(&l)})
 	})
 	if ctx.Err() != nil {
 		return nil
 	}
+	reason := req.Reason
+	if reason == "" {
+		reason = "other"
+	}
+	props := map[string]any{
+		"reason":        reason,
+		"tested_count":  tested,
+		"success_count": succeeded,
+		"failure_count": failed,
+	}
+	if fastest >= 0 {
+		props["fastest_ms"] = fastest
+		if fastestCountry != "" {
+			props["fastest_country"] = fastestCountry
+		}
+	}
 	if err != nil {
+		s.trackError("latency_tested", err, props, false)
 		return toStatus(err)
 	}
+	s.track("latency_tested", props)
 	return nil
 }
 

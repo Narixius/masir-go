@@ -35,6 +35,11 @@ func (s *Server) AddRouting(ctx context.Context, req *pb.AddRoutingRequest) (*pb
 	if err != nil {
 		return nil, err
 	}
+	s.track("rule_added", map[string]any{
+		"matchers":    matcherKinds(req.RuleJson),
+		"target_kind": targetKind(req.Target),
+		"prepend":     req.Prepend,
+	})
 	return &pb.AddRoutingResponse{}, nil
 }
 
@@ -45,6 +50,7 @@ func (s *Server) RemoveRouting(ctx context.Context, req *pb.RemoveRoutingRequest
 	if err != nil {
 		return nil, err
 	}
+	s.track("rule_removed", map[string]any{})
 	return &pb.RemoveRoutingResponse{}, nil
 }
 
@@ -73,6 +79,14 @@ func (s *Server) AlterRouting(ctx context.Context, req *pb.AlterRoutingRequest) 
 	if err != nil {
 		return nil, err
 	}
+	props := map[string]any{"renamed": req.NewRuleTag != nil}
+	if req.RuleJson != nil {
+		props["matchers"] = matcherKinds(*req.RuleJson)
+	}
+	if req.Target != nil {
+		props["target_kind"] = targetKind(*req.Target)
+	}
+	s.track("rule_altered", props)
 	return &pb.AlterRoutingResponse{}, nil
 }
 
@@ -83,6 +97,7 @@ func (s *Server) MoveRouting(ctx context.Context, req *pb.MoveRoutingRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	s.track("rule_moved", map[string]any{"index": req.Index})
 	return &pb.MoveRoutingResponse{}, nil
 }
 

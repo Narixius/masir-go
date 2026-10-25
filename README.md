@@ -210,6 +210,49 @@ masir settings reset mixedPort
 | `gateway` | `10.10.20.1/24` | IPv4 range for the TUN interface |
 | `subInterval` | `720` | Minutes between background subscription refreshes (5 to 43200) |
 | `logLevel` | `warning` | Xray's own log level: `debug`, `info`, `warning`, `error`, or `none`; `masir logs` shows these |
+| `analytics` | `on` | Send anonymous usage and error events to PostHog |
+
+## Privacy and analytics
+
+masir sends anonymous usage and error events to PostHog (EU region) to make the defaults and failure handling better. It is on by default, and a one-time notice appears on first interactive use. Turn it off with:
+
+```sh
+masir settings set analytics off
+```
+
+`DO_NOT_TRACK=1` and `MASIR_ANALYTICS=off` also disable it. Development builds don't send unless `MASIR_ANALYTICS=on` and a key is configured.
+
+**What is sent**
+
+- Anonymous install ID (random, not a machine or account ID)
+- Command names, success/failure, duration, and flag names — never values like domains, URLs or rule contents
+- Error kinds, fingerprints, and scrubbed messages for panics/unexpected daemon errors
+- App, Xray, OS, architecture, and Go versions (OS/version/library context is added by PostHog's Go SDK)
+- Local timezone and UTC offset (for regional grouping; no IP geolocation)
+- Active config country parsed from its flag emoji, plus protocol/transport/security
+- Safe settings: routing fallback, TUN/LAN/always-on, proxy port and whether it's default, Xray log level, subscription interval, DNS/DoH provider categories and counts
+- Counts of rules, inbounds, outbounds, subscriptions, and configs
+- Update, subscription refresh, latency, Xray start/stop/apply-failure, and daemon start/stop events
+
+**What is never sent**
+
+- Subscription URLs or names
+- Config names, server addresses, ports, UUIDs, passwords
+- Rule domains, IPs, process names or app paths
+- Raw DNS/DoH addresses or URLs
+- Local file paths, usernames, hostnames, or raw logs
+- IP-based geolocation (PostHog GeoIP is disabled)
+
+Analytics tries a direct connection first and falls back to the running proxy when the direct route is blocked. Events captured while the daemon is unavailable wait in a local spool and are sent on the next daemon start. Person profiles are deliberately disabled (`$process_person_profile: false`), so events are anonymous and don't create PostHog person profiles.
+
+For local builds, put the public PostHog project token in `.env`:
+
+```sh
+MASIR_POSTHOG_KEY=
+MASIR_POSTHOG_HOST=https://eu.i.posthog.com
+```
+
+`make build` and `make snapshot` read `.env`. Release builds read `MASIR_POSTHOG_KEY` and `MASIR_POSTHOG_HOST` from repository Actions variables; without a key, analytics is a no-op.
 
 ## How it works
 

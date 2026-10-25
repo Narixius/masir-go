@@ -5,9 +5,11 @@ go 1.27.2
 require (
 	github.com/narixius/masir-go/libs/masir-core v0.0.0
 	github.com/narixius/masir-go/libs/masir-proto v0.0.0
+	github.com/posthog/posthog-go v1.37.0
 	github.com/xtls/libxray v1.261021.0
 	github.com/xtls/xray-core v1.260327.1-0.20261021115930-1b1647cd9ddf
 	golang.org/x/mod v0.42.0
+	golang.org/x/sys v0.49.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
@@ -18,8 +20,10 @@ require (
 	github.com/andybalholm/brotli v1.2.6 // indirect
 	github.com/apernet/quic-go v0.63.1-0.20261004180939-a10df75c260c // indirect
 	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344 // indirect
+	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.1.0 // indirect
 	github.com/juju/ratelimit v1.0.2 // indirect
@@ -56,7 +60,6 @@ require (
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f // indirect

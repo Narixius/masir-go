@@ -91,7 +91,7 @@ func cmdUpdateGeo(a args) error {
 func startUpdate(target pb.UpdateTarget, force bool) error {
 	client, _ := self()
 	_, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.StartUpdateResponse, error) {
-		return c.StartUpdate(ctx, &pb.StartUpdateRequest{Target: target, Force: force, ClientBinary: client})
+		return c.StartUpdate(ctx, &pb.StartUpdateRequest{Target: target, Force: force, ClientBinary: client, Trigger: "user"})
 	})
 	return err
 }
@@ -359,6 +359,7 @@ func updateSelf(job *pb.UpdateJob) error {
 		self = resolved
 	}
 	if same, _ := sameContent(src, self); same {
+		trackSelfUpdate("daemon", true, job, nil)
 		ui.Success("masir " + job.Version + " is installed.")
 		return nil
 	}
@@ -366,11 +367,23 @@ func updateSelf(job *pb.UpdateJob) error {
 		if os.IsPermission(err) || errors.Is(err, fs.ErrPermission) {
 			return finishSelfWithElevation(job, src, self)
 		}
+		trackSelfUpdate("failed", false, job, err)
 		ui.Warn(fmt.Sprintf("The daemon is updated to %s, but this copy of masir couldn't replace itself: %s", job.Version, friendlyFileError(err, self)))
 		return nil
 	}
+	trackSelfUpdate("cli", true, job, nil)
 	ui.Success("masir " + job.Version + " is installed.")
 	return nil
+}
+
+func trackSelfUpdate(method string, success bool, job *pb.UpdateJob, err error) {
+	props := map[string]any{"method": method, "success": success, "version": job.Version}
+	if err != nil {
+		for k, v := range errorProps(err) {
+			props[k] = v
+		}
+	}
+	captureEvent("self_update_finished", props)
 }
 
 // finishSelfWithElevation finishes the CLI update when the file needs root: the daemon
@@ -378,24 +391,26 @@ func updateSelf(job *pb.UpdateJob) error {
 // refused leaves a copyable command rather than a raw cp.
 func finishSelfWithElevation(job *pb.UpdateJob, src, self string) error {
 	if !ui.Interactive() {
-		selfUpdateHint(src, self)
+		selfUpdateHint(job, src, self)
 		return nil
 	}
 	ui.Note(fmt.Sprintf("The daemon is updated to %s, but your copy of masir at %s is owned by %s.\n"+
 		"masir can finish the update for you; %s.", job.Version, self, privilegeOwner, elevationAsk),
 		ui.Yellow("▲ One more step"))
 	if err := elevate("daemon", "sync-self", "--from", src, "--to", self); err == nil {
+		trackSelfUpdate("sudo", true, job, nil)
 		ui.Success("masir " + job.Version + " is installed.")
 		return nil
 	} else if cancelled(err) {
 		return err
 	}
-	selfUpdateHint(src, self)
+	selfUpdateHint(job, src, self)
 	return nil
 }
 
 // selfUpdateHint leaves one copyable command when masir can't finish by itself.
-func selfUpdateHint(src, dst string) {
+func selfUpdateHint(job *pb.UpdateJob, src, dst string) {
+	trackSelfUpdate("manual", false, job, nil)
 	ui.Warn("The daemon is updated, but this copy of masir still has the old version.")
 	if runtime.GOOS == "windows" {
 		ui.Message("Run this once as Administrator:")

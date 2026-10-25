@@ -7,8 +7,10 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/charmbracelet/fang"
 	"github.com/spf13/cobra"
@@ -39,6 +41,17 @@ var exitStatus int
 var elevatedResult, lastErr string
 
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			if !internalRun() { // the daemon reports its own panics
+				captureEvent("cli_panic", map[string]any{
+					"message":           scrub(fmt.Sprint(r)),
+					"stack_fingerprint": fingerprint(string(debug.Stack())),
+				})
+			}
+			panic(r)
+		}
+	}()
 	ui.SetupBidi()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	appCtx = ctx
@@ -54,6 +67,19 @@ func main() {
 		os.Exit(1)
 	}
 	os.Exit(exitStatus)
+}
+
+// internalRun reports whether this process is the daemon or an elevated helper, which
+// report their own analytics and shouldn't be treated as CLI commands.
+func internalRun() bool {
+	if len(os.Args) < 3 || os.Args[1] != "daemon" {
+		return false
+	}
+	switch os.Args[2] {
+	case "run", "sync-service", "sync-self":
+		return true
+	}
+	return false
 }
 
 // writeElevatedResult writes "ok" or the error, atomically so the waiting process
@@ -344,9 +370,16 @@ func group(use, short string, subs ...*cobra.Command) *cobra.Command {
 // usage errors and command failures always look like the rest of masir.
 func runE(fn func(args) error) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, pos []string) error {
-		if err := fn(argsFrom(cmd, pos)); err != nil {
+		if !cmd.Hidden && cmd.Name() != "version" && cmd.Name() != "completion" {
+			maybeAnalyticsNotice()
+		}
+		a := argsFrom(cmd, pos)
+		start := time.Now()
+		err := fn(a)
+		if err != nil {
 			exitStatus = report(err)
 		}
+		captureCLI(cmd, a, err, time.Since(start))
 		return nil
 	}
 }

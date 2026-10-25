@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -72,8 +73,8 @@ func (s *Server) runner(t pb.UpdateTarget) (*update.Runner, error) {
 	return nil, status.Error(codes.InvalidArgument, "target must be masir or geo")
 }
 
-func (s *Server) masirTask(force bool, clientBinary string) update.Task {
-	return update.Masir{
+func (s *Server) masirTask(force bool, clientBinary, trigger string) update.Task {
+	return s.wrapUpdate("masir", force, trigger, update.Masir{
 		Clients:       s.clients(),
 		Current:       Version,
 		Force:         force,
@@ -83,7 +84,7 @@ func (s *Server) masirTask(force bool, clientBinary string) update.Task {
 		Privileged:    s.id.Privileged,
 		WorkDir:       filepath.Join(s.dir, "updates", "masir"),
 		Restart:       s.restartForUpdate,
-	}.Run
+	}.Run)
 }
 
 // clientBinary accepts the CLI's path only when this daemon has the rights to replace
@@ -103,19 +104,60 @@ func (s *Server) clientBinary(path string) string {
 	return path
 }
 
-func (s *Server) geoTask(force bool) update.Task {
-	return update.Geo{
+func (s *Server) geoTask(force bool, trigger string) update.Task {
+	return s.wrapUpdate("geo", force, trigger, update.Geo{
 		Clients:  s.clients(),
 		AssetDir: s.xray.AssetDir(),
 		WorkDir:  filepath.Join(s.dir, "updates", "geo"),
 		Force:    force,
 		Reload:   xray.ReloadGeodata,
-	}.Run
+	}.Run)
+}
+
+// wrapUpdate records the start and outcome of every update, including background geo
+// refreshes that don't go through StartUpdate.
+func (s *Server) wrapUpdate(target string, force bool, trigger string, task update.Task) update.Task {
+	if trigger == "" {
+		trigger = "api"
+	}
+	return func(ctx context.Context, r *update.Reporter) error {
+		start := time.Now()
+		s.track("update_started", map[string]any{
+			"target":  target,
+			"force":   force,
+			"trigger": trigger,
+		})
+		err := task(ctx, r)
+		if ctx.Err() != nil {
+			// Paused or stopped: the control RPC records that outcome; this isn't a
+			// finished update and shouldn't look like a failure.
+			return err
+		}
+		job := r.Snapshot()
+		state := strings.ToLower(strings.TrimPrefix(job.State.String(), "UPDATE_STATE_"))
+		props := map[string]any{
+			"target":      target,
+			"state":       state,
+			"duration_ms": time.Since(start).Milliseconds(),
+			"bytes_done":  job.BytesDone,
+			"bytes_total": job.BytesTotal,
+			"version":     job.Version,
+			"trigger":     trigger,
+		}
+		if err != nil {
+			s.trackError("update_finished", err, props, false)
+		} else {
+			props["success"] = true
+			s.track("update_finished", props)
+		}
+		return err
+	}
 }
 
 // restartForUpdate ends the daemon so that main starts the newly installed binary.
 func (s *Server) restartForUpdate() {
 	s.Log("info", "restarting into the new version")
+	s.TrackDaemonStopped("update")
 	s.restart.Store(true)
 	s.stopOnce.Do(func() { close(s.stopped) })
 }
@@ -128,6 +170,12 @@ func (s *Server) CheckUpdate(ctx context.Context, _ *pb.CheckUpdateRequest) (*pb
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
+	s.track("update_checked", map[string]any{
+		"trigger":         "user",
+		"available":       info.Available,
+		"current_version": info.CurrentVersion,
+		"latest_version":  info.LatestVersion,
+	})
 	return &pb.CheckUpdateResponse{Release: info}, nil
 }
 
@@ -156,9 +204,13 @@ func (s *Server) StartUpdate(_ context.Context, req *pb.StartUpdateRequest) (*pb
 	if err != nil {
 		return nil, err
 	}
-	task := s.geoTask(req.Force)
+	trigger := req.Trigger
+	if trigger == "" {
+		trigger = "api"
+	}
+	task := s.geoTask(req.Force, trigger)
 	if req.Target == pb.UpdateTarget_UPDATE_TARGET_MASIR {
-		task = s.masirTask(req.Force, req.ClientBinary)
+		task = s.masirTask(req.Force, req.ClientBinary, trigger)
 	}
 	job, err := r.Start(task)
 	if err != nil {
@@ -177,6 +229,11 @@ func (s *Server) PauseUpdate(_ context.Context, req *pb.PauseUpdateRequest) (*pb
 	if err != nil {
 		return nil, jobErr(err)
 	}
+	s.track("update_paused", map[string]any{
+		"target":      targetName(req.Target),
+		"bytes_done":  job.BytesDone,
+		"bytes_total": job.BytesTotal,
+	})
 	return &pb.PauseUpdateResponse{Job: job}, nil
 }
 
@@ -189,6 +246,7 @@ func (s *Server) ResumeUpdate(_ context.Context, req *pb.ResumeUpdateRequest) (*
 	if err != nil {
 		return nil, jobErr(err)
 	}
+	s.track("update_resumed", map[string]any{"target": targetName(req.Target)})
 	return &pb.ResumeUpdateResponse{Job: job}, nil
 }
 
@@ -201,6 +259,11 @@ func (s *Server) StopUpdate(_ context.Context, req *pb.StopUpdateRequest) (*pb.S
 	if err != nil {
 		return nil, jobErr(err)
 	}
+	s.track("update_stopped", map[string]any{
+		"target":      targetName(req.Target),
+		"bytes_done":  job.BytesDone,
+		"bytes_total": job.BytesTotal,
+	})
 	return &pb.StopUpdateResponse{Job: job}, nil
 }
 
@@ -242,15 +305,21 @@ func (s *Server) maintainUpdates(ctx context.Context) {
 	for {
 		if time.Since(lastCheck) >= checkEvery {
 			cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			if _, err := s.checkRelease(cctx); err != nil {
+			if info, err := s.checkRelease(cctx); err != nil {
 				s.Log("warn", "update check: "+err.Error())
 			} else {
 				lastCheck = time.Now()
+				s.track("update_checked", map[string]any{
+					"trigger":         "daily",
+					"available":       info.Available,
+					"current_version": info.CurrentVersion,
+					"latest_version":  info.LatestVersion,
+				})
 			}
 			cancel()
 		}
 		if age, ok := s.geoAge(); (!ok || age > geoMaxAge) && !s.upd.geo.Active() {
-			if _, err := s.upd.geo.Start(s.geoTask(false)); err == nil {
+			if _, err := s.upd.geo.Start(s.geoTask(false, "background")); err == nil {
 				s.Log("info", "refreshing geo data")
 			}
 		}

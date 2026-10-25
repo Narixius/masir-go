@@ -69,15 +69,33 @@ func (s *Server) applyLocked(ctx context.Context, st store.State) error {
 		return status.Error(codes.Internal, "compose: "+err.Error())
 	}
 
+	wasRunning := s.xray.Running()
 	if runs {
 		if err := s.xray.Apply(ctx, p); err != nil {
+			mode := "proxy"
+			if tun {
+				mode = "tun"
+			}
+			s.trackErrorLocked(st, "xray_apply_failed", err, map[string]any{"mode": mode}, true)
 			return status.Error(codes.Internal, err.Error())
 		}
 	} else if err := s.xray.Close(); err != nil {
+		s.trackErrorLocked(st, "xray_apply_failed", err, map[string]any{"mode": "off"}, true)
 		return status.Error(codes.Internal, err.Error())
 	}
 	s.resolved = out.Rules
 	s.running = running{proxy: runs, tun: tun}
+	if !wasRunning && runs {
+		mode := "proxy"
+		if tun {
+			mode = "tun"
+		}
+		props := map[string]any{"mode": mode}
+		addActiveProps(props, activeInfoFrom(active))
+		s.trackLocked(st, "xray_started", props)
+	} else if wasRunning && !runs {
+		s.trackLocked(st, "xray_stopped", map[string]any{"reason": "state"})
+	}
 	if runs {
 		host := "127.0.0.1"
 		if st.Settings.AllowLAN {
@@ -122,8 +140,9 @@ func (s *Server) reconcileLocked(ctx context.Context) error {
 // moved, fallen back to proxy, or the selection may have followed a rotated config.
 func (s *Server) subscriptionsChanged(ctx context.Context) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	_ = s.reconcileLocked(ctx)
+	s.mu.Unlock()
+	s.refreshSubscriptionCounts()
 }
 
 func (s *Server) resolveTarget(t store.Target) (subs.Config, bool) {

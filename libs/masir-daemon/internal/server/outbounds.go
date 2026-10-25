@@ -20,6 +20,7 @@ func (s *Server) AddOutbound(ctx context.Context, req *pb.AddOutboundRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	s.track("outbound_added", map[string]any{})
 	return &pb.AddOutboundResponse{}, nil
 }
 
@@ -30,6 +31,7 @@ func (s *Server) RemoveOutbound(ctx context.Context, req *pb.RemoveOutboundReque
 	if err != nil {
 		return nil, err
 	}
+	s.track("outbound_removed", map[string]any{})
 	return &pb.RemoveOutboundResponse{}, nil
 }
 
@@ -40,5 +42,6 @@ func (s *Server) AlterOutbound(ctx context.Context, req *pb.AlterOutboundRequest
 	if err != nil {
 		return nil, err
 	}
+	s.track("outbound_altered", map[string]any{})
 	return &pb.AlterOutboundResponse{}, nil
 }

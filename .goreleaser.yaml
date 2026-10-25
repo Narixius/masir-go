@@ -17,7 +17,10 @@ builds:
     goos: [darwin, linux, windows] # Windows builds embed the Wintun driver TUN needs
     goarch: [amd64, arm64]
     flags: [-trimpath]
-    ldflags: ["-s -w -X main.version={{ .Version }}"]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+      - -X github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.apiKey={{ .Env.MASIR_POSTHOG_KEY }}
+      - -X github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.host={{ .Env.MASIR_POSTHOG_HOST }}
 
 archives:
   - id: masir

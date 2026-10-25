@@ -97,6 +97,9 @@ var settingsTable = []setting{
 			return fail("log level is debug, info, warning, error, or none")
 		},
 		apply: func(r *pb.UpdateSettingsRequest, v string) { r.XrayLogLevel = &v }},
+	{key: "analytics", label: "Anonymous analytics", desc: "send anonymous usage and error data to improve masir", aliases: []string{"telemetry", "usage", "posthog"}, kind: "bool",
+		get:   func(s *pb.Settings) string { return strconv.FormatBool(s.GetAnalytics()) },
+		apply: func(r *pb.UpdateSettingsRequest, v string) { b := v == "true"; r.Analytics = &b }},
 	{key: "gateway", label: "TUN gateway", desc: "IPv4 range for the TUN interface", aliases: []string{"tungateway"},
 		get: func(s *pb.Settings) string { return s.GetTunGateway() },
 		validate: func(v string) error {

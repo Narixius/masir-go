@@ -115,10 +115,12 @@ type Manager struct {
 	mu sync.Mutex // serializes read-modify-write of the files; never held across a fetch
 
 	// Log reports background activity. OnChange runs after a subscription's configs
-	// change or it's removed, so whoever pins configs can rebuild. Both are optional
-	// and set before Run; OnChange is called without the manager's lock held.
-	Log      func(level, msg string)
-	OnChange func(ctx context.Context)
+	// change or it's removed, so whoever pins configs can rebuild. OnRefresh reports a
+	// background refresh's outcome for analytics. All are optional and set before Run;
+	// OnChange and OnRefresh are called without the manager's lock held.
+	Log       func(level, msg string)
+	OnChange  func(ctx context.Context)
+	OnRefresh func(sub *Subscription, err error, took time.Duration)
 
 	now func() time.Time
 }
@@ -456,10 +458,18 @@ func (m *Manager) refreshDue(ctx context.Context) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
 			defer cancel()
-			if u, err := m.Update(ctx, s.ID); err != nil {
+			start := time.Now()
+			u, err := m.Update(ctx, s.ID)
+			if err != nil {
 				m.log("warn", fmt.Sprintf("subscription %s: %v", s.Name, err))
+				if m.OnRefresh != nil {
+					m.OnRefresh(&s, err, time.Since(start))
+				}
 			} else {
 				m.log("info", fmt.Sprintf("subscription %s refreshed (%d configs)", u.Name, len(u.Configs)))
+				if m.OnRefresh != nil {
+					m.OnRefresh(u, nil, time.Since(start))
+				}
 			}
 		}(s)
 	}

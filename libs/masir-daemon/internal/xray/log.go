@@ -46,6 +46,14 @@ type teeHandler struct {
 	sink func(level, msg string)
 }
 
+// Close closes the file logger when Xray shuts down.
+func (h *teeHandler) Close() error {
+	if c, ok := h.file.(interface{ Close() error }); ok {
+		return c.Close()
+	}
+	return nil
+}
+
 func (h *teeHandler) Handle(msg clog.Message) {
 	if h.file != nil {
 		h.file.Handle(msg)

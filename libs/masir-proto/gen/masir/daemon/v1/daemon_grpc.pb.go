@@ -25,6 +25,7 @@ const (
 	DaemonService_WatchStatus_FullMethodName             = "/masir.daemon.v1.DaemonService/WatchStatus"
 	DaemonService_Shutdown_FullMethodName                = "/masir.daemon.v1.DaemonService/Shutdown"
 	DaemonService_StreamLogs_FullMethodName              = "/masir.daemon.v1.DaemonService/StreamLogs"
+	DaemonService_CaptureEvent_FullMethodName            = "/masir.daemon.v1.DaemonService/CaptureEvent"
 	DaemonService_TestLatency_FullMethodName             = "/masir.daemon.v1.DaemonService/TestLatency"
 	DaemonService_CancelLatencyTest_FullMethodName       = "/masir.daemon.v1.DaemonService/CancelLatencyTest"
 	DaemonService_GetSettings_FullMethodName             = "/masir.daemon.v1.DaemonService/GetSettings"
@@ -77,6 +78,9 @@ type DaemonServiceClient interface {
 	// Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
 	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamLogsResponse], error)
+	// CaptureEvent records one anonymous client event for analytics. Events are dropped
+	// silently when analytics is off.
+	CaptureEvent(ctx context.Context, in *CaptureEventRequest, opts ...grpc.CallOption) (*CaptureEventResponse, error)
 	// latency
 	TestLatency(ctx context.Context, in *TestLatencyRequest, opts ...grpc.CallOption) (*TestLatencyResponse, error)
 	CancelLatencyTest(ctx context.Context, in *CancelLatencyTestRequest, opts ...grpc.CallOption) (*CancelLatencyTestResponse, error)
@@ -213,6 +217,16 @@ func (c *daemonServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequ
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DaemonService_StreamLogsClient = grpc.ServerStreamingClient[StreamLogsResponse]
+
+func (c *daemonServiceClient) CaptureEvent(ctx context.Context, in *CaptureEventRequest, opts ...grpc.CallOption) (*CaptureEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CaptureEventResponse)
+	err := c.cc.Invoke(ctx, DaemonService_CaptureEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 func (c *daemonServiceClient) TestLatency(ctx context.Context, in *TestLatencyRequest, opts ...grpc.CallOption) (*TestLatencyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -615,6 +629,9 @@ type DaemonServiceServer interface {
 	// Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
 	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[StreamLogsResponse]) error
+	// CaptureEvent records one anonymous client event for analytics. Events are dropped
+	// silently when analytics is off.
+	CaptureEvent(context.Context, *CaptureEventRequest) (*CaptureEventResponse, error)
 	// latency
 	TestLatency(context.Context, *TestLatencyRequest) (*TestLatencyResponse, error)
 	CancelLatencyTest(context.Context, *CancelLatencyTestRequest) (*CancelLatencyTestResponse, error)
@@ -691,6 +708,9 @@ func (UnimplementedDaemonServiceServer) Shutdown(context.Context, *ShutdownReque
 }
 func (UnimplementedDaemonServiceServer) StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[StreamLogsResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
+}
+func (UnimplementedDaemonServiceServer) CaptureEvent(context.Context, *CaptureEventRequest) (*CaptureEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CaptureEvent not implemented")
 }
 func (UnimplementedDaemonServiceServer) TestLatency(context.Context, *TestLatencyRequest) (*TestLatencyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TestLatency not implemented")
@@ -917,6 +937,24 @@ func _DaemonService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DaemonService_StreamLogsServer = grpc.ServerStreamingServer[StreamLogsResponse]
+
+func _DaemonService_CaptureEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CaptureEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).CaptureEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_CaptureEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).CaptureEvent(ctx, req.(*CaptureEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 func _DaemonService_TestLatency_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TestLatencyRequest)
@@ -1592,6 +1630,10 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Shutdown",
 			Handler:    _DaemonService_Shutdown_Handler,
+		},
+		{
+			MethodName: "CaptureEvent",
+			Handler:    _DaemonService_CaptureEvent_Handler,
 		},
 		{
 			MethodName: "TestLatency",

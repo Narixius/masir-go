@@ -96,7 +96,7 @@ func cmdSubAdd(a args) error {
 	if err != nil {
 		return err
 	}
-	return selectNode(all, key, "Active outbound configured to")
+	return selectNode(all, key, "Active outbound configured to", "interactive")
 }
 
 func cmdSubList(a args) error {

@@ -25,3 +25,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Public PostHog project token and host, stored as repository variables.
+          # GoReleaser reads them from .Env.MASIR_POSTHOG_KEY / .Env.MASIR_POSTHOG_HOST
+          # in .goreleaser.yaml.
+          MASIR_POSTHOG_KEY: ${{ vars.MASIR_POSTHOG_KEY }}
+          MASIR_POSTHOG_HOST: ${{ vars.MASIR_POSTHOG_HOST }}

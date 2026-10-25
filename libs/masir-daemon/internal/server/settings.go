@@ -20,6 +20,35 @@ func (s *Server) GetSettings(ctx context.Context, _ *pb.GetSettingsRequest) (*pb
 
 func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsRequest) (*pb.UpdateSettingsResponse, error) {
 	var out store.Settings
+	var changed []string
+	add := func(name string) { changed = append(changed, name) }
+	if req.AlwaysOnProxy != nil {
+		add("alwaysOnProxy")
+	}
+	if req.AllowLan != nil {
+		add("allowLan")
+	}
+	if req.ProxyPort != nil {
+		add("proxyPort")
+	}
+	if req.DohDns != nil {
+		add("dohDns")
+	}
+	if req.DnsServers != nil {
+		add("dnsServers")
+	}
+	if req.TunDns != nil {
+		add("tunDns")
+	}
+	if req.TunGateway != nil {
+		add("tunGateway")
+	}
+	if req.SubIntervalMinutes != nil {
+		add("subIntervalMinutes")
+	}
+	if req.XrayLogLevel != nil {
+		add("xrayLogLevel")
+	}
 	// Switching always-on proxy on means "proxy now", idle or not.
 	wasIdle := req.AlwaysOnProxy != nil && *req.AlwaysOnProxy && s.idle.Swap(false)
 	err := s.change(ctx, "settings updated", func(st *store.State) error {
@@ -51,6 +80,9 @@ func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsReque
 		if req.XrayLogLevel != nil {
 			set.XrayLogLevel = store.NormalizeXrayLogLevel(*req.XrayLogLevel)
 		}
+		if req.Analytics != nil {
+			set.Analytics = *req.Analytics
+		}
 		out = *set
 		return set.Validate()
 	})
@@ -59,6 +91,18 @@ func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsReque
 			s.idle.Store(true)
 		}
 		return nil, err
+	}
+	if len(changed) > 0 {
+		s.track("settings_changed", map[string]any{"keys": changed})
+	}
+	if req.Analytics != nil && s.analytics != nil {
+		if *req.Analytics {
+			s.analytics.SetEnabled(true)
+			s.track("analytics_enabled", map[string]any{"source": "settings"})
+		} else {
+			s.track("analytics_disabled", map[string]any{"source": "settings"})
+			s.analytics.SetEnabled(false)
+		}
 	}
 	s.subs.SetInterval(time.Duration(out.SubIntervalMinutes) * time.Minute)
 	return &pb.UpdateSettingsResponse{Settings: toPBSettings(out)}, nil
@@ -78,8 +122,16 @@ func (s *Server) SetPower(ctx context.Context, req *pb.SetPowerRequest) (*pb.Set
 		if wasIdle {
 			s.idle.Store(true)
 		}
+		s.trackError("power_changed_failed", err, map[string]any{"on": req.On}, false)
 		return nil, err
 	}
+	s.mu.Lock()
+	tun := s.state.Settings.Tun
+	s.mu.Unlock()
+	s.trackWithActive("power_changed", map[string]any{
+		"on":  req.On,
+		"tun": tun,
+	})
 	return &pb.SetPowerResponse{}, nil
 }
 
@@ -105,8 +157,10 @@ func (s *Server) SetFallback(ctx context.Context, req *pb.SetFallbackRequest) (*
 		return nil
 	})
 	if err != nil {
+		s.trackError("routing_mode_changed_failed", err, map[string]any{"mode": string(f)}, false)
 		return nil, err
 	}
+	s.track("routing_mode_changed", map[string]any{"mode": string(f)})
 	return &pb.SetFallbackResponse{}, nil
 }
 
@@ -114,15 +168,19 @@ func (s *Server) SetFallback(ctx context.Context, req *pb.SetFallbackRequest) (*
 // so the UI can elevate the daemon and call again.
 func (s *Server) SetTunEnabled(ctx context.Context, req *pb.SetTunEnabledRequest) (*pb.SetTunEnabledResponse, error) {
 	if req.Enabled && !s.id.Privileged {
-		return nil, rootRequired()
+		err := rootRequired()
+		s.trackError("tun_failed", err, map[string]any{"enabled": true}, false)
+		return nil, err
 	}
 	err := s.change(ctx, fmt.Sprintf("tun enabled: %v", req.Enabled), func(st *store.State) error {
 		st.Settings.Tun = req.Enabled
 		return nil
 	})
 	if err != nil {
+		s.trackError("tun_failed", err, map[string]any{"enabled": req.Enabled}, false)
 		return nil, err
 	}
+	s.trackWithActive("tun_changed", map[string]any{"enabled": req.Enabled})
 	return &pb.SetTunEnabledResponse{}, nil
 }
 
@@ -153,5 +211,6 @@ func toPBSettings(s store.Settings) *pb.Settings {
 
 		SubIntervalMinutes: uint32(s.SubIntervalMinutes),
 		XrayLogLevel:       s.XrayLogLevel,
+		Analytics:          s.Analytics,
 	}
 }

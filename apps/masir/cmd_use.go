@@ -18,31 +18,34 @@ func cmdUse(a args) error {
 		return fail("no subscriptions yet; add one with `masir sub add <url>`")
 	}
 
-	var key string
+	var key, reason string
 	switch {
 	case a.boolean("fastest", false):
 		key, err = fastest(all)
+		reason = "fastest"
 	case a.arg(0) != "":
 		s, cfg, ok := findNode(all, a.arg(0))
 		if !ok {
 			return fail("outbound node with ID %q not found in any subscription", a.arg(0))
 		}
 		key = nodeKey(s.sub.Id, cfg.Id)
+		reason = "id"
 	case !ui.Interactive():
 		return fail("pass a proxy id: masir use <id> (ids are in `masir sub list --nodes`), or --fastest")
 	default:
 		key, err = pickNode(all, "Choose active outbound configuration", activeKey())
+		reason = "interactive"
 	}
 	if err != nil {
 		return err
 	}
-	return selectNode(all, key, "Active outbound switched to")
+	return selectNode(all, key, "Active outbound switched to", reason)
 }
 
-func selectNode(all []subNodes, key, verb string) error {
+func selectNode(all []subNodes, key, verb, reason string) error {
 	subID, cfgID := splitKey(key)
 	if _, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.SelectConfigResponse, error) {
-		return c.SelectConfig(ctx, &pb.SelectConfigRequest{SubscriptionId: subID, ConfigId: cfgID})
+		return c.SelectConfig(ctx, &pb.SelectConfigRequest{SubscriptionId: subID, ConfigId: cfgID, Reason: reason})
 	}); err != nil {
 		return err
 	}
@@ -96,7 +99,7 @@ func fastest(all []subNodes) (string, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = probe(appCtx, c, s.sub.Id, ids, func(cfgID string, l *pb.LatencyResult) {
+			_ = probe(appCtx, c, s.sub.Id, ids, "use_fastest", func(cfgID string, l *pb.LatencyResult) {
 				mu.Lock()
 				defer mu.Unlock()
 				done++

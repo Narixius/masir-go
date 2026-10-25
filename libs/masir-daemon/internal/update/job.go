@@ -217,6 +217,9 @@ func (p *Reporter) update(fn func(j *pb.UpdateJob)) {
 	p.r.notifyLocked()
 }
 
+// Snapshot is the job as it is now, for analytics at the end of a task.
+func (p *Reporter) Snapshot() *pb.UpdateJob { return p.r.Snapshot() }
+
 func (p *Reporter) State(s pb.UpdateState) { p.update(func(j *pb.UpdateJob) { j.State = s }) }
 func (p *Reporter) Version(v string)       { p.update(func(j *pb.UpdateJob) { j.Version = v }) }
 func (p *Reporter) File(name string)       { p.update(func(j *pb.UpdateJob) { j.File = name }) }

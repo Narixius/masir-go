@@ -715,6 +715,7 @@ type Settings struct {
 	TunGateway         string                 `protobuf:"bytes,10,opt,name=tun_gateway,json=tunGateway,proto3" json:"tun_gateway,omitempty"`                            // IPv4 CIDR for the TUN interface
 	SubIntervalMinutes uint32                 `protobuf:"varint,11,opt,name=sub_interval_minutes,json=subIntervalMinutes,proto3" json:"sub_interval_minutes,omitempty"` // background subscription refresh; a subscription's own interval wins
 	XrayLogLevel       string                 `protobuf:"bytes,12,opt,name=xray_log_level,json=xrayLogLevel,proto3" json:"xray_log_level,omitempty"`                    // debug, info, warning, error, or none; default warning
+	Analytics          bool                   `protobuf:"varint,13,opt,name=analytics,proto3" json:"analytics,omitempty"`                                               // send anonymous usage/error events to PostHog
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -831,6 +832,13 @@ func (x *Settings) GetXrayLogLevel() string {
 		return x.XrayLogLevel
 	}
 	return ""
+}
+
+func (x *Settings) GetAnalytics() bool {
+	if x != nil {
+		return x.Analytics
+	}
+	return false
 }
 
 type GetSettingsRequest struct {
@@ -978,6 +986,7 @@ type UpdateSettingsRequest struct {
 	TunGateway         *string                `protobuf:"bytes,7,opt,name=tun_gateway,json=tunGateway,proto3,oneof" json:"tun_gateway,omitempty"`
 	SubIntervalMinutes *uint32                `protobuf:"varint,8,opt,name=sub_interval_minutes,json=subIntervalMinutes,proto3,oneof" json:"sub_interval_minutes,omitempty"` // 5 to 43200
 	XrayLogLevel       *string                `protobuf:"bytes,9,opt,name=xray_log_level,json=xrayLogLevel,proto3,oneof" json:"xray_log_level,omitempty"`                    // debug, info, warning, error, or none
+	Analytics          *bool                  `protobuf:"varint,10,opt,name=analytics,proto3,oneof" json:"analytics,omitempty"`                                              // anonymous usage/error events
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1073,6 +1082,13 @@ func (x *UpdateSettingsRequest) GetXrayLogLevel() string {
 		return *x.XrayLogLevel
 	}
 	return ""
+}
+
+func (x *UpdateSettingsRequest) GetAnalytics() bool {
+	if x != nil && x.Analytics != nil {
+		return *x.Analytics
+	}
+	return false
 }
 
 type UpdateSettingsResponse struct {
@@ -1467,6 +1483,104 @@ func (x *StreamLogsResponse) GetEntry() *LogEntry {
 	return nil
 }
 
+// CaptureEvent is the CLI's analytics hook. properties_json is a JSON object; the
+// daemon validates it, adds common properties, and drops it when analytics is off.
+type CaptureEventRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Event          string                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	PropertiesJson string                 `protobuf:"bytes,2,opt,name=properties_json,json=propertiesJson,proto3" json:"properties_json,omitempty"`
+	TimestampMs    int64                  `protobuf:"varint,3,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"` // when it happened; 0 means now
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CaptureEventRequest) Reset() {
+	*x = CaptureEventRequest{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CaptureEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CaptureEventRequest) ProtoMessage() {}
+
+func (x *CaptureEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CaptureEventRequest.ProtoReflect.Descriptor instead.
+func (*CaptureEventRequest) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *CaptureEventRequest) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *CaptureEventRequest) GetPropertiesJson() string {
+	if x != nil {
+		return x.PropertiesJson
+	}
+	return ""
+}
+
+func (x *CaptureEventRequest) GetTimestampMs() int64 {
+	if x != nil {
+		return x.TimestampMs
+	}
+	return 0
+}
+
+type CaptureEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CaptureEventResponse) Reset() {
+	*x = CaptureEventResponse{}
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CaptureEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CaptureEventResponse) ProtoMessage() {}
+
+func (x *CaptureEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CaptureEventResponse.ProtoReflect.Descriptor instead.
+func (*CaptureEventResponse) Descriptor() ([]byte, []int) {
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{22}
+}
+
 type LogEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TimestampMs   int64                  `protobuf:"varint,1,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
@@ -1478,7 +1592,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[21]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1490,7 +1604,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[21]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1503,7 +1617,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{21}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *LogEntry) GetTimestampMs() int64 {
@@ -1535,7 +1649,7 @@ type GetXrayVersionRequest struct {
 
 func (x *GetXrayVersionRequest) Reset() {
 	*x = GetXrayVersionRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[22]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1547,7 +1661,7 @@ func (x *GetXrayVersionRequest) String() string {
 func (*GetXrayVersionRequest) ProtoMessage() {}
 
 func (x *GetXrayVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[22]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1560,7 +1674,7 @@ func (x *GetXrayVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetXrayVersionRequest.ProtoReflect.Descriptor instead.
 func (*GetXrayVersionRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{22}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{24}
 }
 
 type GetXrayVersionResponse struct {
@@ -1572,7 +1686,7 @@ type GetXrayVersionResponse struct {
 
 func (x *GetXrayVersionResponse) Reset() {
 	*x = GetXrayVersionResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[23]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1584,7 +1698,7 @@ func (x *GetXrayVersionResponse) String() string {
 func (*GetXrayVersionResponse) ProtoMessage() {}
 
 func (x *GetXrayVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[23]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1597,7 +1711,7 @@ func (x *GetXrayVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetXrayVersionResponse.ProtoReflect.Descriptor instead.
 func (*GetXrayVersionResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{23}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetXrayVersionResponse) GetVersion() string {
@@ -1615,7 +1729,7 @@ type GetXrayConfigRequest struct {
 
 func (x *GetXrayConfigRequest) Reset() {
 	*x = GetXrayConfigRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[24]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1627,7 +1741,7 @@ func (x *GetXrayConfigRequest) String() string {
 func (*GetXrayConfigRequest) ProtoMessage() {}
 
 func (x *GetXrayConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[24]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1640,7 +1754,7 @@ func (x *GetXrayConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetXrayConfigRequest.ProtoReflect.Descriptor instead.
 func (*GetXrayConfigRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{24}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{26}
 }
 
 type GetXrayConfigResponse struct {
@@ -1652,7 +1766,7 @@ type GetXrayConfigResponse struct {
 
 func (x *GetXrayConfigResponse) Reset() {
 	*x = GetXrayConfigResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[25]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1664,7 +1778,7 @@ func (x *GetXrayConfigResponse) String() string {
 func (*GetXrayConfigResponse) ProtoMessage() {}
 
 func (x *GetXrayConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[25]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1677,7 +1791,7 @@ func (x *GetXrayConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetXrayConfigResponse.ProtoReflect.Descriptor instead.
 func (*GetXrayConfigResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{25}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetXrayConfigResponse) GetJson() string {
@@ -1698,7 +1812,7 @@ type TestLatencyRequest struct {
 
 func (x *TestLatencyRequest) Reset() {
 	*x = TestLatencyRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[26]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1710,7 +1824,7 @@ func (x *TestLatencyRequest) String() string {
 func (*TestLatencyRequest) ProtoMessage() {}
 
 func (x *TestLatencyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[26]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1723,7 +1837,7 @@ func (x *TestLatencyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestLatencyRequest.ProtoReflect.Descriptor instead.
 func (*TestLatencyRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{26}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *TestLatencyRequest) GetXrayConfigJson() string {
@@ -1757,7 +1871,7 @@ type TestLatencyResponse struct {
 
 func (x *TestLatencyResponse) Reset() {
 	*x = TestLatencyResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[27]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1769,7 +1883,7 @@ func (x *TestLatencyResponse) String() string {
 func (*TestLatencyResponse) ProtoMessage() {}
 
 func (x *TestLatencyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[27]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1782,7 +1896,7 @@ func (x *TestLatencyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestLatencyResponse.ProtoReflect.Descriptor instead.
 func (*TestLatencyResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{27}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *TestLatencyResponse) GetLatencyMs() int64 {
@@ -1808,7 +1922,7 @@ type CancelLatencyTestRequest struct {
 
 func (x *CancelLatencyTestRequest) Reset() {
 	*x = CancelLatencyTestRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[28]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1820,7 +1934,7 @@ func (x *CancelLatencyTestRequest) String() string {
 func (*CancelLatencyTestRequest) ProtoMessage() {}
 
 func (x *CancelLatencyTestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[28]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1833,7 +1947,7 @@ func (x *CancelLatencyTestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelLatencyTestRequest.ProtoReflect.Descriptor instead.
 func (*CancelLatencyTestRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{28}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *CancelLatencyTestRequest) GetTestId() string {
@@ -1851,7 +1965,7 @@ type CancelLatencyTestResponse struct {
 
 func (x *CancelLatencyTestResponse) Reset() {
 	*x = CancelLatencyTestResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[29]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1863,7 +1977,7 @@ func (x *CancelLatencyTestResponse) String() string {
 func (*CancelLatencyTestResponse) ProtoMessage() {}
 
 func (x *CancelLatencyTestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[29]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1876,7 +1990,7 @@ func (x *CancelLatencyTestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelLatencyTestResponse.ProtoReflect.Descriptor instead.
 func (*CancelLatencyTestResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{29}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{31}
 }
 
 // A rule's target is one of:
@@ -1899,7 +2013,7 @@ type RoutingRule struct {
 
 func (x *RoutingRule) Reset() {
 	*x = RoutingRule{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[30]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1911,7 +2025,7 @@ func (x *RoutingRule) String() string {
 func (*RoutingRule) ProtoMessage() {}
 
 func (x *RoutingRule) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[30]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1924,7 +2038,7 @@ func (x *RoutingRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoutingRule.ProtoReflect.Descriptor instead.
 func (*RoutingRule) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{30}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RoutingRule) GetRuleTag() string {
@@ -1970,7 +2084,7 @@ type ListRoutingRulesRequest struct {
 
 func (x *ListRoutingRulesRequest) Reset() {
 	*x = ListRoutingRulesRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[31]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1982,7 +2096,7 @@ func (x *ListRoutingRulesRequest) String() string {
 func (*ListRoutingRulesRequest) ProtoMessage() {}
 
 func (x *ListRoutingRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[31]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1995,7 +2109,7 @@ func (x *ListRoutingRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoutingRulesRequest.ProtoReflect.Descriptor instead.
 func (*ListRoutingRulesRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{31}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{33}
 }
 
 type ListRoutingRulesResponse struct {
@@ -2007,7 +2121,7 @@ type ListRoutingRulesResponse struct {
 
 func (x *ListRoutingRulesResponse) Reset() {
 	*x = ListRoutingRulesResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[32]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2019,7 +2133,7 @@ func (x *ListRoutingRulesResponse) String() string {
 func (*ListRoutingRulesResponse) ProtoMessage() {}
 
 func (x *ListRoutingRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[32]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2032,7 +2146,7 @@ func (x *ListRoutingRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoutingRulesResponse.ProtoReflect.Descriptor instead.
 func (*ListRoutingRulesResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{32}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListRoutingRulesResponse) GetRules() []*RoutingRule {
@@ -2055,7 +2169,7 @@ type AddRoutingRequest struct {
 
 func (x *AddRoutingRequest) Reset() {
 	*x = AddRoutingRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[33]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2067,7 +2181,7 @@ func (x *AddRoutingRequest) String() string {
 func (*AddRoutingRequest) ProtoMessage() {}
 
 func (x *AddRoutingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[33]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2080,7 +2194,7 @@ func (x *AddRoutingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddRoutingRequest.ProtoReflect.Descriptor instead.
 func (*AddRoutingRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{33}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AddRoutingRequest) GetRuleJson() string {
@@ -2119,7 +2233,7 @@ type AddRoutingResponse struct {
 
 func (x *AddRoutingResponse) Reset() {
 	*x = AddRoutingResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[34]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2131,7 +2245,7 @@ func (x *AddRoutingResponse) String() string {
 func (*AddRoutingResponse) ProtoMessage() {}
 
 func (x *AddRoutingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[34]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2144,7 +2258,7 @@ func (x *AddRoutingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddRoutingResponse.ProtoReflect.Descriptor instead.
 func (*AddRoutingResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{34}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{36}
 }
 
 type RemoveRoutingRequest struct {
@@ -2156,7 +2270,7 @@ type RemoveRoutingRequest struct {
 
 func (x *RemoveRoutingRequest) Reset() {
 	*x = RemoveRoutingRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[35]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2168,7 +2282,7 @@ func (x *RemoveRoutingRequest) String() string {
 func (*RemoveRoutingRequest) ProtoMessage() {}
 
 func (x *RemoveRoutingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[35]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2181,7 +2295,7 @@ func (x *RemoveRoutingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveRoutingRequest.ProtoReflect.Descriptor instead.
 func (*RemoveRoutingRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{35}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *RemoveRoutingRequest) GetRuleTag() string {
@@ -2199,7 +2313,7 @@ type RemoveRoutingResponse struct {
 
 func (x *RemoveRoutingResponse) Reset() {
 	*x = RemoveRoutingResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[36]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2211,7 +2325,7 @@ func (x *RemoveRoutingResponse) String() string {
 func (*RemoveRoutingResponse) ProtoMessage() {}
 
 func (x *RemoveRoutingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[36]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2224,7 +2338,7 @@ func (x *RemoveRoutingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveRoutingResponse.ProtoReflect.Descriptor instead.
 func (*RemoveRoutingResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{36}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{38}
 }
 
 // Unset fields are left alone; the rule keeps its position.
@@ -2240,7 +2354,7 @@ type AlterRoutingRequest struct {
 
 func (x *AlterRoutingRequest) Reset() {
 	*x = AlterRoutingRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[37]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2252,7 +2366,7 @@ func (x *AlterRoutingRequest) String() string {
 func (*AlterRoutingRequest) ProtoMessage() {}
 
 func (x *AlterRoutingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[37]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2265,7 +2379,7 @@ func (x *AlterRoutingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterRoutingRequest.ProtoReflect.Descriptor instead.
 func (*AlterRoutingRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{37}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *AlterRoutingRequest) GetRuleTag() string {
@@ -2304,7 +2418,7 @@ type AlterRoutingResponse struct {
 
 func (x *AlterRoutingResponse) Reset() {
 	*x = AlterRoutingResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[38]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2316,7 +2430,7 @@ func (x *AlterRoutingResponse) String() string {
 func (*AlterRoutingResponse) ProtoMessage() {}
 
 func (x *AlterRoutingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[38]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2329,7 +2443,7 @@ func (x *AlterRoutingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterRoutingResponse.ProtoReflect.Descriptor instead.
 func (*AlterRoutingResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{38}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{40}
 }
 
 // Moves the rule so it ends up at index (0 is first); an index past the end makes it last.
@@ -2343,7 +2457,7 @@ type MoveRoutingRequest struct {
 
 func (x *MoveRoutingRequest) Reset() {
 	*x = MoveRoutingRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[39]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2355,7 +2469,7 @@ func (x *MoveRoutingRequest) String() string {
 func (*MoveRoutingRequest) ProtoMessage() {}
 
 func (x *MoveRoutingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[39]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2368,7 +2482,7 @@ func (x *MoveRoutingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveRoutingRequest.ProtoReflect.Descriptor instead.
 func (*MoveRoutingRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{39}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *MoveRoutingRequest) GetRuleTag() string {
@@ -2393,7 +2507,7 @@ type MoveRoutingResponse struct {
 
 func (x *MoveRoutingResponse) Reset() {
 	*x = MoveRoutingResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[40]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2405,7 +2519,7 @@ func (x *MoveRoutingResponse) String() string {
 func (*MoveRoutingResponse) ProtoMessage() {}
 
 func (x *MoveRoutingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[40]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2418,7 +2532,7 @@ func (x *MoveRoutingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveRoutingResponse.ProtoReflect.Descriptor instead.
 func (*MoveRoutingResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{40}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{42}
 }
 
 type TestRoutingRequest struct {
@@ -2434,7 +2548,7 @@ type TestRoutingRequest struct {
 
 func (x *TestRoutingRequest) Reset() {
 	*x = TestRoutingRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[41]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2446,7 +2560,7 @@ func (x *TestRoutingRequest) String() string {
 func (*TestRoutingRequest) ProtoMessage() {}
 
 func (x *TestRoutingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[41]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2459,7 +2573,7 @@ func (x *TestRoutingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestRoutingRequest.ProtoReflect.Descriptor instead.
 func (*TestRoutingRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{41}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *TestRoutingRequest) GetDomain() string {
@@ -2508,7 +2622,7 @@ type TestRoutingResponse struct {
 
 func (x *TestRoutingResponse) Reset() {
 	*x = TestRoutingResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[42]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2520,7 +2634,7 @@ func (x *TestRoutingResponse) String() string {
 func (*TestRoutingResponse) ProtoMessage() {}
 
 func (x *TestRoutingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[42]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2533,7 +2647,7 @@ func (x *TestRoutingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestRoutingResponse.ProtoReflect.Descriptor instead.
 func (*TestRoutingResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{42}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *TestRoutingResponse) GetOutboundTag() string {
@@ -2560,7 +2674,7 @@ type TaggedConfig struct {
 
 func (x *TaggedConfig) Reset() {
 	*x = TaggedConfig{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[43]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2572,7 +2686,7 @@ func (x *TaggedConfig) String() string {
 func (*TaggedConfig) ProtoMessage() {}
 
 func (x *TaggedConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[43]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2585,7 +2699,7 @@ func (x *TaggedConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaggedConfig.ProtoReflect.Descriptor instead.
 func (*TaggedConfig) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{43}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *TaggedConfig) GetTag() string {
@@ -2610,7 +2724,7 @@ type ListInboundsRequest struct {
 
 func (x *ListInboundsRequest) Reset() {
 	*x = ListInboundsRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[44]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2622,7 +2736,7 @@ func (x *ListInboundsRequest) String() string {
 func (*ListInboundsRequest) ProtoMessage() {}
 
 func (x *ListInboundsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[44]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2635,7 +2749,7 @@ func (x *ListInboundsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInboundsRequest.ProtoReflect.Descriptor instead.
 func (*ListInboundsRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{44}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{46}
 }
 
 type ListInboundsResponse struct {
@@ -2647,7 +2761,7 @@ type ListInboundsResponse struct {
 
 func (x *ListInboundsResponse) Reset() {
 	*x = ListInboundsResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[45]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2659,7 +2773,7 @@ func (x *ListInboundsResponse) String() string {
 func (*ListInboundsResponse) ProtoMessage() {}
 
 func (x *ListInboundsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[45]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2672,7 +2786,7 @@ func (x *ListInboundsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInboundsResponse.ProtoReflect.Descriptor instead.
 func (*ListInboundsResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{45}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListInboundsResponse) GetInbounds() []*TaggedConfig {
@@ -2690,7 +2804,7 @@ type ListOutboundsRequest struct {
 
 func (x *ListOutboundsRequest) Reset() {
 	*x = ListOutboundsRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[46]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2702,7 +2816,7 @@ func (x *ListOutboundsRequest) String() string {
 func (*ListOutboundsRequest) ProtoMessage() {}
 
 func (x *ListOutboundsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[46]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2715,7 +2829,7 @@ func (x *ListOutboundsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOutboundsRequest.ProtoReflect.Descriptor instead.
 func (*ListOutboundsRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{46}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{48}
 }
 
 type ListOutboundsResponse struct {
@@ -2727,7 +2841,7 @@ type ListOutboundsResponse struct {
 
 func (x *ListOutboundsResponse) Reset() {
 	*x = ListOutboundsResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[47]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2739,7 +2853,7 @@ func (x *ListOutboundsResponse) String() string {
 func (*ListOutboundsResponse) ProtoMessage() {}
 
 func (x *ListOutboundsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[47]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2752,7 +2866,7 @@ func (x *ListOutboundsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOutboundsResponse.ProtoReflect.Descriptor instead.
 func (*ListOutboundsResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{47}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ListOutboundsResponse) GetOutbounds() []*TaggedConfig {
@@ -2773,7 +2887,7 @@ type AddInboundRequest struct {
 
 func (x *AddInboundRequest) Reset() {
 	*x = AddInboundRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[48]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2785,7 +2899,7 @@ func (x *AddInboundRequest) String() string {
 func (*AddInboundRequest) ProtoMessage() {}
 
 func (x *AddInboundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[48]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2798,7 +2912,7 @@ func (x *AddInboundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddInboundRequest.ProtoReflect.Descriptor instead.
 func (*AddInboundRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{48}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *AddInboundRequest) GetTag() string {
@@ -2823,7 +2937,7 @@ type AddInboundResponse struct {
 
 func (x *AddInboundResponse) Reset() {
 	*x = AddInboundResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[49]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2835,7 +2949,7 @@ func (x *AddInboundResponse) String() string {
 func (*AddInboundResponse) ProtoMessage() {}
 
 func (x *AddInboundResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[49]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2848,7 +2962,7 @@ func (x *AddInboundResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddInboundResponse.ProtoReflect.Descriptor instead.
 func (*AddInboundResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{49}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{51}
 }
 
 type RemoveInboundRequest struct {
@@ -2860,7 +2974,7 @@ type RemoveInboundRequest struct {
 
 func (x *RemoveInboundRequest) Reset() {
 	*x = RemoveInboundRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[50]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2872,7 +2986,7 @@ func (x *RemoveInboundRequest) String() string {
 func (*RemoveInboundRequest) ProtoMessage() {}
 
 func (x *RemoveInboundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[50]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2885,7 +2999,7 @@ func (x *RemoveInboundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveInboundRequest.ProtoReflect.Descriptor instead.
 func (*RemoveInboundRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{50}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *RemoveInboundRequest) GetTag() string {
@@ -2903,7 +3017,7 @@ type RemoveInboundResponse struct {
 
 func (x *RemoveInboundResponse) Reset() {
 	*x = RemoveInboundResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[51]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2915,7 +3029,7 @@ func (x *RemoveInboundResponse) String() string {
 func (*RemoveInboundResponse) ProtoMessage() {}
 
 func (x *RemoveInboundResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[51]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2928,7 +3042,7 @@ func (x *RemoveInboundResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveInboundResponse.ProtoReflect.Descriptor instead.
 func (*RemoveInboundResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{51}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{53}
 }
 
 type AlterInboundRequest struct {
@@ -2941,7 +3055,7 @@ type AlterInboundRequest struct {
 
 func (x *AlterInboundRequest) Reset() {
 	*x = AlterInboundRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[52]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2953,7 +3067,7 @@ func (x *AlterInboundRequest) String() string {
 func (*AlterInboundRequest) ProtoMessage() {}
 
 func (x *AlterInboundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[52]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2966,7 +3080,7 @@ func (x *AlterInboundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterInboundRequest.ProtoReflect.Descriptor instead.
 func (*AlterInboundRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{52}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *AlterInboundRequest) GetTag() string {
@@ -2991,7 +3105,7 @@ type AlterInboundResponse struct {
 
 func (x *AlterInboundResponse) Reset() {
 	*x = AlterInboundResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[53]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3003,7 +3117,7 @@ func (x *AlterInboundResponse) String() string {
 func (*AlterInboundResponse) ProtoMessage() {}
 
 func (x *AlterInboundResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[53]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3016,7 +3130,7 @@ func (x *AlterInboundResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterInboundResponse.ProtoReflect.Descriptor instead.
 func (*AlterInboundResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{53}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{55}
 }
 
 // outbounds
@@ -3030,7 +3144,7 @@ type AddOutboundRequest struct {
 
 func (x *AddOutboundRequest) Reset() {
 	*x = AddOutboundRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[54]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3042,7 +3156,7 @@ func (x *AddOutboundRequest) String() string {
 func (*AddOutboundRequest) ProtoMessage() {}
 
 func (x *AddOutboundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[54]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3055,7 +3169,7 @@ func (x *AddOutboundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddOutboundRequest.ProtoReflect.Descriptor instead.
 func (*AddOutboundRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{54}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *AddOutboundRequest) GetTag() string {
@@ -3080,7 +3194,7 @@ type AddOutboundResponse struct {
 
 func (x *AddOutboundResponse) Reset() {
 	*x = AddOutboundResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[55]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3092,7 +3206,7 @@ func (x *AddOutboundResponse) String() string {
 func (*AddOutboundResponse) ProtoMessage() {}
 
 func (x *AddOutboundResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[55]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3105,7 +3219,7 @@ func (x *AddOutboundResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddOutboundResponse.ProtoReflect.Descriptor instead.
 func (*AddOutboundResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{55}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{57}
 }
 
 type RemoveOutboundRequest struct {
@@ -3117,7 +3231,7 @@ type RemoveOutboundRequest struct {
 
 func (x *RemoveOutboundRequest) Reset() {
 	*x = RemoveOutboundRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[56]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3129,7 +3243,7 @@ func (x *RemoveOutboundRequest) String() string {
 func (*RemoveOutboundRequest) ProtoMessage() {}
 
 func (x *RemoveOutboundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[56]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3142,7 +3256,7 @@ func (x *RemoveOutboundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveOutboundRequest.ProtoReflect.Descriptor instead.
 func (*RemoveOutboundRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{56}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *RemoveOutboundRequest) GetTag() string {
@@ -3160,7 +3274,7 @@ type RemoveOutboundResponse struct {
 
 func (x *RemoveOutboundResponse) Reset() {
 	*x = RemoveOutboundResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[57]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3172,7 +3286,7 @@ func (x *RemoveOutboundResponse) String() string {
 func (*RemoveOutboundResponse) ProtoMessage() {}
 
 func (x *RemoveOutboundResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[57]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3185,7 +3299,7 @@ func (x *RemoveOutboundResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveOutboundResponse.ProtoReflect.Descriptor instead.
 func (*RemoveOutboundResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{57}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{59}
 }
 
 type AlterOutboundRequest struct {
@@ -3198,7 +3312,7 @@ type AlterOutboundRequest struct {
 
 func (x *AlterOutboundRequest) Reset() {
 	*x = AlterOutboundRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[58]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3210,7 +3324,7 @@ func (x *AlterOutboundRequest) String() string {
 func (*AlterOutboundRequest) ProtoMessage() {}
 
 func (x *AlterOutboundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[58]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3223,7 +3337,7 @@ func (x *AlterOutboundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterOutboundRequest.ProtoReflect.Descriptor instead.
 func (*AlterOutboundRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{58}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *AlterOutboundRequest) GetTag() string {
@@ -3248,7 +3362,7 @@ type AlterOutboundResponse struct {
 
 func (x *AlterOutboundResponse) Reset() {
 	*x = AlterOutboundResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[59]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3260,7 +3374,7 @@ func (x *AlterOutboundResponse) String() string {
 func (*AlterOutboundResponse) ProtoMessage() {}
 
 func (x *AlterOutboundResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[59]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3273,7 +3387,7 @@ func (x *AlterOutboundResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterOutboundResponse.ProtoReflect.Descriptor instead.
 func (*AlterOutboundResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{59}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{61}
 }
 
 type Subscription struct {
@@ -3295,7 +3409,7 @@ type Subscription struct {
 
 func (x *Subscription) Reset() {
 	*x = Subscription{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[60]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3307,7 +3421,7 @@ func (x *Subscription) String() string {
 func (*Subscription) ProtoMessage() {}
 
 func (x *Subscription) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[60]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3320,7 +3434,7 @@ func (x *Subscription) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Subscription.ProtoReflect.Descriptor instead.
 func (*Subscription) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{60}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *Subscription) GetId() string {
@@ -3413,7 +3527,7 @@ type Usage struct {
 
 func (x *Usage) Reset() {
 	*x = Usage{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[61]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3425,7 +3539,7 @@ func (x *Usage) String() string {
 func (*Usage) ProtoMessage() {}
 
 func (x *Usage) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[61]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3438,7 +3552,7 @@ func (x *Usage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Usage.ProtoReflect.Descriptor instead.
 func (*Usage) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{61}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *Usage) GetUploadBytes() int64 {
@@ -3486,7 +3600,7 @@ type SubscriptionConfig struct {
 
 func (x *SubscriptionConfig) Reset() {
 	*x = SubscriptionConfig{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[62]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3498,7 +3612,7 @@ func (x *SubscriptionConfig) String() string {
 func (*SubscriptionConfig) ProtoMessage() {}
 
 func (x *SubscriptionConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[62]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3511,7 +3625,7 @@ func (x *SubscriptionConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscriptionConfig.ProtoReflect.Descriptor instead.
 func (*SubscriptionConfig) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{62}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *SubscriptionConfig) GetId() string {
@@ -3588,7 +3702,7 @@ type LatencyResult struct {
 
 func (x *LatencyResult) Reset() {
 	*x = LatencyResult{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[63]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3600,7 +3714,7 @@ func (x *LatencyResult) String() string {
 func (*LatencyResult) ProtoMessage() {}
 
 func (x *LatencyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[63]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3613,7 +3727,7 @@ func (x *LatencyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LatencyResult.ProtoReflect.Descriptor instead.
 func (*LatencyResult) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{63}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *LatencyResult) GetLatencyMs() int64 {
@@ -3645,7 +3759,7 @@ type ListSubscriptionsRequest struct {
 
 func (x *ListSubscriptionsRequest) Reset() {
 	*x = ListSubscriptionsRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[64]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3657,7 +3771,7 @@ func (x *ListSubscriptionsRequest) String() string {
 func (*ListSubscriptionsRequest) ProtoMessage() {}
 
 func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[64]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3670,7 +3784,7 @@ func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSubscriptionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionsRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{64}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{66}
 }
 
 type ListSubscriptionsResponse struct {
@@ -3682,7 +3796,7 @@ type ListSubscriptionsResponse struct {
 
 func (x *ListSubscriptionsResponse) Reset() {
 	*x = ListSubscriptionsResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[65]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3694,7 +3808,7 @@ func (x *ListSubscriptionsResponse) String() string {
 func (*ListSubscriptionsResponse) ProtoMessage() {}
 
 func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[65]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3707,7 +3821,7 @@ func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSubscriptionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionsResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{65}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ListSubscriptionsResponse) GetSubscriptions() []*Subscription {
@@ -3726,7 +3840,7 @@ type GetSubscriptionRequest struct {
 
 func (x *GetSubscriptionRequest) Reset() {
 	*x = GetSubscriptionRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[66]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3738,7 +3852,7 @@ func (x *GetSubscriptionRequest) String() string {
 func (*GetSubscriptionRequest) ProtoMessage() {}
 
 func (x *GetSubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[66]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3751,7 +3865,7 @@ func (x *GetSubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*GetSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{66}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *GetSubscriptionRequest) GetId() string {
@@ -3771,7 +3885,7 @@ type GetSubscriptionResponse struct {
 
 func (x *GetSubscriptionResponse) Reset() {
 	*x = GetSubscriptionResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[67]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3783,7 +3897,7 @@ func (x *GetSubscriptionResponse) String() string {
 func (*GetSubscriptionResponse) ProtoMessage() {}
 
 func (x *GetSubscriptionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[67]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3796,7 +3910,7 @@ func (x *GetSubscriptionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSubscriptionResponse.ProtoReflect.Descriptor instead.
 func (*GetSubscriptionResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{67}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *GetSubscriptionResponse) GetSubscription() *Subscription {
@@ -3826,7 +3940,7 @@ type AddSubscriptionRequest struct {
 
 func (x *AddSubscriptionRequest) Reset() {
 	*x = AddSubscriptionRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[68]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3838,7 +3952,7 @@ func (x *AddSubscriptionRequest) String() string {
 func (*AddSubscriptionRequest) ProtoMessage() {}
 
 func (x *AddSubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[68]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3851,7 +3965,7 @@ func (x *AddSubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*AddSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{68}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *AddSubscriptionRequest) GetUrl() string {
@@ -3884,7 +3998,7 @@ type AddSubscriptionResponse struct {
 
 func (x *AddSubscriptionResponse) Reset() {
 	*x = AddSubscriptionResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[69]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3896,7 +4010,7 @@ func (x *AddSubscriptionResponse) String() string {
 func (*AddSubscriptionResponse) ProtoMessage() {}
 
 func (x *AddSubscriptionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[69]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3909,7 +4023,7 @@ func (x *AddSubscriptionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSubscriptionResponse.ProtoReflect.Descriptor instead.
 func (*AddSubscriptionResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{69}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *AddSubscriptionResponse) GetSubscription() *Subscription {
@@ -3932,7 +4046,7 @@ type AlterSubscriptionRequest struct {
 
 func (x *AlterSubscriptionRequest) Reset() {
 	*x = AlterSubscriptionRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[70]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3944,7 +4058,7 @@ func (x *AlterSubscriptionRequest) String() string {
 func (*AlterSubscriptionRequest) ProtoMessage() {}
 
 func (x *AlterSubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[70]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3957,7 +4071,7 @@ func (x *AlterSubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterSubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*AlterSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{70}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *AlterSubscriptionRequest) GetId() string {
@@ -3997,7 +4111,7 @@ type AlterSubscriptionResponse struct {
 
 func (x *AlterSubscriptionResponse) Reset() {
 	*x = AlterSubscriptionResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[71]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4009,7 +4123,7 @@ func (x *AlterSubscriptionResponse) String() string {
 func (*AlterSubscriptionResponse) ProtoMessage() {}
 
 func (x *AlterSubscriptionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[71]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4022,7 +4136,7 @@ func (x *AlterSubscriptionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterSubscriptionResponse.ProtoReflect.Descriptor instead.
 func (*AlterSubscriptionResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{71}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *AlterSubscriptionResponse) GetSubscription() *Subscription {
@@ -4041,7 +4155,7 @@ type RemoveSubscriptionRequest struct {
 
 func (x *RemoveSubscriptionRequest) Reset() {
 	*x = RemoveSubscriptionRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[72]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4053,7 +4167,7 @@ func (x *RemoveSubscriptionRequest) String() string {
 func (*RemoveSubscriptionRequest) ProtoMessage() {}
 
 func (x *RemoveSubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[72]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4066,7 +4180,7 @@ func (x *RemoveSubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*RemoveSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{72}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *RemoveSubscriptionRequest) GetId() string {
@@ -4084,7 +4198,7 @@ type RemoveSubscriptionResponse struct {
 
 func (x *RemoveSubscriptionResponse) Reset() {
 	*x = RemoveSubscriptionResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[73]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4096,7 +4210,7 @@ func (x *RemoveSubscriptionResponse) String() string {
 func (*RemoveSubscriptionResponse) ProtoMessage() {}
 
 func (x *RemoveSubscriptionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[73]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4109,7 +4223,7 @@ func (x *RemoveSubscriptionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSubscriptionResponse.ProtoReflect.Descriptor instead.
 func (*RemoveSubscriptionResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{73}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{75}
 }
 
 // Re-fetches now. On failure the old configs are kept and last_error is set.
@@ -4122,7 +4236,7 @@ type UpdateSubscriptionRequest struct {
 
 func (x *UpdateSubscriptionRequest) Reset() {
 	*x = UpdateSubscriptionRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[74]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4134,7 +4248,7 @@ func (x *UpdateSubscriptionRequest) String() string {
 func (*UpdateSubscriptionRequest) ProtoMessage() {}
 
 func (x *UpdateSubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[74]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4147,7 +4261,7 @@ func (x *UpdateSubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{74}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *UpdateSubscriptionRequest) GetId() string {
@@ -4166,7 +4280,7 @@ type UpdateSubscriptionResponse struct {
 
 func (x *UpdateSubscriptionResponse) Reset() {
 	*x = UpdateSubscriptionResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[75]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4178,7 +4292,7 @@ func (x *UpdateSubscriptionResponse) String() string {
 func (*UpdateSubscriptionResponse) ProtoMessage() {}
 
 func (x *UpdateSubscriptionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[75]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4191,7 +4305,7 @@ func (x *UpdateSubscriptionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSubscriptionResponse.ProtoReflect.Descriptor instead.
 func (*UpdateSubscriptionResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{75}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *UpdateSubscriptionResponse) GetSubscription() *Subscription {
@@ -4208,13 +4322,14 @@ type TestSubscriptionLatencyRequest struct {
 	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
 	ConfigIds      []string               `protobuf:"bytes,2,rep,name=config_ids,json=configIds,proto3" json:"config_ids,omitempty"`
 	ProbeUrl       string                 `protobuf:"bytes,3,opt,name=probe_url,json=probeUrl,proto3" json:"probe_url,omitempty"`
+	Reason         string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"` // status, use_fastest, picker, or other
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *TestSubscriptionLatencyRequest) Reset() {
 	*x = TestSubscriptionLatencyRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[76]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4226,7 +4341,7 @@ func (x *TestSubscriptionLatencyRequest) String() string {
 func (*TestSubscriptionLatencyRequest) ProtoMessage() {}
 
 func (x *TestSubscriptionLatencyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[76]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4239,7 +4354,7 @@ func (x *TestSubscriptionLatencyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestSubscriptionLatencyRequest.ProtoReflect.Descriptor instead.
 func (*TestSubscriptionLatencyRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{76}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *TestSubscriptionLatencyRequest) GetSubscriptionId() string {
@@ -4263,6 +4378,13 @@ func (x *TestSubscriptionLatencyRequest) GetProbeUrl() string {
 	return ""
 }
 
+func (x *TestSubscriptionLatencyRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 type TestSubscriptionLatencyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConfigId      string                 `protobuf:"bytes,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
@@ -4273,7 +4395,7 @@ type TestSubscriptionLatencyResponse struct {
 
 func (x *TestSubscriptionLatencyResponse) Reset() {
 	*x = TestSubscriptionLatencyResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[77]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4285,7 +4407,7 @@ func (x *TestSubscriptionLatencyResponse) String() string {
 func (*TestSubscriptionLatencyResponse) ProtoMessage() {}
 
 func (x *TestSubscriptionLatencyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[77]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4298,7 +4420,7 @@ func (x *TestSubscriptionLatencyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestSubscriptionLatencyResponse.ProtoReflect.Descriptor instead.
 func (*TestSubscriptionLatencyResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{77}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *TestSubscriptionLatencyResponse) GetConfigId() string {
@@ -4323,13 +4445,14 @@ type SelectConfigRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
 	ConfigId       string                 `protobuf:"bytes,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	Reason         string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"` // id, interactive, fastest, or api
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SelectConfigRequest) Reset() {
 	*x = SelectConfigRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[78]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4341,7 +4464,7 @@ func (x *SelectConfigRequest) String() string {
 func (*SelectConfigRequest) ProtoMessage() {}
 
 func (x *SelectConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[78]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4354,7 +4477,7 @@ func (x *SelectConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectConfigRequest.ProtoReflect.Descriptor instead.
 func (*SelectConfigRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{78}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *SelectConfigRequest) GetSubscriptionId() string {
@@ -4371,6 +4494,13 @@ func (x *SelectConfigRequest) GetConfigId() string {
 	return ""
 }
 
+func (x *SelectConfigRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 type SelectConfigResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -4379,7 +4509,7 @@ type SelectConfigResponse struct {
 
 func (x *SelectConfigResponse) Reset() {
 	*x = SelectConfigResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[79]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4391,7 +4521,7 @@ func (x *SelectConfigResponse) String() string {
 func (*SelectConfigResponse) ProtoMessage() {}
 
 func (x *SelectConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[79]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4404,7 +4534,7 @@ func (x *SelectConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectConfigResponse.ProtoReflect.Descriptor instead.
 func (*SelectConfigResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{79}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{81}
 }
 
 type GetActiveConfigRequest struct {
@@ -4415,7 +4545,7 @@ type GetActiveConfigRequest struct {
 
 func (x *GetActiveConfigRequest) Reset() {
 	*x = GetActiveConfigRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[80]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4427,7 +4557,7 @@ func (x *GetActiveConfigRequest) String() string {
 func (*GetActiveConfigRequest) ProtoMessage() {}
 
 func (x *GetActiveConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[80]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4440,7 +4570,7 @@ func (x *GetActiveConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActiveConfigRequest.ProtoReflect.Descriptor instead.
 func (*GetActiveConfigRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{80}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{82}
 }
 
 // Empty ids mean nothing was selected from a subscription. config is unset
@@ -4456,7 +4586,7 @@ type GetActiveConfigResponse struct {
 
 func (x *GetActiveConfigResponse) Reset() {
 	*x = GetActiveConfigResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[81]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4468,7 +4598,7 @@ func (x *GetActiveConfigResponse) String() string {
 func (*GetActiveConfigResponse) ProtoMessage() {}
 
 func (x *GetActiveConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[81]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4481,7 +4611,7 @@ func (x *GetActiveConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActiveConfigResponse.ProtoReflect.Descriptor instead.
 func (*GetActiveConfigResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{81}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *GetActiveConfigResponse) GetSubscriptionId() string {
@@ -4519,7 +4649,7 @@ type ReleaseInfo struct {
 
 func (x *ReleaseInfo) Reset() {
 	*x = ReleaseInfo{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[82]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4531,7 +4661,7 @@ func (x *ReleaseInfo) String() string {
 func (*ReleaseInfo) ProtoMessage() {}
 
 func (x *ReleaseInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[82]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4544,7 +4674,7 @@ func (x *ReleaseInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseInfo.ProtoReflect.Descriptor instead.
 func (*ReleaseInfo) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{82}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ReleaseInfo) GetCurrentVersion() string {
@@ -4609,7 +4739,7 @@ type UpdateJob struct {
 
 func (x *UpdateJob) Reset() {
 	*x = UpdateJob{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[83]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4621,7 +4751,7 @@ func (x *UpdateJob) String() string {
 func (*UpdateJob) ProtoMessage() {}
 
 func (x *UpdateJob) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[83]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4634,7 +4764,7 @@ func (x *UpdateJob) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateJob.ProtoReflect.Descriptor instead.
 func (*UpdateJob) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{83}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *UpdateJob) GetTarget() UpdateTarget {
@@ -4715,7 +4845,7 @@ type CheckUpdateRequest struct {
 
 func (x *CheckUpdateRequest) Reset() {
 	*x = CheckUpdateRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[84]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4727,7 +4857,7 @@ func (x *CheckUpdateRequest) String() string {
 func (*CheckUpdateRequest) ProtoMessage() {}
 
 func (x *CheckUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[84]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4740,7 +4870,7 @@ func (x *CheckUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckUpdateRequest.ProtoReflect.Descriptor instead.
 func (*CheckUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{84}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{86}
 }
 
 type CheckUpdateResponse struct {
@@ -4752,7 +4882,7 @@ type CheckUpdateResponse struct {
 
 func (x *CheckUpdateResponse) Reset() {
 	*x = CheckUpdateResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[85]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4764,7 +4894,7 @@ func (x *CheckUpdateResponse) String() string {
 func (*CheckUpdateResponse) ProtoMessage() {}
 
 func (x *CheckUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[85]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4777,7 +4907,7 @@ func (x *CheckUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckUpdateResponse.ProtoReflect.Descriptor instead.
 func (*CheckUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{85}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *CheckUpdateResponse) GetRelease() *ReleaseInfo {
@@ -4794,13 +4924,14 @@ type StartUpdateRequest struct {
 	// The CLI's own binary, so a privileged daemon can update that copy too. Unset when
 	// the caller doesn't know it.
 	ClientBinary  string `protobuf:"bytes,3,opt,name=client_binary,json=clientBinary,proto3" json:"client_binary,omitempty"`
+	Trigger       string `protobuf:"bytes,4,opt,name=trigger,proto3" json:"trigger,omitempty"` // user, background, or api
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StartUpdateRequest) Reset() {
 	*x = StartUpdateRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[86]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4812,7 +4943,7 @@ func (x *StartUpdateRequest) String() string {
 func (*StartUpdateRequest) ProtoMessage() {}
 
 func (x *StartUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[86]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4825,7 +4956,7 @@ func (x *StartUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartUpdateRequest.ProtoReflect.Descriptor instead.
 func (*StartUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{86}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *StartUpdateRequest) GetTarget() UpdateTarget {
@@ -4849,6 +4980,13 @@ func (x *StartUpdateRequest) GetClientBinary() string {
 	return ""
 }
 
+func (x *StartUpdateRequest) GetTrigger() string {
+	if x != nil {
+		return x.Trigger
+	}
+	return ""
+}
+
 type StartUpdateResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Job           *UpdateJob             `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
@@ -4858,7 +4996,7 @@ type StartUpdateResponse struct {
 
 func (x *StartUpdateResponse) Reset() {
 	*x = StartUpdateResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[87]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4870,7 +5008,7 @@ func (x *StartUpdateResponse) String() string {
 func (*StartUpdateResponse) ProtoMessage() {}
 
 func (x *StartUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[87]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4883,7 +5021,7 @@ func (x *StartUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartUpdateResponse.ProtoReflect.Descriptor instead.
 func (*StartUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{87}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *StartUpdateResponse) GetJob() *UpdateJob {
@@ -4902,7 +5040,7 @@ type PauseUpdateRequest struct {
 
 func (x *PauseUpdateRequest) Reset() {
 	*x = PauseUpdateRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[88]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4914,7 +5052,7 @@ func (x *PauseUpdateRequest) String() string {
 func (*PauseUpdateRequest) ProtoMessage() {}
 
 func (x *PauseUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[88]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4927,7 +5065,7 @@ func (x *PauseUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauseUpdateRequest.ProtoReflect.Descriptor instead.
 func (*PauseUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{88}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *PauseUpdateRequest) GetTarget() UpdateTarget {
@@ -4946,7 +5084,7 @@ type PauseUpdateResponse struct {
 
 func (x *PauseUpdateResponse) Reset() {
 	*x = PauseUpdateResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[89]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4958,7 +5096,7 @@ func (x *PauseUpdateResponse) String() string {
 func (*PauseUpdateResponse) ProtoMessage() {}
 
 func (x *PauseUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[89]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4971,7 +5109,7 @@ func (x *PauseUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauseUpdateResponse.ProtoReflect.Descriptor instead.
 func (*PauseUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{89}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *PauseUpdateResponse) GetJob() *UpdateJob {
@@ -4990,7 +5128,7 @@ type ResumeUpdateRequest struct {
 
 func (x *ResumeUpdateRequest) Reset() {
 	*x = ResumeUpdateRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[90]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5002,7 +5140,7 @@ func (x *ResumeUpdateRequest) String() string {
 func (*ResumeUpdateRequest) ProtoMessage() {}
 
 func (x *ResumeUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[90]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5015,7 +5153,7 @@ func (x *ResumeUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeUpdateRequest.ProtoReflect.Descriptor instead.
 func (*ResumeUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{90}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *ResumeUpdateRequest) GetTarget() UpdateTarget {
@@ -5034,7 +5172,7 @@ type ResumeUpdateResponse struct {
 
 func (x *ResumeUpdateResponse) Reset() {
 	*x = ResumeUpdateResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[91]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5046,7 +5184,7 @@ func (x *ResumeUpdateResponse) String() string {
 func (*ResumeUpdateResponse) ProtoMessage() {}
 
 func (x *ResumeUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[91]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5059,7 +5197,7 @@ func (x *ResumeUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeUpdateResponse.ProtoReflect.Descriptor instead.
 func (*ResumeUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{91}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *ResumeUpdateResponse) GetJob() *UpdateJob {
@@ -5078,7 +5216,7 @@ type StopUpdateRequest struct {
 
 func (x *StopUpdateRequest) Reset() {
 	*x = StopUpdateRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[92]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5090,7 +5228,7 @@ func (x *StopUpdateRequest) String() string {
 func (*StopUpdateRequest) ProtoMessage() {}
 
 func (x *StopUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[92]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5103,7 +5241,7 @@ func (x *StopUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopUpdateRequest.ProtoReflect.Descriptor instead.
 func (*StopUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{92}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *StopUpdateRequest) GetTarget() UpdateTarget {
@@ -5122,7 +5260,7 @@ type StopUpdateResponse struct {
 
 func (x *StopUpdateResponse) Reset() {
 	*x = StopUpdateResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[93]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5134,7 +5272,7 @@ func (x *StopUpdateResponse) String() string {
 func (*StopUpdateResponse) ProtoMessage() {}
 
 func (x *StopUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[93]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5147,7 +5285,7 @@ func (x *StopUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopUpdateResponse.ProtoReflect.Descriptor instead.
 func (*StopUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{93}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *StopUpdateResponse) GetJob() *UpdateJob {
@@ -5166,7 +5304,7 @@ type WatchUpdateRequest struct {
 
 func (x *WatchUpdateRequest) Reset() {
 	*x = WatchUpdateRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[94]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5178,7 +5316,7 @@ func (x *WatchUpdateRequest) String() string {
 func (*WatchUpdateRequest) ProtoMessage() {}
 
 func (x *WatchUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[94]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5191,7 +5329,7 @@ func (x *WatchUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchUpdateRequest.ProtoReflect.Descriptor instead.
 func (*WatchUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{94}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *WatchUpdateRequest) GetTarget() UpdateTarget {
@@ -5210,7 +5348,7 @@ type WatchUpdateResponse struct {
 
 func (x *WatchUpdateResponse) Reset() {
 	*x = WatchUpdateResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[95]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5222,7 +5360,7 @@ func (x *WatchUpdateResponse) String() string {
 func (*WatchUpdateResponse) ProtoMessage() {}
 
 func (x *WatchUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[95]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5235,7 +5373,7 @@ func (x *WatchUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchUpdateResponse.ProtoReflect.Descriptor instead.
 func (*WatchUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{95}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *WatchUpdateResponse) GetJob() *UpdateJob {
@@ -5255,7 +5393,7 @@ type GeoCategory struct {
 
 func (x *GeoCategory) Reset() {
 	*x = GeoCategory{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[96]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5267,7 +5405,7 @@ func (x *GeoCategory) String() string {
 func (*GeoCategory) ProtoMessage() {}
 
 func (x *GeoCategory) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[96]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5280,7 +5418,7 @@ func (x *GeoCategory) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GeoCategory.ProtoReflect.Descriptor instead.
 func (*GeoCategory) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{96}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *GeoCategory) GetCode() string {
@@ -5306,7 +5444,7 @@ type ListGeoCategoriesRequest struct {
 
 func (x *ListGeoCategoriesRequest) Reset() {
 	*x = ListGeoCategoriesRequest{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[97]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5318,7 +5456,7 @@ func (x *ListGeoCategoriesRequest) String() string {
 func (*ListGeoCategoriesRequest) ProtoMessage() {}
 
 func (x *ListGeoCategoriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[97]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5331,7 +5469,7 @@ func (x *ListGeoCategoriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGeoCategoriesRequest.ProtoReflect.Descriptor instead.
 func (*ListGeoCategoriesRequest) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{97}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *ListGeoCategoriesRequest) GetKind() GeoKind {
@@ -5350,7 +5488,7 @@ type ListGeoCategoriesResponse struct {
 
 func (x *ListGeoCategoriesResponse) Reset() {
 	*x = ListGeoCategoriesResponse{}
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[98]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5362,7 +5500,7 @@ func (x *ListGeoCategoriesResponse) String() string {
 func (*ListGeoCategoriesResponse) ProtoMessage() {}
 
 func (x *ListGeoCategoriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[98]
+	mi := &file_masir_daemon_v1_daemon_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5375,7 +5513,7 @@ func (x *ListGeoCategoriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGeoCategoriesResponse.ProtoReflect.Descriptor instead.
 func (*ListGeoCategoriesResponse) Descriptor() ([]byte, []int) {
-	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{98}
+	return file_masir_daemon_v1_daemon_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *ListGeoCategoriesResponse) GetCategories() []*GeoCategory {
@@ -5428,7 +5566,7 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x13WatchStatusResponse\x12/\n" +
 	"\x06status\x18\x01 \x01(\v2\x17.masir.daemon.v1.StatusR\x06status\"\x11\n" +
 	"\x0fShutdownRequest\"\x12\n" +
-	"\x10ShutdownResponse\"\x99\x03\n" +
+	"\x10ShutdownResponse\"\xb7\x03\n" +
 	"\bSettings\x12\x14\n" +
 	"\x05power\x18\x01 \x01(\bR\x05power\x12\x10\n" +
 	"\x03tun\x18\x02 \x01(\bR\x03tun\x12&\n" +
@@ -5445,14 +5583,15 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	" \x01(\tR\n" +
 	"tunGateway\x120\n" +
 	"\x14sub_interval_minutes\x18\v \x01(\rR\x12subIntervalMinutes\x12$\n" +
-	"\x0exray_log_level\x18\f \x01(\tR\fxrayLogLevel\"\x14\n" +
+	"\x0exray_log_level\x18\f \x01(\tR\fxrayLogLevel\x12\x1c\n" +
+	"\tanalytics\x18\r \x01(\bR\tanalytics\"\x14\n" +
 	"\x12GetSettingsRequest\"\x83\x01\n" +
 	"\x13GetSettingsResponse\x125\n" +
 	"\bsettings\x18\x01 \x01(\v2\x19.masir.daemon.v1.SettingsR\bsettings\x125\n" +
 	"\bdefaults\x18\x02 \x01(\v2\x19.masir.daemon.v1.SettingsR\bdefaults\"$\n" +
 	"\n" +
 	"StringList\x12\x16\n" +
-	"\x06values\x18\x01 \x03(\tR\x06values\"\x9d\x04\n" +
+	"\x06values\x18\x01 \x03(\tR\x06values\"\xce\x04\n" +
 	"\x15UpdateSettingsRequest\x12+\n" +
 	"\x0falways_on_proxy\x18\x01 \x01(\bH\x00R\ralwaysOnProxy\x88\x01\x01\x12 \n" +
 	"\tallow_lan\x18\x02 \x01(\bH\x01R\ballowLan\x88\x01\x01\x12\"\n" +
@@ -5465,7 +5604,9 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\vtun_gateway\x18\a \x01(\tH\x04R\n" +
 	"tunGateway\x88\x01\x01\x125\n" +
 	"\x14sub_interval_minutes\x18\b \x01(\rH\x05R\x12subIntervalMinutes\x88\x01\x01\x12)\n" +
-	"\x0exray_log_level\x18\t \x01(\tH\x06R\fxrayLogLevel\x88\x01\x01B\x12\n" +
+	"\x0exray_log_level\x18\t \x01(\tH\x06R\fxrayLogLevel\x88\x01\x01\x12!\n" +
+	"\tanalytics\x18\n" +
+	" \x01(\bH\aR\tanalytics\x88\x01\x01B\x12\n" +
 	"\x10_always_on_proxyB\f\n" +
 	"\n" +
 	"_allow_lanB\r\n" +
@@ -5474,7 +5615,9 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\b_doh_dnsB\x0e\n" +
 	"\f_tun_gatewayB\x17\n" +
 	"\x15_sub_interval_minutesB\x11\n" +
-	"\x0f_xray_log_level\"O\n" +
+	"\x0f_xray_log_levelB\f\n" +
+	"\n" +
+	"_analytics\"O\n" +
 	"\x16UpdateSettingsResponse\x125\n" +
 	"\bsettings\x18\x01 \x01(\v2\x19.masir.daemon.v1.SettingsR\bsettings\"!\n" +
 	"\x0fSetPowerRequest\x12\x0e\n" +
@@ -5491,7 +5634,12 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x05lines\x18\x02 \x01(\rR\x05lines\x12\x1b\n" +
 	"\tmin_level\x18\x03 \x01(\tR\bminLevel\"E\n" +
 	"\x12StreamLogsResponse\x12/\n" +
-	"\x05entry\x18\x01 \x01(\v2\x19.masir.daemon.v1.LogEntryR\x05entry\"]\n" +
+	"\x05entry\x18\x01 \x01(\v2\x19.masir.daemon.v1.LogEntryR\x05entry\"w\n" +
+	"\x13CaptureEventRequest\x12\x14\n" +
+	"\x05event\x18\x01 \x01(\tR\x05event\x12'\n" +
+	"\x0fproperties_json\x18\x02 \x01(\tR\x0epropertiesJson\x12!\n" +
+	"\ftimestamp_ms\x18\x03 \x01(\x03R\vtimestampMs\"\x16\n" +
+	"\x14CaptureEventResponse\"]\n" +
 	"\bLogEntry\x12!\n" +
 	"\ftimestamp_ms\x18\x01 \x01(\x03R\vtimestampMs\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
@@ -5654,18 +5802,20 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x19UpdateSubscriptionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"_\n" +
 	"\x1aUpdateSubscriptionResponse\x12A\n" +
-	"\fsubscription\x18\x01 \x01(\v2\x1d.masir.daemon.v1.SubscriptionR\fsubscription\"\x85\x01\n" +
+	"\fsubscription\x18\x01 \x01(\v2\x1d.masir.daemon.v1.SubscriptionR\fsubscription\"\x9d\x01\n" +
 	"\x1eTestSubscriptionLatencyRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1d\n" +
 	"\n" +
 	"config_ids\x18\x02 \x03(\tR\tconfigIds\x12\x1b\n" +
-	"\tprobe_url\x18\x03 \x01(\tR\bprobeUrl\"v\n" +
+	"\tprobe_url\x18\x03 \x01(\tR\bprobeUrl\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"v\n" +
 	"\x1fTestSubscriptionLatencyResponse\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\tR\bconfigId\x126\n" +
-	"\x06result\x18\x02 \x01(\v2\x1e.masir.daemon.v1.LatencyResultR\x06result\"[\n" +
+	"\x06result\x18\x02 \x01(\v2\x1e.masir.daemon.v1.LatencyResultR\x06result\"s\n" +
 	"\x13SelectConfigRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
-	"\tconfig_id\x18\x02 \x01(\tR\bconfigId\"\x16\n" +
+	"\tconfig_id\x18\x02 \x01(\tR\bconfigId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x16\n" +
 	"\x14SelectConfigResponse\"\x18\n" +
 	"\x16GetActiveConfigRequest\"\x9c\x01\n" +
 	"\x17GetActiveConfigResponse\x12'\n" +
@@ -5696,11 +5846,12 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	" \x01(\tR\tstagedDir\"\x14\n" +
 	"\x12CheckUpdateRequest\"M\n" +
 	"\x13CheckUpdateResponse\x126\n" +
-	"\arelease\x18\x01 \x01(\v2\x1c.masir.daemon.v1.ReleaseInfoR\arelease\"\x86\x01\n" +
+	"\arelease\x18\x01 \x01(\v2\x1c.masir.daemon.v1.ReleaseInfoR\arelease\"\xa0\x01\n" +
 	"\x12StartUpdateRequest\x125\n" +
 	"\x06target\x18\x01 \x01(\x0e2\x1d.masir.daemon.v1.UpdateTargetR\x06target\x12\x14\n" +
 	"\x05force\x18\x02 \x01(\bR\x05force\x12#\n" +
-	"\rclient_binary\x18\x03 \x01(\tR\fclientBinary\"C\n" +
+	"\rclient_binary\x18\x03 \x01(\tR\fclientBinary\x12\x18\n" +
+	"\atrigger\x18\x04 \x01(\tR\atrigger\"C\n" +
 	"\x13StartUpdateResponse\x12,\n" +
 	"\x03job\x18\x01 \x01(\v2\x1a.masir.daemon.v1.UpdateJobR\x03job\"K\n" +
 	"\x12PauseUpdateRequest\x125\n" +
@@ -5752,7 +5903,7 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\aGeoKind\x12\x18\n" +
 	"\x14GEO_KIND_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rGEO_KIND_SITE\x10\x01\x12\x0f\n" +
-	"\vGEO_KIND_IP\x10\x022\xa8 \n" +
+	"\vGEO_KIND_IP\x10\x022\x85!\n" +
 	"\rDaemonService\x12a\n" +
 	"\x0eGetXrayVersion\x12&.masir.daemon.v1.GetXrayVersionRequest\x1a'.masir.daemon.v1.GetXrayVersionResponse\x12^\n" +
 	"\rGetXrayConfig\x12%.masir.daemon.v1.GetXrayConfigRequest\x1a&.masir.daemon.v1.GetXrayConfigResponse\x12R\n" +
@@ -5760,7 +5911,8 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\vWatchStatus\x12#.masir.daemon.v1.WatchStatusRequest\x1a$.masir.daemon.v1.WatchStatusResponse0\x01\x12O\n" +
 	"\bShutdown\x12 .masir.daemon.v1.ShutdownRequest\x1a!.masir.daemon.v1.ShutdownResponse\x12W\n" +
 	"\n" +
-	"StreamLogs\x12\".masir.daemon.v1.StreamLogsRequest\x1a#.masir.daemon.v1.StreamLogsResponse0\x01\x12X\n" +
+	"StreamLogs\x12\".masir.daemon.v1.StreamLogsRequest\x1a#.masir.daemon.v1.StreamLogsResponse0\x01\x12[\n" +
+	"\fCaptureEvent\x12$.masir.daemon.v1.CaptureEventRequest\x1a%.masir.daemon.v1.CaptureEventResponse\x12X\n" +
 	"\vTestLatency\x12#.masir.daemon.v1.TestLatencyRequest\x1a$.masir.daemon.v1.TestLatencyResponse\x12j\n" +
 	"\x11CancelLatencyTest\x12).masir.daemon.v1.CancelLatencyTestRequest\x1a*.masir.daemon.v1.CancelLatencyTestResponse\x12X\n" +
 	"\vGetSettings\x12#.masir.daemon.v1.GetSettingsRequest\x1a$.masir.daemon.v1.GetSettingsResponse\x12a\n" +
@@ -5816,7 +5968,7 @@ func file_masir_daemon_v1_daemon_proto_rawDescGZIP() []byte {
 }
 
 var file_masir_daemon_v1_daemon_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_masir_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 99)
+var file_masir_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 101)
 var file_masir_daemon_v1_daemon_proto_goTypes = []any{
 	(Fallback)(0),                           // 0: masir.daemon.v1.Fallback
 	(UpdateTarget)(0),                       // 1: masir.daemon.v1.UpdateTarget
@@ -5843,88 +5995,90 @@ var file_masir_daemon_v1_daemon_proto_goTypes = []any{
 	(*SetTunEnabledResponse)(nil),           // 22: masir.daemon.v1.SetTunEnabledResponse
 	(*StreamLogsRequest)(nil),               // 23: masir.daemon.v1.StreamLogsRequest
 	(*StreamLogsResponse)(nil),              // 24: masir.daemon.v1.StreamLogsResponse
-	(*LogEntry)(nil),                        // 25: masir.daemon.v1.LogEntry
-	(*GetXrayVersionRequest)(nil),           // 26: masir.daemon.v1.GetXrayVersionRequest
-	(*GetXrayVersionResponse)(nil),          // 27: masir.daemon.v1.GetXrayVersionResponse
-	(*GetXrayConfigRequest)(nil),            // 28: masir.daemon.v1.GetXrayConfigRequest
-	(*GetXrayConfigResponse)(nil),           // 29: masir.daemon.v1.GetXrayConfigResponse
-	(*TestLatencyRequest)(nil),              // 30: masir.daemon.v1.TestLatencyRequest
-	(*TestLatencyResponse)(nil),             // 31: masir.daemon.v1.TestLatencyResponse
-	(*CancelLatencyTestRequest)(nil),        // 32: masir.daemon.v1.CancelLatencyTestRequest
-	(*CancelLatencyTestResponse)(nil),       // 33: masir.daemon.v1.CancelLatencyTestResponse
-	(*RoutingRule)(nil),                     // 34: masir.daemon.v1.RoutingRule
-	(*ListRoutingRulesRequest)(nil),         // 35: masir.daemon.v1.ListRoutingRulesRequest
-	(*ListRoutingRulesResponse)(nil),        // 36: masir.daemon.v1.ListRoutingRulesResponse
-	(*AddRoutingRequest)(nil),               // 37: masir.daemon.v1.AddRoutingRequest
-	(*AddRoutingResponse)(nil),              // 38: masir.daemon.v1.AddRoutingResponse
-	(*RemoveRoutingRequest)(nil),            // 39: masir.daemon.v1.RemoveRoutingRequest
-	(*RemoveRoutingResponse)(nil),           // 40: masir.daemon.v1.RemoveRoutingResponse
-	(*AlterRoutingRequest)(nil),             // 41: masir.daemon.v1.AlterRoutingRequest
-	(*AlterRoutingResponse)(nil),            // 42: masir.daemon.v1.AlterRoutingResponse
-	(*MoveRoutingRequest)(nil),              // 43: masir.daemon.v1.MoveRoutingRequest
-	(*MoveRoutingResponse)(nil),             // 44: masir.daemon.v1.MoveRoutingResponse
-	(*TestRoutingRequest)(nil),              // 45: masir.daemon.v1.TestRoutingRequest
-	(*TestRoutingResponse)(nil),             // 46: masir.daemon.v1.TestRoutingResponse
-	(*TaggedConfig)(nil),                    // 47: masir.daemon.v1.TaggedConfig
-	(*ListInboundsRequest)(nil),             // 48: masir.daemon.v1.ListInboundsRequest
-	(*ListInboundsResponse)(nil),            // 49: masir.daemon.v1.ListInboundsResponse
-	(*ListOutboundsRequest)(nil),            // 50: masir.daemon.v1.ListOutboundsRequest
-	(*ListOutboundsResponse)(nil),           // 51: masir.daemon.v1.ListOutboundsResponse
-	(*AddInboundRequest)(nil),               // 52: masir.daemon.v1.AddInboundRequest
-	(*AddInboundResponse)(nil),              // 53: masir.daemon.v1.AddInboundResponse
-	(*RemoveInboundRequest)(nil),            // 54: masir.daemon.v1.RemoveInboundRequest
-	(*RemoveInboundResponse)(nil),           // 55: masir.daemon.v1.RemoveInboundResponse
-	(*AlterInboundRequest)(nil),             // 56: masir.daemon.v1.AlterInboundRequest
-	(*AlterInboundResponse)(nil),            // 57: masir.daemon.v1.AlterInboundResponse
-	(*AddOutboundRequest)(nil),              // 58: masir.daemon.v1.AddOutboundRequest
-	(*AddOutboundResponse)(nil),             // 59: masir.daemon.v1.AddOutboundResponse
-	(*RemoveOutboundRequest)(nil),           // 60: masir.daemon.v1.RemoveOutboundRequest
-	(*RemoveOutboundResponse)(nil),          // 61: masir.daemon.v1.RemoveOutboundResponse
-	(*AlterOutboundRequest)(nil),            // 62: masir.daemon.v1.AlterOutboundRequest
-	(*AlterOutboundResponse)(nil),           // 63: masir.daemon.v1.AlterOutboundResponse
-	(*Subscription)(nil),                    // 64: masir.daemon.v1.Subscription
-	(*Usage)(nil),                           // 65: masir.daemon.v1.Usage
-	(*SubscriptionConfig)(nil),              // 66: masir.daemon.v1.SubscriptionConfig
-	(*LatencyResult)(nil),                   // 67: masir.daemon.v1.LatencyResult
-	(*ListSubscriptionsRequest)(nil),        // 68: masir.daemon.v1.ListSubscriptionsRequest
-	(*ListSubscriptionsResponse)(nil),       // 69: masir.daemon.v1.ListSubscriptionsResponse
-	(*GetSubscriptionRequest)(nil),          // 70: masir.daemon.v1.GetSubscriptionRequest
-	(*GetSubscriptionResponse)(nil),         // 71: masir.daemon.v1.GetSubscriptionResponse
-	(*AddSubscriptionRequest)(nil),          // 72: masir.daemon.v1.AddSubscriptionRequest
-	(*AddSubscriptionResponse)(nil),         // 73: masir.daemon.v1.AddSubscriptionResponse
-	(*AlterSubscriptionRequest)(nil),        // 74: masir.daemon.v1.AlterSubscriptionRequest
-	(*AlterSubscriptionResponse)(nil),       // 75: masir.daemon.v1.AlterSubscriptionResponse
-	(*RemoveSubscriptionRequest)(nil),       // 76: masir.daemon.v1.RemoveSubscriptionRequest
-	(*RemoveSubscriptionResponse)(nil),      // 77: masir.daemon.v1.RemoveSubscriptionResponse
-	(*UpdateSubscriptionRequest)(nil),       // 78: masir.daemon.v1.UpdateSubscriptionRequest
-	(*UpdateSubscriptionResponse)(nil),      // 79: masir.daemon.v1.UpdateSubscriptionResponse
-	(*TestSubscriptionLatencyRequest)(nil),  // 80: masir.daemon.v1.TestSubscriptionLatencyRequest
-	(*TestSubscriptionLatencyResponse)(nil), // 81: masir.daemon.v1.TestSubscriptionLatencyResponse
-	(*SelectConfigRequest)(nil),             // 82: masir.daemon.v1.SelectConfigRequest
-	(*SelectConfigResponse)(nil),            // 83: masir.daemon.v1.SelectConfigResponse
-	(*GetActiveConfigRequest)(nil),          // 84: masir.daemon.v1.GetActiveConfigRequest
-	(*GetActiveConfigResponse)(nil),         // 85: masir.daemon.v1.GetActiveConfigResponse
-	(*ReleaseInfo)(nil),                     // 86: masir.daemon.v1.ReleaseInfo
-	(*UpdateJob)(nil),                       // 87: masir.daemon.v1.UpdateJob
-	(*CheckUpdateRequest)(nil),              // 88: masir.daemon.v1.CheckUpdateRequest
-	(*CheckUpdateResponse)(nil),             // 89: masir.daemon.v1.CheckUpdateResponse
-	(*StartUpdateRequest)(nil),              // 90: masir.daemon.v1.StartUpdateRequest
-	(*StartUpdateResponse)(nil),             // 91: masir.daemon.v1.StartUpdateResponse
-	(*PauseUpdateRequest)(nil),              // 92: masir.daemon.v1.PauseUpdateRequest
-	(*PauseUpdateResponse)(nil),             // 93: masir.daemon.v1.PauseUpdateResponse
-	(*ResumeUpdateRequest)(nil),             // 94: masir.daemon.v1.ResumeUpdateRequest
-	(*ResumeUpdateResponse)(nil),            // 95: masir.daemon.v1.ResumeUpdateResponse
-	(*StopUpdateRequest)(nil),               // 96: masir.daemon.v1.StopUpdateRequest
-	(*StopUpdateResponse)(nil),              // 97: masir.daemon.v1.StopUpdateResponse
-	(*WatchUpdateRequest)(nil),              // 98: masir.daemon.v1.WatchUpdateRequest
-	(*WatchUpdateResponse)(nil),             // 99: masir.daemon.v1.WatchUpdateResponse
-	(*GeoCategory)(nil),                     // 100: masir.daemon.v1.GeoCategory
-	(*ListGeoCategoriesRequest)(nil),        // 101: masir.daemon.v1.ListGeoCategoriesRequest
-	(*ListGeoCategoriesResponse)(nil),       // 102: masir.daemon.v1.ListGeoCategoriesResponse
+	(*CaptureEventRequest)(nil),             // 25: masir.daemon.v1.CaptureEventRequest
+	(*CaptureEventResponse)(nil),            // 26: masir.daemon.v1.CaptureEventResponse
+	(*LogEntry)(nil),                        // 27: masir.daemon.v1.LogEntry
+	(*GetXrayVersionRequest)(nil),           // 28: masir.daemon.v1.GetXrayVersionRequest
+	(*GetXrayVersionResponse)(nil),          // 29: masir.daemon.v1.GetXrayVersionResponse
+	(*GetXrayConfigRequest)(nil),            // 30: masir.daemon.v1.GetXrayConfigRequest
+	(*GetXrayConfigResponse)(nil),           // 31: masir.daemon.v1.GetXrayConfigResponse
+	(*TestLatencyRequest)(nil),              // 32: masir.daemon.v1.TestLatencyRequest
+	(*TestLatencyResponse)(nil),             // 33: masir.daemon.v1.TestLatencyResponse
+	(*CancelLatencyTestRequest)(nil),        // 34: masir.daemon.v1.CancelLatencyTestRequest
+	(*CancelLatencyTestResponse)(nil),       // 35: masir.daemon.v1.CancelLatencyTestResponse
+	(*RoutingRule)(nil),                     // 36: masir.daemon.v1.RoutingRule
+	(*ListRoutingRulesRequest)(nil),         // 37: masir.daemon.v1.ListRoutingRulesRequest
+	(*ListRoutingRulesResponse)(nil),        // 38: masir.daemon.v1.ListRoutingRulesResponse
+	(*AddRoutingRequest)(nil),               // 39: masir.daemon.v1.AddRoutingRequest
+	(*AddRoutingResponse)(nil),              // 40: masir.daemon.v1.AddRoutingResponse
+	(*RemoveRoutingRequest)(nil),            // 41: masir.daemon.v1.RemoveRoutingRequest
+	(*RemoveRoutingResponse)(nil),           // 42: masir.daemon.v1.RemoveRoutingResponse
+	(*AlterRoutingRequest)(nil),             // 43: masir.daemon.v1.AlterRoutingRequest
+	(*AlterRoutingResponse)(nil),            // 44: masir.daemon.v1.AlterRoutingResponse
+	(*MoveRoutingRequest)(nil),              // 45: masir.daemon.v1.MoveRoutingRequest
+	(*MoveRoutingResponse)(nil),             // 46: masir.daemon.v1.MoveRoutingResponse
+	(*TestRoutingRequest)(nil),              // 47: masir.daemon.v1.TestRoutingRequest
+	(*TestRoutingResponse)(nil),             // 48: masir.daemon.v1.TestRoutingResponse
+	(*TaggedConfig)(nil),                    // 49: masir.daemon.v1.TaggedConfig
+	(*ListInboundsRequest)(nil),             // 50: masir.daemon.v1.ListInboundsRequest
+	(*ListInboundsResponse)(nil),            // 51: masir.daemon.v1.ListInboundsResponse
+	(*ListOutboundsRequest)(nil),            // 52: masir.daemon.v1.ListOutboundsRequest
+	(*ListOutboundsResponse)(nil),           // 53: masir.daemon.v1.ListOutboundsResponse
+	(*AddInboundRequest)(nil),               // 54: masir.daemon.v1.AddInboundRequest
+	(*AddInboundResponse)(nil),              // 55: masir.daemon.v1.AddInboundResponse
+	(*RemoveInboundRequest)(nil),            // 56: masir.daemon.v1.RemoveInboundRequest
+	(*RemoveInboundResponse)(nil),           // 57: masir.daemon.v1.RemoveInboundResponse
+	(*AlterInboundRequest)(nil),             // 58: masir.daemon.v1.AlterInboundRequest
+	(*AlterInboundResponse)(nil),            // 59: masir.daemon.v1.AlterInboundResponse
+	(*AddOutboundRequest)(nil),              // 60: masir.daemon.v1.AddOutboundRequest
+	(*AddOutboundResponse)(nil),             // 61: masir.daemon.v1.AddOutboundResponse
+	(*RemoveOutboundRequest)(nil),           // 62: masir.daemon.v1.RemoveOutboundRequest
+	(*RemoveOutboundResponse)(nil),          // 63: masir.daemon.v1.RemoveOutboundResponse
+	(*AlterOutboundRequest)(nil),            // 64: masir.daemon.v1.AlterOutboundRequest
+	(*AlterOutboundResponse)(nil),           // 65: masir.daemon.v1.AlterOutboundResponse
+	(*Subscription)(nil),                    // 66: masir.daemon.v1.Subscription
+	(*Usage)(nil),                           // 67: masir.daemon.v1.Usage
+	(*SubscriptionConfig)(nil),              // 68: masir.daemon.v1.SubscriptionConfig
+	(*LatencyResult)(nil),                   // 69: masir.daemon.v1.LatencyResult
+	(*ListSubscriptionsRequest)(nil),        // 70: masir.daemon.v1.ListSubscriptionsRequest
+	(*ListSubscriptionsResponse)(nil),       // 71: masir.daemon.v1.ListSubscriptionsResponse
+	(*GetSubscriptionRequest)(nil),          // 72: masir.daemon.v1.GetSubscriptionRequest
+	(*GetSubscriptionResponse)(nil),         // 73: masir.daemon.v1.GetSubscriptionResponse
+	(*AddSubscriptionRequest)(nil),          // 74: masir.daemon.v1.AddSubscriptionRequest
+	(*AddSubscriptionResponse)(nil),         // 75: masir.daemon.v1.AddSubscriptionResponse
+	(*AlterSubscriptionRequest)(nil),        // 76: masir.daemon.v1.AlterSubscriptionRequest
+	(*AlterSubscriptionResponse)(nil),       // 77: masir.daemon.v1.AlterSubscriptionResponse
+	(*RemoveSubscriptionRequest)(nil),       // 78: masir.daemon.v1.RemoveSubscriptionRequest
+	(*RemoveSubscriptionResponse)(nil),      // 79: masir.daemon.v1.RemoveSubscriptionResponse
+	(*UpdateSubscriptionRequest)(nil),       // 80: masir.daemon.v1.UpdateSubscriptionRequest
+	(*UpdateSubscriptionResponse)(nil),      // 81: masir.daemon.v1.UpdateSubscriptionResponse
+	(*TestSubscriptionLatencyRequest)(nil),  // 82: masir.daemon.v1.TestSubscriptionLatencyRequest
+	(*TestSubscriptionLatencyResponse)(nil), // 83: masir.daemon.v1.TestSubscriptionLatencyResponse
+	(*SelectConfigRequest)(nil),             // 84: masir.daemon.v1.SelectConfigRequest
+	(*SelectConfigResponse)(nil),            // 85: masir.daemon.v1.SelectConfigResponse
+	(*GetActiveConfigRequest)(nil),          // 86: masir.daemon.v1.GetActiveConfigRequest
+	(*GetActiveConfigResponse)(nil),         // 87: masir.daemon.v1.GetActiveConfigResponse
+	(*ReleaseInfo)(nil),                     // 88: masir.daemon.v1.ReleaseInfo
+	(*UpdateJob)(nil),                       // 89: masir.daemon.v1.UpdateJob
+	(*CheckUpdateRequest)(nil),              // 90: masir.daemon.v1.CheckUpdateRequest
+	(*CheckUpdateResponse)(nil),             // 91: masir.daemon.v1.CheckUpdateResponse
+	(*StartUpdateRequest)(nil),              // 92: masir.daemon.v1.StartUpdateRequest
+	(*StartUpdateResponse)(nil),             // 93: masir.daemon.v1.StartUpdateResponse
+	(*PauseUpdateRequest)(nil),              // 94: masir.daemon.v1.PauseUpdateRequest
+	(*PauseUpdateResponse)(nil),             // 95: masir.daemon.v1.PauseUpdateResponse
+	(*ResumeUpdateRequest)(nil),             // 96: masir.daemon.v1.ResumeUpdateRequest
+	(*ResumeUpdateResponse)(nil),            // 97: masir.daemon.v1.ResumeUpdateResponse
+	(*StopUpdateRequest)(nil),               // 98: masir.daemon.v1.StopUpdateRequest
+	(*StopUpdateResponse)(nil),              // 99: masir.daemon.v1.StopUpdateResponse
+	(*WatchUpdateRequest)(nil),              // 100: masir.daemon.v1.WatchUpdateRequest
+	(*WatchUpdateResponse)(nil),             // 101: masir.daemon.v1.WatchUpdateResponse
+	(*GeoCategory)(nil),                     // 102: masir.daemon.v1.GeoCategory
+	(*ListGeoCategoriesRequest)(nil),        // 103: masir.daemon.v1.ListGeoCategoriesRequest
+	(*ListGeoCategoriesResponse)(nil),       // 104: masir.daemon.v1.ListGeoCategoriesResponse
 }
 var file_masir_daemon_v1_daemon_proto_depIdxs = []int32{
 	11,  // 0: masir.daemon.v1.Status.settings:type_name -> masir.daemon.v1.Settings
-	86,  // 1: masir.daemon.v1.Status.latest_release:type_name -> masir.daemon.v1.ReleaseInfo
+	88,  // 1: masir.daemon.v1.Status.latest_release:type_name -> masir.daemon.v1.ReleaseInfo
 	4,   // 2: masir.daemon.v1.GetStatusResponse.status:type_name -> masir.daemon.v1.Status
 	4,   // 3: masir.daemon.v1.WatchStatusResponse.status:type_name -> masir.daemon.v1.Status
 	0,   // 4: masir.daemon.v1.Settings.fallback:type_name -> masir.daemon.v1.Fallback
@@ -5934,123 +6088,125 @@ var file_masir_daemon_v1_daemon_proto_depIdxs = []int32{
 	14,  // 8: masir.daemon.v1.UpdateSettingsRequest.tun_dns:type_name -> masir.daemon.v1.StringList
 	11,  // 9: masir.daemon.v1.UpdateSettingsResponse.settings:type_name -> masir.daemon.v1.Settings
 	0,   // 10: masir.daemon.v1.SetFallbackRequest.fallback:type_name -> masir.daemon.v1.Fallback
-	25,  // 11: masir.daemon.v1.StreamLogsResponse.entry:type_name -> masir.daemon.v1.LogEntry
-	34,  // 12: masir.daemon.v1.ListRoutingRulesResponse.rules:type_name -> masir.daemon.v1.RoutingRule
-	47,  // 13: masir.daemon.v1.ListInboundsResponse.inbounds:type_name -> masir.daemon.v1.TaggedConfig
-	47,  // 14: masir.daemon.v1.ListOutboundsResponse.outbounds:type_name -> masir.daemon.v1.TaggedConfig
-	65,  // 15: masir.daemon.v1.Subscription.usage:type_name -> masir.daemon.v1.Usage
-	67,  // 16: masir.daemon.v1.SubscriptionConfig.latency:type_name -> masir.daemon.v1.LatencyResult
-	64,  // 17: masir.daemon.v1.ListSubscriptionsResponse.subscriptions:type_name -> masir.daemon.v1.Subscription
-	64,  // 18: masir.daemon.v1.GetSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
-	66,  // 19: masir.daemon.v1.GetSubscriptionResponse.configs:type_name -> masir.daemon.v1.SubscriptionConfig
-	64,  // 20: masir.daemon.v1.AddSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
-	64,  // 21: masir.daemon.v1.AlterSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
-	64,  // 22: masir.daemon.v1.UpdateSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
-	67,  // 23: masir.daemon.v1.TestSubscriptionLatencyResponse.result:type_name -> masir.daemon.v1.LatencyResult
-	66,  // 24: masir.daemon.v1.GetActiveConfigResponse.config:type_name -> masir.daemon.v1.SubscriptionConfig
+	27,  // 11: masir.daemon.v1.StreamLogsResponse.entry:type_name -> masir.daemon.v1.LogEntry
+	36,  // 12: masir.daemon.v1.ListRoutingRulesResponse.rules:type_name -> masir.daemon.v1.RoutingRule
+	49,  // 13: masir.daemon.v1.ListInboundsResponse.inbounds:type_name -> masir.daemon.v1.TaggedConfig
+	49,  // 14: masir.daemon.v1.ListOutboundsResponse.outbounds:type_name -> masir.daemon.v1.TaggedConfig
+	67,  // 15: masir.daemon.v1.Subscription.usage:type_name -> masir.daemon.v1.Usage
+	69,  // 16: masir.daemon.v1.SubscriptionConfig.latency:type_name -> masir.daemon.v1.LatencyResult
+	66,  // 17: masir.daemon.v1.ListSubscriptionsResponse.subscriptions:type_name -> masir.daemon.v1.Subscription
+	66,  // 18: masir.daemon.v1.GetSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	68,  // 19: masir.daemon.v1.GetSubscriptionResponse.configs:type_name -> masir.daemon.v1.SubscriptionConfig
+	66,  // 20: masir.daemon.v1.AddSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	66,  // 21: masir.daemon.v1.AlterSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	66,  // 22: masir.daemon.v1.UpdateSubscriptionResponse.subscription:type_name -> masir.daemon.v1.Subscription
+	69,  // 23: masir.daemon.v1.TestSubscriptionLatencyResponse.result:type_name -> masir.daemon.v1.LatencyResult
+	68,  // 24: masir.daemon.v1.GetActiveConfigResponse.config:type_name -> masir.daemon.v1.SubscriptionConfig
 	1,   // 25: masir.daemon.v1.UpdateJob.target:type_name -> masir.daemon.v1.UpdateTarget
 	2,   // 26: masir.daemon.v1.UpdateJob.state:type_name -> masir.daemon.v1.UpdateState
-	86,  // 27: masir.daemon.v1.CheckUpdateResponse.release:type_name -> masir.daemon.v1.ReleaseInfo
+	88,  // 27: masir.daemon.v1.CheckUpdateResponse.release:type_name -> masir.daemon.v1.ReleaseInfo
 	1,   // 28: masir.daemon.v1.StartUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
-	87,  // 29: masir.daemon.v1.StartUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	89,  // 29: masir.daemon.v1.StartUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
 	1,   // 30: masir.daemon.v1.PauseUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
-	87,  // 31: masir.daemon.v1.PauseUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	89,  // 31: masir.daemon.v1.PauseUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
 	1,   // 32: masir.daemon.v1.ResumeUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
-	87,  // 33: masir.daemon.v1.ResumeUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	89,  // 33: masir.daemon.v1.ResumeUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
 	1,   // 34: masir.daemon.v1.StopUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
-	87,  // 35: masir.daemon.v1.StopUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	89,  // 35: masir.daemon.v1.StopUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
 	1,   // 36: masir.daemon.v1.WatchUpdateRequest.target:type_name -> masir.daemon.v1.UpdateTarget
-	87,  // 37: masir.daemon.v1.WatchUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
+	89,  // 37: masir.daemon.v1.WatchUpdateResponse.job:type_name -> masir.daemon.v1.UpdateJob
 	3,   // 38: masir.daemon.v1.ListGeoCategoriesRequest.kind:type_name -> masir.daemon.v1.GeoKind
-	100, // 39: masir.daemon.v1.ListGeoCategoriesResponse.categories:type_name -> masir.daemon.v1.GeoCategory
-	26,  // 40: masir.daemon.v1.DaemonService.GetXrayVersion:input_type -> masir.daemon.v1.GetXrayVersionRequest
-	28,  // 41: masir.daemon.v1.DaemonService.GetXrayConfig:input_type -> masir.daemon.v1.GetXrayConfigRequest
+	102, // 39: masir.daemon.v1.ListGeoCategoriesResponse.categories:type_name -> masir.daemon.v1.GeoCategory
+	28,  // 40: masir.daemon.v1.DaemonService.GetXrayVersion:input_type -> masir.daemon.v1.GetXrayVersionRequest
+	30,  // 41: masir.daemon.v1.DaemonService.GetXrayConfig:input_type -> masir.daemon.v1.GetXrayConfigRequest
 	5,   // 42: masir.daemon.v1.DaemonService.GetStatus:input_type -> masir.daemon.v1.GetStatusRequest
 	7,   // 43: masir.daemon.v1.DaemonService.WatchStatus:input_type -> masir.daemon.v1.WatchStatusRequest
 	9,   // 44: masir.daemon.v1.DaemonService.Shutdown:input_type -> masir.daemon.v1.ShutdownRequest
 	23,  // 45: masir.daemon.v1.DaemonService.StreamLogs:input_type -> masir.daemon.v1.StreamLogsRequest
-	30,  // 46: masir.daemon.v1.DaemonService.TestLatency:input_type -> masir.daemon.v1.TestLatencyRequest
-	32,  // 47: masir.daemon.v1.DaemonService.CancelLatencyTest:input_type -> masir.daemon.v1.CancelLatencyTestRequest
-	12,  // 48: masir.daemon.v1.DaemonService.GetSettings:input_type -> masir.daemon.v1.GetSettingsRequest
-	15,  // 49: masir.daemon.v1.DaemonService.UpdateSettings:input_type -> masir.daemon.v1.UpdateSettingsRequest
-	17,  // 50: masir.daemon.v1.DaemonService.SetPower:input_type -> masir.daemon.v1.SetPowerRequest
-	19,  // 51: masir.daemon.v1.DaemonService.SetFallback:input_type -> masir.daemon.v1.SetFallbackRequest
-	21,  // 52: masir.daemon.v1.DaemonService.SetTunEnabled:input_type -> masir.daemon.v1.SetTunEnabledRequest
-	35,  // 53: masir.daemon.v1.DaemonService.ListRoutingRules:input_type -> masir.daemon.v1.ListRoutingRulesRequest
-	37,  // 54: masir.daemon.v1.DaemonService.AddRouting:input_type -> masir.daemon.v1.AddRoutingRequest
-	39,  // 55: masir.daemon.v1.DaemonService.RemoveRouting:input_type -> masir.daemon.v1.RemoveRoutingRequest
-	41,  // 56: masir.daemon.v1.DaemonService.AlterRouting:input_type -> masir.daemon.v1.AlterRoutingRequest
-	43,  // 57: masir.daemon.v1.DaemonService.MoveRouting:input_type -> masir.daemon.v1.MoveRoutingRequest
-	45,  // 58: masir.daemon.v1.DaemonService.TestRouting:input_type -> masir.daemon.v1.TestRoutingRequest
-	48,  // 59: masir.daemon.v1.DaemonService.ListInbounds:input_type -> masir.daemon.v1.ListInboundsRequest
-	52,  // 60: masir.daemon.v1.DaemonService.AddInbound:input_type -> masir.daemon.v1.AddInboundRequest
-	54,  // 61: masir.daemon.v1.DaemonService.RemoveInbound:input_type -> masir.daemon.v1.RemoveInboundRequest
-	56,  // 62: masir.daemon.v1.DaemonService.AlterInbound:input_type -> masir.daemon.v1.AlterInboundRequest
-	50,  // 63: masir.daemon.v1.DaemonService.ListOutbounds:input_type -> masir.daemon.v1.ListOutboundsRequest
-	58,  // 64: masir.daemon.v1.DaemonService.AddOutbound:input_type -> masir.daemon.v1.AddOutboundRequest
-	60,  // 65: masir.daemon.v1.DaemonService.RemoveOutbound:input_type -> masir.daemon.v1.RemoveOutboundRequest
-	62,  // 66: masir.daemon.v1.DaemonService.AlterOutbound:input_type -> masir.daemon.v1.AlterOutboundRequest
-	68,  // 67: masir.daemon.v1.DaemonService.ListSubscriptions:input_type -> masir.daemon.v1.ListSubscriptionsRequest
-	70,  // 68: masir.daemon.v1.DaemonService.GetSubscription:input_type -> masir.daemon.v1.GetSubscriptionRequest
-	72,  // 69: masir.daemon.v1.DaemonService.AddSubscription:input_type -> masir.daemon.v1.AddSubscriptionRequest
-	74,  // 70: masir.daemon.v1.DaemonService.AlterSubscription:input_type -> masir.daemon.v1.AlterSubscriptionRequest
-	76,  // 71: masir.daemon.v1.DaemonService.RemoveSubscription:input_type -> masir.daemon.v1.RemoveSubscriptionRequest
-	78,  // 72: masir.daemon.v1.DaemonService.UpdateSubscription:input_type -> masir.daemon.v1.UpdateSubscriptionRequest
-	80,  // 73: masir.daemon.v1.DaemonService.TestSubscriptionLatency:input_type -> masir.daemon.v1.TestSubscriptionLatencyRequest
-	82,  // 74: masir.daemon.v1.DaemonService.SelectConfig:input_type -> masir.daemon.v1.SelectConfigRequest
-	84,  // 75: masir.daemon.v1.DaemonService.GetActiveConfig:input_type -> masir.daemon.v1.GetActiveConfigRequest
-	88,  // 76: masir.daemon.v1.DaemonService.CheckUpdate:input_type -> masir.daemon.v1.CheckUpdateRequest
-	90,  // 77: masir.daemon.v1.DaemonService.StartUpdate:input_type -> masir.daemon.v1.StartUpdateRequest
-	92,  // 78: masir.daemon.v1.DaemonService.PauseUpdate:input_type -> masir.daemon.v1.PauseUpdateRequest
-	94,  // 79: masir.daemon.v1.DaemonService.ResumeUpdate:input_type -> masir.daemon.v1.ResumeUpdateRequest
-	96,  // 80: masir.daemon.v1.DaemonService.StopUpdate:input_type -> masir.daemon.v1.StopUpdateRequest
-	98,  // 81: masir.daemon.v1.DaemonService.WatchUpdate:input_type -> masir.daemon.v1.WatchUpdateRequest
-	101, // 82: masir.daemon.v1.DaemonService.ListGeoCategories:input_type -> masir.daemon.v1.ListGeoCategoriesRequest
-	27,  // 83: masir.daemon.v1.DaemonService.GetXrayVersion:output_type -> masir.daemon.v1.GetXrayVersionResponse
-	29,  // 84: masir.daemon.v1.DaemonService.GetXrayConfig:output_type -> masir.daemon.v1.GetXrayConfigResponse
-	6,   // 85: masir.daemon.v1.DaemonService.GetStatus:output_type -> masir.daemon.v1.GetStatusResponse
-	8,   // 86: masir.daemon.v1.DaemonService.WatchStatus:output_type -> masir.daemon.v1.WatchStatusResponse
-	10,  // 87: masir.daemon.v1.DaemonService.Shutdown:output_type -> masir.daemon.v1.ShutdownResponse
-	24,  // 88: masir.daemon.v1.DaemonService.StreamLogs:output_type -> masir.daemon.v1.StreamLogsResponse
-	31,  // 89: masir.daemon.v1.DaemonService.TestLatency:output_type -> masir.daemon.v1.TestLatencyResponse
-	33,  // 90: masir.daemon.v1.DaemonService.CancelLatencyTest:output_type -> masir.daemon.v1.CancelLatencyTestResponse
-	13,  // 91: masir.daemon.v1.DaemonService.GetSettings:output_type -> masir.daemon.v1.GetSettingsResponse
-	16,  // 92: masir.daemon.v1.DaemonService.UpdateSettings:output_type -> masir.daemon.v1.UpdateSettingsResponse
-	18,  // 93: masir.daemon.v1.DaemonService.SetPower:output_type -> masir.daemon.v1.SetPowerResponse
-	20,  // 94: masir.daemon.v1.DaemonService.SetFallback:output_type -> masir.daemon.v1.SetFallbackResponse
-	22,  // 95: masir.daemon.v1.DaemonService.SetTunEnabled:output_type -> masir.daemon.v1.SetTunEnabledResponse
-	36,  // 96: masir.daemon.v1.DaemonService.ListRoutingRules:output_type -> masir.daemon.v1.ListRoutingRulesResponse
-	38,  // 97: masir.daemon.v1.DaemonService.AddRouting:output_type -> masir.daemon.v1.AddRoutingResponse
-	40,  // 98: masir.daemon.v1.DaemonService.RemoveRouting:output_type -> masir.daemon.v1.RemoveRoutingResponse
-	42,  // 99: masir.daemon.v1.DaemonService.AlterRouting:output_type -> masir.daemon.v1.AlterRoutingResponse
-	44,  // 100: masir.daemon.v1.DaemonService.MoveRouting:output_type -> masir.daemon.v1.MoveRoutingResponse
-	46,  // 101: masir.daemon.v1.DaemonService.TestRouting:output_type -> masir.daemon.v1.TestRoutingResponse
-	49,  // 102: masir.daemon.v1.DaemonService.ListInbounds:output_type -> masir.daemon.v1.ListInboundsResponse
-	53,  // 103: masir.daemon.v1.DaemonService.AddInbound:output_type -> masir.daemon.v1.AddInboundResponse
-	55,  // 104: masir.daemon.v1.DaemonService.RemoveInbound:output_type -> masir.daemon.v1.RemoveInboundResponse
-	57,  // 105: masir.daemon.v1.DaemonService.AlterInbound:output_type -> masir.daemon.v1.AlterInboundResponse
-	51,  // 106: masir.daemon.v1.DaemonService.ListOutbounds:output_type -> masir.daemon.v1.ListOutboundsResponse
-	59,  // 107: masir.daemon.v1.DaemonService.AddOutbound:output_type -> masir.daemon.v1.AddOutboundResponse
-	61,  // 108: masir.daemon.v1.DaemonService.RemoveOutbound:output_type -> masir.daemon.v1.RemoveOutboundResponse
-	63,  // 109: masir.daemon.v1.DaemonService.AlterOutbound:output_type -> masir.daemon.v1.AlterOutboundResponse
-	69,  // 110: masir.daemon.v1.DaemonService.ListSubscriptions:output_type -> masir.daemon.v1.ListSubscriptionsResponse
-	71,  // 111: masir.daemon.v1.DaemonService.GetSubscription:output_type -> masir.daemon.v1.GetSubscriptionResponse
-	73,  // 112: masir.daemon.v1.DaemonService.AddSubscription:output_type -> masir.daemon.v1.AddSubscriptionResponse
-	75,  // 113: masir.daemon.v1.DaemonService.AlterSubscription:output_type -> masir.daemon.v1.AlterSubscriptionResponse
-	77,  // 114: masir.daemon.v1.DaemonService.RemoveSubscription:output_type -> masir.daemon.v1.RemoveSubscriptionResponse
-	79,  // 115: masir.daemon.v1.DaemonService.UpdateSubscription:output_type -> masir.daemon.v1.UpdateSubscriptionResponse
-	81,  // 116: masir.daemon.v1.DaemonService.TestSubscriptionLatency:output_type -> masir.daemon.v1.TestSubscriptionLatencyResponse
-	83,  // 117: masir.daemon.v1.DaemonService.SelectConfig:output_type -> masir.daemon.v1.SelectConfigResponse
-	85,  // 118: masir.daemon.v1.DaemonService.GetActiveConfig:output_type -> masir.daemon.v1.GetActiveConfigResponse
-	89,  // 119: masir.daemon.v1.DaemonService.CheckUpdate:output_type -> masir.daemon.v1.CheckUpdateResponse
-	91,  // 120: masir.daemon.v1.DaemonService.StartUpdate:output_type -> masir.daemon.v1.StartUpdateResponse
-	93,  // 121: masir.daemon.v1.DaemonService.PauseUpdate:output_type -> masir.daemon.v1.PauseUpdateResponse
-	95,  // 122: masir.daemon.v1.DaemonService.ResumeUpdate:output_type -> masir.daemon.v1.ResumeUpdateResponse
-	97,  // 123: masir.daemon.v1.DaemonService.StopUpdate:output_type -> masir.daemon.v1.StopUpdateResponse
-	99,  // 124: masir.daemon.v1.DaemonService.WatchUpdate:output_type -> masir.daemon.v1.WatchUpdateResponse
-	102, // 125: masir.daemon.v1.DaemonService.ListGeoCategories:output_type -> masir.daemon.v1.ListGeoCategoriesResponse
-	83,  // [83:126] is the sub-list for method output_type
-	40,  // [40:83] is the sub-list for method input_type
+	25,  // 46: masir.daemon.v1.DaemonService.CaptureEvent:input_type -> masir.daemon.v1.CaptureEventRequest
+	32,  // 47: masir.daemon.v1.DaemonService.TestLatency:input_type -> masir.daemon.v1.TestLatencyRequest
+	34,  // 48: masir.daemon.v1.DaemonService.CancelLatencyTest:input_type -> masir.daemon.v1.CancelLatencyTestRequest
+	12,  // 49: masir.daemon.v1.DaemonService.GetSettings:input_type -> masir.daemon.v1.GetSettingsRequest
+	15,  // 50: masir.daemon.v1.DaemonService.UpdateSettings:input_type -> masir.daemon.v1.UpdateSettingsRequest
+	17,  // 51: masir.daemon.v1.DaemonService.SetPower:input_type -> masir.daemon.v1.SetPowerRequest
+	19,  // 52: masir.daemon.v1.DaemonService.SetFallback:input_type -> masir.daemon.v1.SetFallbackRequest
+	21,  // 53: masir.daemon.v1.DaemonService.SetTunEnabled:input_type -> masir.daemon.v1.SetTunEnabledRequest
+	37,  // 54: masir.daemon.v1.DaemonService.ListRoutingRules:input_type -> masir.daemon.v1.ListRoutingRulesRequest
+	39,  // 55: masir.daemon.v1.DaemonService.AddRouting:input_type -> masir.daemon.v1.AddRoutingRequest
+	41,  // 56: masir.daemon.v1.DaemonService.RemoveRouting:input_type -> masir.daemon.v1.RemoveRoutingRequest
+	43,  // 57: masir.daemon.v1.DaemonService.AlterRouting:input_type -> masir.daemon.v1.AlterRoutingRequest
+	45,  // 58: masir.daemon.v1.DaemonService.MoveRouting:input_type -> masir.daemon.v1.MoveRoutingRequest
+	47,  // 59: masir.daemon.v1.DaemonService.TestRouting:input_type -> masir.daemon.v1.TestRoutingRequest
+	50,  // 60: masir.daemon.v1.DaemonService.ListInbounds:input_type -> masir.daemon.v1.ListInboundsRequest
+	54,  // 61: masir.daemon.v1.DaemonService.AddInbound:input_type -> masir.daemon.v1.AddInboundRequest
+	56,  // 62: masir.daemon.v1.DaemonService.RemoveInbound:input_type -> masir.daemon.v1.RemoveInboundRequest
+	58,  // 63: masir.daemon.v1.DaemonService.AlterInbound:input_type -> masir.daemon.v1.AlterInboundRequest
+	52,  // 64: masir.daemon.v1.DaemonService.ListOutbounds:input_type -> masir.daemon.v1.ListOutboundsRequest
+	60,  // 65: masir.daemon.v1.DaemonService.AddOutbound:input_type -> masir.daemon.v1.AddOutboundRequest
+	62,  // 66: masir.daemon.v1.DaemonService.RemoveOutbound:input_type -> masir.daemon.v1.RemoveOutboundRequest
+	64,  // 67: masir.daemon.v1.DaemonService.AlterOutbound:input_type -> masir.daemon.v1.AlterOutboundRequest
+	70,  // 68: masir.daemon.v1.DaemonService.ListSubscriptions:input_type -> masir.daemon.v1.ListSubscriptionsRequest
+	72,  // 69: masir.daemon.v1.DaemonService.GetSubscription:input_type -> masir.daemon.v1.GetSubscriptionRequest
+	74,  // 70: masir.daemon.v1.DaemonService.AddSubscription:input_type -> masir.daemon.v1.AddSubscriptionRequest
+	76,  // 71: masir.daemon.v1.DaemonService.AlterSubscription:input_type -> masir.daemon.v1.AlterSubscriptionRequest
+	78,  // 72: masir.daemon.v1.DaemonService.RemoveSubscription:input_type -> masir.daemon.v1.RemoveSubscriptionRequest
+	80,  // 73: masir.daemon.v1.DaemonService.UpdateSubscription:input_type -> masir.daemon.v1.UpdateSubscriptionRequest
+	82,  // 74: masir.daemon.v1.DaemonService.TestSubscriptionLatency:input_type -> masir.daemon.v1.TestSubscriptionLatencyRequest
+	84,  // 75: masir.daemon.v1.DaemonService.SelectConfig:input_type -> masir.daemon.v1.SelectConfigRequest
+	86,  // 76: masir.daemon.v1.DaemonService.GetActiveConfig:input_type -> masir.daemon.v1.GetActiveConfigRequest
+	90,  // 77: masir.daemon.v1.DaemonService.CheckUpdate:input_type -> masir.daemon.v1.CheckUpdateRequest
+	92,  // 78: masir.daemon.v1.DaemonService.StartUpdate:input_type -> masir.daemon.v1.StartUpdateRequest
+	94,  // 79: masir.daemon.v1.DaemonService.PauseUpdate:input_type -> masir.daemon.v1.PauseUpdateRequest
+	96,  // 80: masir.daemon.v1.DaemonService.ResumeUpdate:input_type -> masir.daemon.v1.ResumeUpdateRequest
+	98,  // 81: masir.daemon.v1.DaemonService.StopUpdate:input_type -> masir.daemon.v1.StopUpdateRequest
+	100, // 82: masir.daemon.v1.DaemonService.WatchUpdate:input_type -> masir.daemon.v1.WatchUpdateRequest
+	103, // 83: masir.daemon.v1.DaemonService.ListGeoCategories:input_type -> masir.daemon.v1.ListGeoCategoriesRequest
+	29,  // 84: masir.daemon.v1.DaemonService.GetXrayVersion:output_type -> masir.daemon.v1.GetXrayVersionResponse
+	31,  // 85: masir.daemon.v1.DaemonService.GetXrayConfig:output_type -> masir.daemon.v1.GetXrayConfigResponse
+	6,   // 86: masir.daemon.v1.DaemonService.GetStatus:output_type -> masir.daemon.v1.GetStatusResponse
+	8,   // 87: masir.daemon.v1.DaemonService.WatchStatus:output_type -> masir.daemon.v1.WatchStatusResponse
+	10,  // 88: masir.daemon.v1.DaemonService.Shutdown:output_type -> masir.daemon.v1.ShutdownResponse
+	24,  // 89: masir.daemon.v1.DaemonService.StreamLogs:output_type -> masir.daemon.v1.StreamLogsResponse
+	26,  // 90: masir.daemon.v1.DaemonService.CaptureEvent:output_type -> masir.daemon.v1.CaptureEventResponse
+	33,  // 91: masir.daemon.v1.DaemonService.TestLatency:output_type -> masir.daemon.v1.TestLatencyResponse
+	35,  // 92: masir.daemon.v1.DaemonService.CancelLatencyTest:output_type -> masir.daemon.v1.CancelLatencyTestResponse
+	13,  // 93: masir.daemon.v1.DaemonService.GetSettings:output_type -> masir.daemon.v1.GetSettingsResponse
+	16,  // 94: masir.daemon.v1.DaemonService.UpdateSettings:output_type -> masir.daemon.v1.UpdateSettingsResponse
+	18,  // 95: masir.daemon.v1.DaemonService.SetPower:output_type -> masir.daemon.v1.SetPowerResponse
+	20,  // 96: masir.daemon.v1.DaemonService.SetFallback:output_type -> masir.daemon.v1.SetFallbackResponse
+	22,  // 97: masir.daemon.v1.DaemonService.SetTunEnabled:output_type -> masir.daemon.v1.SetTunEnabledResponse
+	38,  // 98: masir.daemon.v1.DaemonService.ListRoutingRules:output_type -> masir.daemon.v1.ListRoutingRulesResponse
+	40,  // 99: masir.daemon.v1.DaemonService.AddRouting:output_type -> masir.daemon.v1.AddRoutingResponse
+	42,  // 100: masir.daemon.v1.DaemonService.RemoveRouting:output_type -> masir.daemon.v1.RemoveRoutingResponse
+	44,  // 101: masir.daemon.v1.DaemonService.AlterRouting:output_type -> masir.daemon.v1.AlterRoutingResponse
+	46,  // 102: masir.daemon.v1.DaemonService.MoveRouting:output_type -> masir.daemon.v1.MoveRoutingResponse
+	48,  // 103: masir.daemon.v1.DaemonService.TestRouting:output_type -> masir.daemon.v1.TestRoutingResponse
+	51,  // 104: masir.daemon.v1.DaemonService.ListInbounds:output_type -> masir.daemon.v1.ListInboundsResponse
+	55,  // 105: masir.daemon.v1.DaemonService.AddInbound:output_type -> masir.daemon.v1.AddInboundResponse
+	57,  // 106: masir.daemon.v1.DaemonService.RemoveInbound:output_type -> masir.daemon.v1.RemoveInboundResponse
+	59,  // 107: masir.daemon.v1.DaemonService.AlterInbound:output_type -> masir.daemon.v1.AlterInboundResponse
+	53,  // 108: masir.daemon.v1.DaemonService.ListOutbounds:output_type -> masir.daemon.v1.ListOutboundsResponse
+	61,  // 109: masir.daemon.v1.DaemonService.AddOutbound:output_type -> masir.daemon.v1.AddOutboundResponse
+	63,  // 110: masir.daemon.v1.DaemonService.RemoveOutbound:output_type -> masir.daemon.v1.RemoveOutboundResponse
+	65,  // 111: masir.daemon.v1.DaemonService.AlterOutbound:output_type -> masir.daemon.v1.AlterOutboundResponse
+	71,  // 112: masir.daemon.v1.DaemonService.ListSubscriptions:output_type -> masir.daemon.v1.ListSubscriptionsResponse
+	73,  // 113: masir.daemon.v1.DaemonService.GetSubscription:output_type -> masir.daemon.v1.GetSubscriptionResponse
+	75,  // 114: masir.daemon.v1.DaemonService.AddSubscription:output_type -> masir.daemon.v1.AddSubscriptionResponse
+	77,  // 115: masir.daemon.v1.DaemonService.AlterSubscription:output_type -> masir.daemon.v1.AlterSubscriptionResponse
+	79,  // 116: masir.daemon.v1.DaemonService.RemoveSubscription:output_type -> masir.daemon.v1.RemoveSubscriptionResponse
+	81,  // 117: masir.daemon.v1.DaemonService.UpdateSubscription:output_type -> masir.daemon.v1.UpdateSubscriptionResponse
+	83,  // 118: masir.daemon.v1.DaemonService.TestSubscriptionLatency:output_type -> masir.daemon.v1.TestSubscriptionLatencyResponse
+	85,  // 119: masir.daemon.v1.DaemonService.SelectConfig:output_type -> masir.daemon.v1.SelectConfigResponse
+	87,  // 120: masir.daemon.v1.DaemonService.GetActiveConfig:output_type -> masir.daemon.v1.GetActiveConfigResponse
+	91,  // 121: masir.daemon.v1.DaemonService.CheckUpdate:output_type -> masir.daemon.v1.CheckUpdateResponse
+	93,  // 122: masir.daemon.v1.DaemonService.StartUpdate:output_type -> masir.daemon.v1.StartUpdateResponse
+	95,  // 123: masir.daemon.v1.DaemonService.PauseUpdate:output_type -> masir.daemon.v1.PauseUpdateResponse
+	97,  // 124: masir.daemon.v1.DaemonService.ResumeUpdate:output_type -> masir.daemon.v1.ResumeUpdateResponse
+	99,  // 125: masir.daemon.v1.DaemonService.StopUpdate:output_type -> masir.daemon.v1.StopUpdateResponse
+	101, // 126: masir.daemon.v1.DaemonService.WatchUpdate:output_type -> masir.daemon.v1.WatchUpdateResponse
+	104, // 127: masir.daemon.v1.DaemonService.ListGeoCategories:output_type -> masir.daemon.v1.ListGeoCategoriesResponse
+	84,  // [84:128] is the sub-list for method output_type
+	40,  // [40:84] is the sub-list for method input_type
 	40,  // [40:40] is the sub-list for extension type_name
 	40,  // [40:40] is the sub-list for extension extendee
 	0,   // [0:40] is the sub-list for field type_name
@@ -6062,15 +6218,15 @@ func file_masir_daemon_v1_daemon_proto_init() {
 		return
 	}
 	file_masir_daemon_v1_daemon_proto_msgTypes[11].OneofWrappers = []any{}
-	file_masir_daemon_v1_daemon_proto_msgTypes[37].OneofWrappers = []any{}
-	file_masir_daemon_v1_daemon_proto_msgTypes[70].OneofWrappers = []any{}
+	file_masir_daemon_v1_daemon_proto_msgTypes[39].OneofWrappers = []any{}
+	file_masir_daemon_v1_daemon_proto_msgTypes[72].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_masir_daemon_v1_daemon_proto_rawDesc), len(file_masir_daemon_v1_daemon_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   99,
+			NumMessages:   101,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

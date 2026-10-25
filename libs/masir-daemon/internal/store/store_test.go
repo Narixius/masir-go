@@ -109,12 +109,13 @@ func TestLoadSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !st.Settings.AllowLAN || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackDirect || st.Settings.XrayLogLevel != "warning" {
+	if !st.Settings.AllowLAN || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackDirect || st.Settings.XrayLogLevel != "warning" || !st.Settings.Analytics {
 		t.Fatalf("defaults = %+v", st.Settings)
 	}
 
 	st.Settings.Power = true
 	st.Settings.XrayLogLevel = "info"
+	st.Settings.Analytics = false
 	_ = st.AddRule("r", []byte(`{"domain":["full:a.com"]}`), Target{Kind: TargetConfig, SubscriptionID: "s", ConfigID: "c", Name: "n"}, false)
 	_ = st.AddOutbound("wg", []byte(`{"protocol":"freedom"}`))
 	if err := Save(dir, st); err != nil {
@@ -129,7 +130,7 @@ func TestLoadSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !back.Settings.Power || back.Settings.XrayLogLevel != "info" || len(back.Rules) != 1 || back.Rules[0].Target.Name != "n" || len(back.Outbounds) != 1 {
+	if !back.Settings.Power || back.Settings.XrayLogLevel != "info" || back.Settings.Analytics || len(back.Rules) != 1 || back.Rules[0].Target.Name != "n" || len(back.Outbounds) != 1 {
 		t.Fatalf("round trip = %+v", back)
 	}
 

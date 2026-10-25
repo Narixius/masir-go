@@ -12,6 +12,9 @@ service DaemonService {
   // Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
   rpc StreamLogs(StreamLogsRequest) returns (stream StreamLogsResponse);
+  // CaptureEvent records one anonymous client event for analytics. Events are dropped
+  // silently when analytics is off.
+  rpc CaptureEvent(CaptureEventRequest) returns (CaptureEventResponse);
   // latency
   rpc TestLatency(TestLatencyRequest) returns (TestLatencyResponse);
   rpc CancelLatencyTest(CancelLatencyTestRequest) returns (CancelLatencyTestResponse);
@@ -132,6 +135,7 @@ message Settings {
   string tun_gateway = 10;         // IPv4 CIDR for the TUN interface
   uint32 sub_interval_minutes = 11; // background subscription refresh; a subscription's own interval wins
   string xray_log_level = 12;       // debug, info, warning, error, or none; default warning
+  bool analytics = 13;              // send anonymous usage/error events to PostHog
 }
 
 message GetSettingsRequest {}
@@ -154,6 +158,7 @@ message UpdateSettingsRequest {
   optional string tun_gateway = 7;
   optional uint32 sub_interval_minutes = 8; // 5 to 43200
   optional string xray_log_level = 9;       // debug, info, warning, error, or none
+  optional bool analytics = 10;             // anonymous usage/error events
 }
 message UpdateSettingsResponse { Settings settings = 1; }
 
@@ -176,6 +181,15 @@ message StreamLogsRequest {
   string min_level = 3;  // debug, info, warn, error; empty means all
 }
 message StreamLogsResponse { LogEntry entry = 1; }
+
+// CaptureEvent is the CLI's analytics hook. properties_json is a JSON object; the
+// daemon validates it, adds common properties, and drops it when analytics is off.
+message CaptureEventRequest {
+  string event = 1;
+  string properties_json = 2;
+  int64 timestamp_ms = 3; // when it happened; 0 means now
+}
+message CaptureEventResponse {}
 
 message LogEntry {
   int64 timestamp_ms = 1;
@@ -359,6 +373,7 @@ message TestSubscriptionLatencyRequest {
   string subscription_id = 1;
   repeated string config_ids = 2;
   string probe_url = 3;
+  string reason = 4; // status, use_fastest, picker, or other
 }
 message TestSubscriptionLatencyResponse {
   string config_id = 1;
@@ -374,6 +389,7 @@ message TestSubscriptionLatencyResponse {
 message SelectConfigRequest {
   string subscription_id = 1;
   string config_id = 2;
+  string reason = 3; // id, interactive, fastest, or api
 }
 message SelectConfigResponse {}
 
@@ -441,6 +457,7 @@ message StartUpdateRequest {
   // The CLI's own binary, so a privileged daemon can update that copy too. Unset when
   // the caller doesn't know it.
   string client_binary = 3;
+  string trigger = 4; // user, background, or api
 }
 message StartUpdateResponse { UpdateJob job = 1; }
 
