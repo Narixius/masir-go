@@ -18,6 +18,10 @@ import (
 
 const probeURL = "https://www.gstatic.com/generate_204"
 
+// directProbeConfig is a bare Xray config whose only outbound is freedom, used to
+// measure the network as it is without any of masir's routing.
+const directProbeConfig = `{"outbounds":[{"tag":"direct","protocol":"freedom"}]}`
+
 func cmdStatus(a args) error {
 	c, ok := runningDaemon()
 	if !ok {
@@ -215,7 +219,7 @@ func measureConnectivity(c pb.DaemonServiceClient, st *pb.Status, done func(row 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		conn.Internet = probeInternet()
+		conn.Internet = probeInternet(c)
 		if done != nil {
 			done(0, conn.Internet)
 		}
@@ -231,7 +235,29 @@ func measureConnectivity(c pb.DaemonServiceClient, st *pb.Status, done func(row 
 	return conn
 }
 
-func probeInternet() probeResult {
+// probeInternet measures the internet without masir's routing. It has to run in the
+// daemon: while TUN is on, a request from the CLI goes back into Xray and follows the
+// rules, so the "Internet" row could really be testing the proxy (and pay a TUN hop).
+// This uses the same temporary-instance, fastest-of-two measurement as the proxy row.
+func probeInternet(c pb.DaemonServiceClient) probeResult {
+	ctx, cancel := context.WithTimeout(appCtx, 15*time.Second)
+	defer cancel()
+	res, err := c.TestLatency(ctx, &pb.TestLatencyRequest{
+		XrayConfigJson: directProbeConfig,
+		ProbeUrl:       probeURL,
+	})
+	if err == nil {
+		if res.Error != "" {
+			return probeResult{Error: shortErr(errors.New(res.Error))}
+		}
+		return probeResult{OK: true, LatencyMs: res.LatencyMs}
+	}
+	// The RPC itself failed (daemon restarting, old daemon, transport error).
+	// Fall back to a plain request from here so status still answers something.
+	return probeInternetDirect()
+}
+
+func probeInternetDirect() probeResult {
 	ctx, cancel := context.WithTimeout(appCtx, 8*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
