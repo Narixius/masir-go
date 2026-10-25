@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	userAgent    = "v2rayNG/2.0.15" // panels pick the response format by client; this one is widely served
+	userAgent    = "v2rayNG/2.3.11" // panels pick the response format by client; this one is widely served
 	maxBodyBytes = 10 << 20
 )
 
