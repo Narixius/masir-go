@@ -255,7 +255,7 @@ masir settings reset mixedPort
 | `routingMode` | `proxy` | Where traffic no rule matches goes: `proxy` or `direct` |
 | `mixedPort` | `7890` | The local proxy port, SOCKS5 and HTTP on one port |
 | `allowLan` | `on` | Let other devices on your network use the proxy |
-| `alwaysOnProxy` | `off` | Keep the proxy port up even while masir is off |
+| `alwaysOnProxy` | `on` | Keep the proxy port up even while masir is off |
 | `dohDns` | `https://1.1.1.1/dns-query` | DNS over HTTPS, reached through the proxy |
 | `dnsServers` | `1.1.1.1, 8.8.8.8` | Plain DNS, sent direct, used to resolve proxy server names |
 | `tunDns` | empty | DNS servers the TUN interface advertises; empty uses `dnsServers` |
