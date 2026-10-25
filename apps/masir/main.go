@@ -167,7 +167,7 @@ func rootCmd() *cobra.Command {
 	subList.Aliases = []string{"ls"}
 	subAdd := leaf("add [url]", "Add a subscription", cmdSubAdd, cobra.MaximumNArgs(1),
 		flagSpec{names: []string{"name"}, help: "a name; default: the provider's title"},
-		flagSpec{names: []string{"interval"}, help: "refresh every N minutes; default: the provider's, else 12h"})
+		flagSpec{names: []string{"interval"}, help: "refresh every N minutes (5 to 43200); default: the subInterval setting"})
 	subAdd.Example = "# Add a subscription; its name comes from the provider\n" +
 		"masir sub add https://example.com/sub\n" +
 		"# Name it, and refresh it every 6 hours\n" +

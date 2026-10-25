@@ -61,6 +61,7 @@ const (
 	DaemonService_ResumeUpdate_FullMethodName            = "/masir.daemon.v1.DaemonService/ResumeUpdate"
 	DaemonService_StopUpdate_FullMethodName              = "/masir.daemon.v1.DaemonService/StopUpdate"
 	DaemonService_WatchUpdate_FullMethodName             = "/masir.daemon.v1.DaemonService/WatchUpdate"
+	DaemonService_ListGeoCategories_FullMethodName       = "/masir.daemon.v1.DaemonService/ListGeoCategories"
 )
 
 // DaemonServiceClient is the client API for DaemonService service.
@@ -122,6 +123,9 @@ type DaemonServiceClient interface {
 	StopUpdate(ctx context.Context, in *StopUpdateRequest, opts ...grpc.CallOption) (*StopUpdateResponse, error)
 	// WatchUpdate sends the job's state now and on every change, until it finishes.
 	WatchUpdate(ctx context.Context, in *WatchUpdateRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchUpdateResponse], error)
+	// ListGeoCategories lists every category in the installed geosite.dat or geoip.dat,
+	// so a UI can offer them all (by search), not just the ones it knows by name.
+	ListGeoCategories(ctx context.Context, in *ListGeoCategoriesRequest, opts ...grpc.CallOption) (*ListGeoCategoriesResponse, error)
 }
 
 type daemonServiceClient struct {
@@ -588,6 +592,16 @@ func (c *daemonServiceClient) WatchUpdate(ctx context.Context, in *WatchUpdateRe
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DaemonService_WatchUpdateClient = grpc.ServerStreamingClient[WatchUpdateResponse]
 
+func (c *daemonServiceClient) ListGeoCategories(ctx context.Context, in *ListGeoCategoriesRequest, opts ...grpc.CallOption) (*ListGeoCategoriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListGeoCategoriesResponse)
+	err := c.cc.Invoke(ctx, DaemonService_ListGeoCategories_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DaemonServiceServer is the server API for DaemonService service.
 // All implementations must embed UnimplementedDaemonServiceServer
 // for forward compatibility.
@@ -647,6 +661,9 @@ type DaemonServiceServer interface {
 	StopUpdate(context.Context, *StopUpdateRequest) (*StopUpdateResponse, error)
 	// WatchUpdate sends the job's state now and on every change, until it finishes.
 	WatchUpdate(*WatchUpdateRequest, grpc.ServerStreamingServer[WatchUpdateResponse]) error
+	// ListGeoCategories lists every category in the installed geosite.dat or geoip.dat,
+	// so a UI can offer them all (by search), not just the ones it knows by name.
+	ListGeoCategories(context.Context, *ListGeoCategoriesRequest) (*ListGeoCategoriesResponse, error)
 	mustEmbedUnimplementedDaemonServiceServer()
 }
 
@@ -782,6 +799,9 @@ func (UnimplementedDaemonServiceServer) StopUpdate(context.Context, *StopUpdateR
 }
 func (UnimplementedDaemonServiceServer) WatchUpdate(*WatchUpdateRequest, grpc.ServerStreamingServer[WatchUpdateResponse]) error {
 	return status.Error(codes.Unimplemented, "method WatchUpdate not implemented")
+}
+func (UnimplementedDaemonServiceServer) ListGeoCategories(context.Context, *ListGeoCategoriesRequest) (*ListGeoCategoriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGeoCategories not implemented")
 }
 func (UnimplementedDaemonServiceServer) mustEmbedUnimplementedDaemonServiceServer() {}
 func (UnimplementedDaemonServiceServer) testEmbeddedByValue()                       {}
@@ -1532,6 +1552,24 @@ func _DaemonService_WatchUpdate_Handler(srv interface{}, stream grpc.ServerStrea
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DaemonService_WatchUpdateServer = grpc.ServerStreamingServer[WatchUpdateResponse]
 
+func _DaemonService_ListGeoCategories_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGeoCategoriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).ListGeoCategories(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_ListGeoCategories_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).ListGeoCategories(ctx, req.(*ListGeoCategoriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DaemonService_ServiceDesc is the grpc.ServiceDesc for DaemonService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1690,6 +1728,10 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopUpdate",
 			Handler:    _DaemonService_StopUpdate_Handler,
+		},
+		{
+			MethodName: "ListGeoCategories",
+			Handler:    _DaemonService_ListGeoCategories_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

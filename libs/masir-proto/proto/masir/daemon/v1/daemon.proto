@@ -59,6 +59,10 @@ service DaemonService {
   rpc StopUpdate(StopUpdateRequest) returns (StopUpdateResponse);
   // WatchUpdate sends the job's state now and on every change, until it finishes.
   rpc WatchUpdate(WatchUpdateRequest) returns (stream WatchUpdateResponse);
+
+  // ListGeoCategories lists every category in the installed geosite.dat or geoip.dat,
+  // so a UI can offer them all (by search), not just the ones it knows by name.
+  rpc ListGeoCategories(ListGeoCategoriesRequest) returns (ListGeoCategoriesResponse);
 }
 
 // Everything a UI needs to draw the daemon's state and decide what to offer,
@@ -92,6 +96,7 @@ message Status {
   uint32 fell_back_rules = 20; // rules whose target couldn't be used (see ListRoutingRules)
   ReleaseInfo latest_release = 21; // from the daemon's daily check; unset until it has run
   string geo_updated_at = 22;      // RFC 3339 time geosite.dat was last written; empty if missing
+  string geo_dir = 23;             // where the daemon reads geosite.dat and geoip.dat
 }
 
 message GetStatusRequest {}
@@ -125,6 +130,7 @@ message Settings {
   repeated string dns_servers = 8; // plain DNS (IPs) for proxy server names; goes direct
   repeated string tun_dns = 9;     // DNS the TUN interface advertises; empty means dns_servers
   string tun_gateway = 10;         // IPv4 CIDR for the TUN interface
+  uint32 sub_interval_minutes = 11; // background subscription refresh; a subscription's own interval wins
 }
 
 message GetSettingsRequest {}
@@ -145,6 +151,7 @@ message UpdateSettingsRequest {
   StringList dns_servers = 5;
   StringList tun_dns = 6;
   optional string tun_gateway = 7;
+  optional uint32 sub_interval_minutes = 8; // 5 to 43200
 }
 message UpdateSettingsResponse { Settings settings = 1; }
 
@@ -439,3 +446,19 @@ message StopUpdateResponse { UpdateJob job = 1; }
 
 message WatchUpdateRequest { UpdateTarget target = 1; }
 message WatchUpdateResponse { UpdateJob job = 1; }
+
+// ---- Geo data ----
+
+enum GeoKind {
+  GEO_KIND_UNSPECIFIED = 0;
+  GEO_KIND_SITE = 1; // geosite.dat: geosite:<code> domain lists
+  GEO_KIND_IP = 2;   // geoip.dat: geoip:<code> address lists
+}
+
+message GeoCategory {
+  string code = 1;    // lowercase, as used after geosite: or geoip:
+  uint32 entries = 2; // domains or address ranges in it
+}
+
+message ListGeoCategoriesRequest { GeoKind kind = 1; }
+message ListGeoCategoriesResponse { repeated GeoCategory categories = 1; }

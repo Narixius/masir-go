@@ -232,12 +232,14 @@ func pickMatcher(key string, current []string) ([]string, error) {
 			Message: "Which websites?", Multi: true, Required: true, Initial: current,
 			AddCustom: true, Validate: validateDomain,
 			Groups: []ui.PickGroup{geoGroup("By country", siteCountries), geoGroup("Sites & services", siteServices)},
+			More:   geoSource(pb.GeoKind_GEO_KIND_SITE),
 		}).Run()
 	case "ip":
 		return ui.NewPicker(ui.PickParams{
 			Message: "Which IP addresses?", Multi: true, Required: true, Initial: current,
 			AddCustom: true, Validate: validateIP,
 			Groups: []ui.PickGroup{geoGroup("By country", ipCountries), geoGroup("Other", ipOther)},
+			More:   geoSource(pb.GeoKind_GEO_KIND_IP),
 		}).Run()
 	case "port", "sourcePort":
 		label := "Ports (e.g. 443, 1000-2000)"

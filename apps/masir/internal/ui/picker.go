@@ -22,6 +22,14 @@ type PickItem struct {
 	Suffix string // shown after the label; SetSuffix can change it live
 }
 
+// PickSource is a long list searched as the user types. Load runs once, in the
+// background, on the first keystroke; matches show in their own group.
+type PickSource struct {
+	Label string
+	Load  func() ([]PickItem, error)
+	Limit int // most matches shown; 0 means 30
+}
+
 type PickKey struct {
 	Key  rune
 	Help string             // shown in the help line, e.g. "l retest"
@@ -50,6 +58,10 @@ type PickParams struct {
 	// loop, so it must hand slow work (like latency probes) to a goroutine.
 	OnVisible func(values []string)
 
+	// More offers items beyond Groups once the user types, loaded lazily: the geo files'
+	// full category lists, say.
+	More *PickSource
+
 	// Keys are single-letter shortcuts acting on the item under the cursor. A picker
 	// with keys filters only after "/", so typing a letter never collides with them.
 	Keys []PickKey
@@ -62,6 +74,7 @@ type Picker struct {
 	order    []string // selection order, for the summary
 	custom   []PickItem
 	filter   []rune
+	more     moreState
 	typing   bool // in a picker with Keys: "/" was pressed, letters now filter
 	cursor   int
 	offset   int
@@ -132,11 +145,121 @@ type row struct {
 	hint string
 }
 
-func (pk *Picker) rows() []row {
-	f := strings.ToLower(string(pk.filter))
-	match := func(it PickItem) bool {
-		return f == "" || strings.Contains(strings.ToLower(it.Label+" "+it.Search+" "+it.Value), f)
+// moreState is a PickSource's loading progress. Guarded by Picker.mu.
+type moreState struct {
+	started bool
+	loaded  bool
+	items   []PickItem
+	err     string
+}
+
+// words splits a query into lowercase words; hyphens, underscores and colons count as
+// spaces, so "ai chat" finds category-ai-chat.
+func words(s string) []string {
+	return strings.Fields(strings.NewReplacer("-", " ", "_", " ", ":", " ").Replace(strings.ToLower(s)))
+}
+
+// matchWords reports whether every query word appears in the item's text, or the query
+// typed without spaces appears in the text without them ("aichat" finds ai-chat).
+func matchWords(q []string, it PickItem) bool {
+	all := words(it.Label + " " + it.Search + " " + it.Value)
+	text := strings.Join(all, " ")
+	ok := true
+	for _, w := range q {
+		if !strings.Contains(text, w) {
+			ok = false
+			break
+		}
 	}
+	return ok || strings.Contains(strings.Join(all, ""), strings.Join(q, ""))
+}
+
+// loadMore starts loading the PickSource, once.
+func (pk *Picker) loadMore() {
+	pk.mu.Lock()
+	defer pk.mu.Unlock()
+	if pk.p.More == nil || pk.more.started {
+		return
+	}
+	pk.more.started = true
+	go func() {
+		items, err := pk.p.More.Load()
+		pk.mu.Lock()
+		pk.more.loaded, pk.more.items = true, items
+		if err != nil {
+			pk.more.err = err.Error()
+		}
+		pk.dirty = true
+		pk.mu.Unlock()
+	}()
+}
+
+// moreRows are the PickSource's matches for q, best first, skipping items listed in
+// the groups already.
+func (pk *Picker) moreRows(q []string, listed map[string]bool) []row {
+	if pk.p.More == nil || len(q) == 0 {
+		return nil
+	}
+	pk.mu.Lock()
+	st := pk.more
+	pk.mu.Unlock()
+	header := row{kind: rowHeader, item: PickItem{Label: pk.p.More.Label}}
+	switch {
+	case !st.loaded:
+		header.hint = "loading…"
+		return []row{header}
+	case st.err != "":
+		header.hint = st.err
+		return []row{header}
+	}
+	var found []PickItem
+	for _, it := range st.items {
+		if !listed[it.Value] && matchWords(q, it) {
+			found = append(found, it)
+		}
+	}
+	if len(found) == 0 {
+		return nil
+	}
+	whole := strings.Join(q, " ")
+	score := func(it PickItem) int { // lower is better: exact, then prefix, then shorter
+		label, value := strings.Join(words(it.Label), " "), strings.Join(words(it.Value), " ")
+		switch {
+		case label == whole || strings.HasSuffix(value, " "+whole):
+			return 0
+		case strings.HasPrefix(label, whole):
+			return 1
+		case strings.Contains(label, whole):
+			return 2
+		}
+		return 3
+	}
+	slices.SortStableFunc(found, func(a, b PickItem) int {
+		if d := score(a) - score(b); d != 0 {
+			return d
+		}
+		return len(a.Label) - len(b.Label)
+	})
+	limit := pk.p.More.Limit
+	if limit <= 0 {
+		limit = 30
+	}
+	header.hint = fmt.Sprintf("%d match%s", len(found), plural(len(found), "es"))
+	if len(found) > limit {
+		header.hint = fmt.Sprintf("best %d of %d; type more to narrow", limit, len(found))
+		found = found[:limit]
+	}
+	rows := []row{header}
+	for _, it := range found {
+		rows = append(rows, row{kind: rowItem, item: it})
+	}
+	return rows
+}
+
+func (pk *Picker) rows() []row {
+	q := words(string(pk.filter))
+	match := func(it PickItem) bool { return len(q) == 0 || matchWords(q, it) }
+	listed := map[string]bool{}
 	var rows []row
 	exact := false
 	groups := pk.p.Groups
@@ -146,6 +269,7 @@ func (pk *Picker) rows() []row {
 	for _, g := range groups {
 		var items []row
 		for _, it := range g.Items {
+			listed[it.Value] = true
 			if strings.EqualFold(it.Value, string(pk.filter)) {
 				exact = true
 			}
@@ -161,6 +285,13 @@ func (pk *Picker) rows() []row {
 		}
 		rows = append(rows, items...)
 	}
+	more := pk.moreRows(q, listed)
+	for _, r := range more {
+		if r.kind == rowItem && strings.EqualFold(r.item.Value, string(pk.filter)) {
+			exact = true
+		}
+	}
+	rows = append(rows, more...)
 	// After the matches, so the cursor lands on a listed item when one matches.
 	if pk.p.AddCustom && len(pk.filter) > 0 && !exact {
 		v := strings.TrimSpace(string(pk.filter))
@@ -367,7 +498,9 @@ func (pk *Picker) handle(k key) (done bool, vals []string, err error) {
 	case "clear":
 		pk.setFilter(nil)
 	case "space":
-		if !pk.p.Multi {
+		// While searching, a space is part of the search ("ai chat"); otherwise, in a
+		// multi-select, it selects.
+		if !pk.p.Multi || (len(pk.filter) > 0 && pk.filtering()) {
 			if pk.filtering() {
 				pk.setFilter(append(pk.filter, ' '))
 			}
@@ -385,6 +518,14 @@ func (pk *Picker) handle(k key) (done bool, vals []string, err error) {
 		if pk.p.Multi {
 			if ok && r.kind == rowAdd {
 				pk.addCustom(r.item.Value)
+				return
+			}
+			if len(pk.filter) > 0 { // searching: pick the match, ready for the next search
+				if ok && r.kind == rowItem && !pk.selected[r.item.Value] {
+					pk.toggle(r.item.Value)
+				}
+				pk.typing = false
+				pk.setFilter(nil)
 				return
 			}
 			if pk.p.Required && len(pk.order) == 0 {
@@ -433,6 +574,9 @@ func (pk *Picker) filtering() bool { return len(pk.p.Keys) == 0 || pk.typing }
 
 func (pk *Picker) setFilter(f []rune) {
 	pk.filter = f
+	if len(f) > 0 {
+		pk.loadMore()
+	}
 	pk.offset = 0
 	pk.cursor = pk.firstSelectable(pk.rows(), 0, 1)
 }
@@ -445,6 +589,36 @@ func (pk *Picker) toggle(v string) {
 	}
 	pk.selected[v] = true
 	pk.order = append(pk.order, v)
+	// A pick found by search joins the custom items, so it stays listed (and
+	// deselectable) once the search is cleared.
+	if it, ok := pk.moreItem(v); ok && !pk.listed(v) {
+		pk.custom = append(pk.custom, it)
+	}
+}
+
+// listed reports whether v is among the groups' or custom items already.
+func (pk *Picker) listed(v string) bool {
+	has := func(it PickItem) bool { return it.Value == v }
+	if slices.ContainsFunc(pk.custom, has) {
+		return true
+	}
+	for _, g := range pk.p.Groups {
+		if slices.ContainsFunc(g.Items, has) {
+			return true
+		}
+	}
+	return false
+}
+
+func (pk *Picker) moreItem(v string) (PickItem, bool) {
+	pk.mu.Lock()
+	defer pk.mu.Unlock()
+	for _, it := range pk.more.items {
+		if it.Value == v {
+			return it, true
+		}
+	}
+	return PickItem{}, false
 }
 
 func (pk *Picker) addCustom(v string) {
@@ -499,6 +673,9 @@ func (pk *Picker) window() int {
 }
 
 func (pk *Picker) labelFor(v string) string {
+	if it, ok := pk.moreItem(v); ok {
+		return it.Label
+	}
 	for _, it := range pk.custom {
 		if it.Value == v {
 			return it.Label
@@ -677,10 +854,13 @@ func (pk *Picker) help(rows []row) string {
 	if slices.ContainsFunc(rows, func(r row) bool { return r.kind == rowHeader }) {
 		parts = append(parts, "←/→ group")
 	}
-	if pk.p.Multi {
+	searching := len(pk.filter) > 0
+	if pk.p.Multi && !searching {
 		parts = append(parts, "space select")
 	}
 	switch {
+	case pk.p.Multi && searching:
+		return strings.Join(append(parts, "enter select", "esc clear search"), " • ")
 	case len(pk.p.Keys) > 0:
 		for _, k := range pk.p.Keys {
 			parts = append(parts, k.Help)

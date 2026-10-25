@@ -4,7 +4,9 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestWidth(t *testing.T) {
@@ -175,5 +177,67 @@ func TestBoldAllUndimsSoBoldLasts(t *testing.T) {
 	}
 	if !strings.Contains(got, "\x1b[32m(active)\x1b[39m") || !strings.Contains(got, "\x1b[33m770ms\x1b[39m") {
 		t.Errorf("colors must survive: %q", got)
+	}
+}
+
+func TestPickerSearchesMoreLazily(t *testing.T) {
+	var loads atomic.Int32
+	pk := NewPicker(PickParams{
+		Message: "Which websites?", Multi: true,
+		Groups: []PickGroup{{Label: "Sites", Items: []PickItem{{Value: "geosite:google", Label: "Google"}}}},
+		More: &PickSource{Label: "More in geosite.dat", Load: func() ([]PickItem, error) {
+			loads.Add(1)
+			return []PickItem{
+				{Value: "geosite:google", Label: "Google"}, // also listed above: not repeated
+				{Value: "geosite:category-ai-chat-!cn", Label: "AI chat (outside China)"},
+				{Value: "geosite:category-ai-cn", Label: "AI (China)"},
+				{Value: "geosite:aixcoder", Label: "Aixcoder"},
+			}, nil
+		}},
+	})
+	pk.rows()
+	if loads.Load() != 0 {
+		t.Fatal("nothing should load before the user types")
+	}
+	keys(pk, typed("ai chat")...)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		pk.mu.Lock()
+		loaded := pk.more.loaded
+		pk.mu.Unlock()
+		if loaded || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	var got []string
+	for _, r := range pk.rows() {
+		if r.kind == rowItem {
+			got = append(got, r.item.Value)
+		}
+	}
+	if !slices.Equal(got, []string{"geosite:category-ai-chat-!cn"}) || loads.Load() != 1 {
+		t.Fatalf("\"ai chat\" found %v (loads %d); want just the AI chat category, loaded once", got, loads.Load())
+	}
+
+	// While searching, space is part of the search and Enter picks the match, clearing
+	// the search; the pick stays listed so it can be seen and deselected.
+	pk.cursor = pk.firstSelectable(pk.rows(), 0, 1)
+	keys(pk, key{name: "enter"})
+	if len(pk.filter) != 0 || !pk.selected["geosite:category-ai-chat-!cn"] {
+		t.Fatalf("Enter should select the match and clear the search: filter=%q", string(pk.filter))
+	}
+	if !slices.ContainsFunc(pk.rows(), func(r row) bool { return r.item.Value == "geosite:category-ai-chat-!cn" }) {
+		t.Fatal("a selected search result must stay listed after the search is cleared")
+	}
+	if pk.labelFor("geosite:category-ai-chat-!cn") != "AI chat (outside China)" {
+		t.Error("the summary should name it by its label")
+	}
+
+	// A search hit that's also in the groups is selected there, not listed twice.
+	keys(pk, typed("google")...)
+	keys(pk, key{name: "enter"})
+	if !pk.selected["geosite:google"] || slices.ContainsFunc(pk.custom, func(it PickItem) bool { return it.Value == "geosite:google" }) {
+		t.Errorf("google should be selected in its group without a copy among custom items: %+v", pk.custom)
 	}
 }

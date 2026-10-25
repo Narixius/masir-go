@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -12,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
+	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
 type geoEntry struct{ value, label string }
@@ -60,7 +64,41 @@ func friendly(v string) string {
 	if strings.HasSuffix(v, ".app/") {
 		return strings.TrimSuffix(filepath.Base(strings.TrimSuffix(v, "/")), ".app") + ui.Dim(" (app)")
 	}
+	if code, ok := strings.CutPrefix(v, "geosite:"); ok {
+		return humanizeSite(code)
+	}
+	if code, ok := strings.CutPrefix(v, "geoip:"); ok {
+		return humanizeIP(code)
+	}
 	return v
+}
+
+// geoSource searches every category in the installed geosite.dat or geoip.dat, fetched
+// from the daemon the first time the user types.
+func geoSource(kind pb.GeoKind) *ui.PickSource {
+	prefix, file, unit, name := "geosite:", "geosite.dat", "domain", humanizeSite
+	if kind == pb.GeoKind_GEO_KIND_IP {
+		prefix, file, unit, name = "geoip:", "geoip.dat", "range", humanizeIP
+	}
+	return &ui.PickSource{Label: "More in " + file, Load: func() ([]ui.PickItem, error) {
+		res, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.ListGeoCategoriesResponse, error) {
+			return c.ListGeoCategories(ctx, &pb.ListGeoCategoriesRequest{Kind: kind})
+		})
+		if err != nil {
+			return nil, errors.New(message(err))
+		}
+		items := make([]ui.PickItem, len(res.Categories))
+		for i, cat := range res.Categories {
+			n := int(cat.Entries)
+			items[i] = ui.PickItem{
+				Value:  prefix + cat.Code,
+				Label:  name(cat.Code),
+				Hint:   ui.Dim(fmt.Sprintf("%s%s · %d %s%s", prefix, cat.Code, n, unit, plural(n))),
+				Search: cat.Code,
+			}
+		}
+		return items, nil
+	}}
 }
 
 func geoGroup(label string, entries []geoEntry) ui.PickGroup {

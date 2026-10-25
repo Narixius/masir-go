@@ -118,10 +118,10 @@ func printStatus(st *pb.Status) {
 	)
 	switch geo := st.GeoUpdatedAt; {
 	case geo == "":
-		rows = append(rows, [2]string{"Geo Data", ui.Yellow("missing; geosite:/geoip: rules won't work") + ui.Dim(" — `masir update geo`")})
+		rows = append(rows, [2]string{"Geo Data", ui.Yellow("missing; geosite:/geoip: rules won't work") + ui.Dim(" — `masir update geo` ("+st.GeoDir+")")})
 	default:
 		if t, err := time.Parse(time.RFC3339, geo); err == nil {
-			rows = append(rows, [2]string{"Geo Data", t.Local().Format("2006-01-02") + ui.Dim(" ("+formatAge(time.Since(t))+" ago)")})
+			rows = append(rows, [2]string{"Geo Data", t.Local().Format("2006-01-02") + ui.Dim(" ("+formatAge(time.Since(t))+" ago, "+st.GeoDir+")")})
 		}
 	}
 	if len(set.GetTunDns()) > 0 {

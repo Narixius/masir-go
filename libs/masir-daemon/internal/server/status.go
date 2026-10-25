@@ -60,6 +60,7 @@ func (s *Server) status() *pb.Status {
 	if s.upd != nil && s.upd.release != nil {
 		st.LatestRelease = proto.Clone(s.upd.release).(*pb.ReleaseInfo)
 	}
+	st.GeoDir = s.xray.AssetDir()
 	if fi, err := os.Stat(filepath.Join(s.xray.AssetDir(), "geosite.dat")); err == nil {
 		st.GeoUpdatedAt = fi.ModTime().UTC().Format(time.RFC3339)
 	}
