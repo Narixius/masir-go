@@ -96,7 +96,12 @@ func printStatus(st *pb.Status) {
 		}
 		rows = append(rows, [2]string{"Mode", mode})
 	}
-	rows = append(rows, [2]string{"Routing Mode", fallbackText(set.GetFallback())})
+	rows = append(rows, [2]string{"Routing Fallback", fallbackText(set.GetFallback())})
+	alwaysOn := ui.Gray("OFF")
+	if set.GetAlwaysOnProxy() {
+		alwaysOn = ui.Green("ON") + ui.Dim(" (the proxy stays up while masir is off)")
+	}
+	rows = append(rows, [2]string{"Always-on Proxy", alwaysOn})
 	// The active proxy is named in Connectivity; here only what needs attention.
 	switch {
 	case st.ActiveConfigId == "":
@@ -133,9 +138,6 @@ func printStatus(st *pb.Status) {
 	if st.FellBackRules > 0 {
 		rows = append(rows, [2]string{"Rules", ui.Yellow(fmt.Sprintf("%d rule(s) lost their proxy and use the active one; see `masir rules list`", st.FellBackRules))})
 	}
-	if set.GetAlwaysOnProxy() && !set.GetPower() {
-		rows = append(rows, [2]string{"Always-on proxy", "the proxy stays up while masir is off"})
-	}
 	if st.LastError != "" {
 		rows = append(rows, [2]string{"Error", ui.Red(st.LastError)})
 	}
@@ -147,9 +149,9 @@ func printStatus(st *pb.Status) {
 
 func fallbackText(f pb.Fallback) string {
 	if f == pb.Fallback_FALLBACK_PROXY {
-		return ui.Cyan("proxy") + ui.Dim(" (unmatched traffic goes through the active proxy)")
+		return ui.Cyan("Proxy") + ui.Dim(" (unmatched traffic goes through the active proxy)")
 	}
-	return ui.Green("direct") + ui.Dim(" (unmatched traffic skips the proxy)")
+	return ui.Green("Direct") + ui.Dim(" (unmatched traffic skips the proxy)")
 }
 
 func formatUptime(d time.Duration) string {

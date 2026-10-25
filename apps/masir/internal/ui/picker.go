@@ -498,9 +498,9 @@ func (pk *Picker) handle(k key) (done bool, vals []string, err error) {
 	case "clear":
 		pk.setFilter(nil)
 	case "space":
-		// While searching, a space is part of the search ("ai chat"); otherwise, in a
-		// multi-select, it selects.
-		if !pk.p.Multi || (len(pk.filter) > 0 && pk.filtering()) {
+		// In a multi-select, space always selects, as in every list; a search is typed
+		// without spaces ("aichat" still finds ai-chat, see matchWords).
+		if !pk.p.Multi {
 			if pk.filtering() {
 				pk.setFilter(append(pk.filter, ' '))
 			}
@@ -518,14 +518,6 @@ func (pk *Picker) handle(k key) (done bool, vals []string, err error) {
 		if pk.p.Multi {
 			if ok && r.kind == rowAdd {
 				pk.addCustom(r.item.Value)
-				return
-			}
-			if len(pk.filter) > 0 { // searching: pick the match, ready for the next search
-				if ok && r.kind == rowItem && !pk.selected[r.item.Value] {
-					pk.toggle(r.item.Value)
-				}
-				pk.typing = false
-				pk.setFilter(nil)
 				return
 			}
 			if pk.p.Required && len(pk.order) == 0 {
@@ -854,13 +846,10 @@ func (pk *Picker) help(rows []row) string {
 	if slices.ContainsFunc(rows, func(r row) bool { return r.kind == rowHeader }) {
 		parts = append(parts, "←/→ group")
 	}
-	searching := len(pk.filter) > 0
-	if pk.p.Multi && !searching {
+	if pk.p.Multi {
 		parts = append(parts, "space select")
 	}
 	switch {
-	case pk.p.Multi && searching:
-		return strings.Join(append(parts, "enter select", "esc clear search"), " • ")
 	case len(pk.p.Keys) > 0:
 		for _, k := range pk.p.Keys {
 			parts = append(parts, k.Help)

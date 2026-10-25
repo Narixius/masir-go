@@ -104,6 +104,9 @@ func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle
 	}
 	sock := paths.SocketPathIn(dir)
 
+	// A daemon outlives the terminal that started it (sudo -b leaves it in that session),
+	// so closing the terminal must not end it.
+	signal.Ignore(syscall.SIGHUP)
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

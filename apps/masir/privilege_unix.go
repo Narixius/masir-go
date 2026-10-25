@@ -36,28 +36,33 @@ func canElevateSilently() bool {
 
 // startElevatedDaemon starts `masir daemon run` as root in the background, serving
 // user, its output going to log. It isn't a service: it lasts until it's stopped or
-// the machine restarts. sudo asks for the password first, on this terminal, if needed.
+// the machine restarts.
+//
+// sudo runs on this terminal, so it asks for the password here if it needs to and
+// accepts one it remembers: sudo remembers per terminal, so a detached sudo would
+// always find none. Its -b flag then starts the daemon in the background and returns.
 func startElevatedDaemon(user string, log *os.File) error {
 	exe, err := self()
 	if err != nil {
 		return err
 	}
 	argv := []string{exe, "daemon", "run", "--user", user}
-	if !elevated() {
-		auth := exec.Command("sudo", "-v")
-		auth.Stdin, auth.Stdout, auth.Stderr = os.Stdin, os.Stdout, os.Stderr
-		if err := auth.Run(); err != nil {
-			return fail("root permission wasn't granted")
+	if elevated() {
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Stdout, cmd.Stderr = log, log
+		cmd.SysProcAttr = detached()
+		if err := cmd.Start(); err != nil {
+			return err
 		}
-		argv = append([]string{"sudo", "-n", "--"}, argv...)
+		return cmd.Process.Release()
 	}
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command("sudo", append([]string{"-b", "--"}, argv...)...)
+	cmd.Stdin = os.Stdin // the password prompt itself goes to the terminal
 	cmd.Stdout, cmd.Stderr = log, log
-	cmd.SysProcAttr = detached()
-	if err := cmd.Start(); err != nil {
-		return err
+	if err := cmd.Run(); err != nil {
+		return fail("root permission wasn't granted")
 	}
-	return cmd.Process.Release()
+	return nil
 }
 
 // elevate re-runs masir with args as root, through sudo.

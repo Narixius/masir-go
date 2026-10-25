@@ -199,7 +199,7 @@ func TestPickerSearchesMoreLazily(t *testing.T) {
 	if loads.Load() != 0 {
 		t.Fatal("nothing should load before the user types")
 	}
-	keys(pk, typed("ai chat")...)
+	keys(pk, typed("aichat")...) // searches are typed without spaces: space selects
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		pk.mu.Lock()
@@ -217,15 +217,15 @@ func TestPickerSearchesMoreLazily(t *testing.T) {
 		}
 	}
 	if !slices.Equal(got, []string{"geosite:category-ai-chat-!cn"}) || loads.Load() != 1 {
-		t.Fatalf("\"ai chat\" found %v (loads %d); want just the AI chat category, loaded once", got, loads.Load())
+		t.Fatalf("\"aichat\" found %v (loads %d); want just the AI chat category, loaded once", got, loads.Load())
 	}
 
-	// While searching, space is part of the search and Enter picks the match, clearing
-	// the search; the pick stays listed so it can be seen and deselected.
+	// Space selects the match, as in every list; after the search is cleared, the pick
+	// stays listed so it can be seen and deselected.
 	pk.cursor = pk.firstSelectable(pk.rows(), 0, 1)
-	keys(pk, key{name: "enter"})
-	if len(pk.filter) != 0 || !pk.selected["geosite:category-ai-chat-!cn"] {
-		t.Fatalf("Enter should select the match and clear the search: filter=%q", string(pk.filter))
+	keys(pk, key{name: "space"}, key{name: "clear"})
+	if !pk.selected["geosite:category-ai-chat-!cn"] {
+		t.Fatal("space should select the match")
 	}
 	if !slices.ContainsFunc(pk.rows(), func(r row) bool { return r.item.Value == "geosite:category-ai-chat-!cn" }) {
 		t.Fatal("a selected search result must stay listed after the search is cleared")
@@ -236,7 +236,8 @@ func TestPickerSearchesMoreLazily(t *testing.T) {
 
 	// A search hit that's also in the groups is selected there, not listed twice.
 	keys(pk, typed("google")...)
-	keys(pk, key{name: "enter"})
+	pk.cursor = pk.firstSelectable(pk.rows(), 0, 1)
+	keys(pk, key{name: "space"})
 	if !pk.selected["geosite:google"] || slices.ContainsFunc(pk.custom, func(it PickItem) bool { return it.Value == "geosite:google" }) {
 		t.Errorf("google should be selected in its group without a copy among custom items: %+v", pk.custom)
 	}
