@@ -90,6 +90,18 @@ var geoIPLists = []string{"cloudflare", "cloudfront", "facebook", "fastly", "goo
 
 var countryCode = regexp.MustCompile(`^[a-z]{2}$`)
 
+func TestSiteCountryCatalog(t *testing.T) {
+	for _, e := range siteCountries {
+		code := strings.TrimPrefix(e.value, "geosite:")
+		if addon, ok := strings.CutPrefix(code, "category-"); ok {
+			code = addon
+		}
+		if countryNames[normalizeCountryCode(code)] == "" {
+			t.Errorf("%s (%s) doesn't name a country", e.value, e.label)
+		}
+	}
+}
+
 func TestIPCatalogMatchesGeoData(t *testing.T) {
 	for _, e := range ipCountries {
 		if !countryCode.MatchString(strings.TrimPrefix(e.value, "geoip:")) {

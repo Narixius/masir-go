@@ -304,19 +304,7 @@ func probe(ctx context.Context, c pb.DaemonServiceClient, subID string, cfgIDs [
 	}
 }
 
-func formatBytes(n int64) string {
-	units := []string{"B", "KB", "MB", "GB", "TB"}
-	f := float64(n)
-	i := 0
-	for f >= 1024 && i < len(units)-1 {
-		f /= 1024
-		i++
-	}
-	if i == 0 {
-		return fmt.Sprintf("%d B", n)
-	}
-	return fmt.Sprintf("%.2f %s", f, units[i])
-}
+func formatBytes(n int64) string { return ui.Bytes(n) }
 
 func plural(n int) string {
 	if n == 1 {

@@ -714,6 +714,7 @@ type Settings struct {
 	TunDns             []string               `protobuf:"bytes,9,rep,name=tun_dns,json=tunDns,proto3" json:"tun_dns,omitempty"`                                         // DNS the TUN interface advertises; empty means dns_servers
 	TunGateway         string                 `protobuf:"bytes,10,opt,name=tun_gateway,json=tunGateway,proto3" json:"tun_gateway,omitempty"`                            // IPv4 CIDR for the TUN interface
 	SubIntervalMinutes uint32                 `protobuf:"varint,11,opt,name=sub_interval_minutes,json=subIntervalMinutes,proto3" json:"sub_interval_minutes,omitempty"` // background subscription refresh; a subscription's own interval wins
+	XrayLogLevel       string                 `protobuf:"bytes,12,opt,name=xray_log_level,json=xrayLogLevel,proto3" json:"xray_log_level,omitempty"`                    // debug, info, warning, error, or none; default warning
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -823,6 +824,13 @@ func (x *Settings) GetSubIntervalMinutes() uint32 {
 		return x.SubIntervalMinutes
 	}
 	return 0
+}
+
+func (x *Settings) GetXrayLogLevel() string {
+	if x != nil {
+		return x.XrayLogLevel
+	}
+	return ""
 }
 
 type GetSettingsRequest struct {
@@ -969,6 +977,7 @@ type UpdateSettingsRequest struct {
 	TunDns             *StringList            `protobuf:"bytes,6,opt,name=tun_dns,json=tunDns,proto3" json:"tun_dns,omitempty"`
 	TunGateway         *string                `protobuf:"bytes,7,opt,name=tun_gateway,json=tunGateway,proto3,oneof" json:"tun_gateway,omitempty"`
 	SubIntervalMinutes *uint32                `protobuf:"varint,8,opt,name=sub_interval_minutes,json=subIntervalMinutes,proto3,oneof" json:"sub_interval_minutes,omitempty"` // 5 to 43200
+	XrayLogLevel       *string                `protobuf:"bytes,9,opt,name=xray_log_level,json=xrayLogLevel,proto3,oneof" json:"xray_log_level,omitempty"`                    // debug, info, warning, error, or none
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1057,6 +1066,13 @@ func (x *UpdateSettingsRequest) GetSubIntervalMinutes() uint32 {
 		return *x.SubIntervalMinutes
 	}
 	return 0
+}
+
+func (x *UpdateSettingsRequest) GetXrayLogLevel() string {
+	if x != nil && x.XrayLogLevel != nil {
+		return *x.XrayLogLevel
+	}
+	return ""
 }
 
 type UpdateSettingsResponse struct {
@@ -1349,7 +1365,9 @@ func (*SetTunEnabledResponse) Descriptor() ([]byte, []int) {
 
 type StreamLogsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Follow        bool                   `protobuf:"varint,1,opt,name=follow,proto3" json:"follow,omitempty"`
+	Follow        bool                   `protobuf:"varint,1,opt,name=follow,proto3" json:"follow,omitempty"`                    // send history, then keep streaming
+	Lines         uint32                 `protobuf:"varint,2,opt,name=lines,proto3" json:"lines,omitempty"`                      // most recent entries to send first; 0 means all buffered
+	MinLevel      string                 `protobuf:"bytes,3,opt,name=min_level,json=minLevel,proto3" json:"min_level,omitempty"` // debug, info, warn, error; empty means all
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1389,6 +1407,20 @@ func (x *StreamLogsRequest) GetFollow() bool {
 		return x.Follow
 	}
 	return false
+}
+
+func (x *StreamLogsRequest) GetLines() uint32 {
+	if x != nil {
+		return x.Lines
+	}
+	return 0
+}
+
+func (x *StreamLogsRequest) GetMinLevel() string {
+	if x != nil {
+		return x.MinLevel
+	}
+	return ""
 }
 
 type StreamLogsResponse struct {
@@ -4756,9 +4788,12 @@ func (x *CheckUpdateResponse) GetRelease() *ReleaseInfo {
 }
 
 type StartUpdateRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Target        UpdateTarget           `protobuf:"varint,1,opt,name=target,proto3,enum=masir.daemon.v1.UpdateTarget" json:"target,omitempty"`
-	Force         bool                   `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"` // install even when not newer, or from a development build
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Target UpdateTarget           `protobuf:"varint,1,opt,name=target,proto3,enum=masir.daemon.v1.UpdateTarget" json:"target,omitempty"`
+	Force  bool                   `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"` // install even when not newer, or from a development build
+	// The CLI's own binary, so a privileged daemon can update that copy too. Unset when
+	// the caller doesn't know it.
+	ClientBinary  string `protobuf:"bytes,3,opt,name=client_binary,json=clientBinary,proto3" json:"client_binary,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4805,6 +4840,13 @@ func (x *StartUpdateRequest) GetForce() bool {
 		return x.Force
 	}
 	return false
+}
+
+func (x *StartUpdateRequest) GetClientBinary() string {
+	if x != nil {
+		return x.ClientBinary
+	}
+	return ""
 }
 
 type StartUpdateResponse struct {
@@ -5386,7 +5428,7 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x13WatchStatusResponse\x12/\n" +
 	"\x06status\x18\x01 \x01(\v2\x17.masir.daemon.v1.StatusR\x06status\"\x11\n" +
 	"\x0fShutdownRequest\"\x12\n" +
-	"\x10ShutdownResponse\"\xf3\x02\n" +
+	"\x10ShutdownResponse\"\x99\x03\n" +
 	"\bSettings\x12\x14\n" +
 	"\x05power\x18\x01 \x01(\bR\x05power\x12\x10\n" +
 	"\x03tun\x18\x02 \x01(\bR\x03tun\x12&\n" +
@@ -5402,14 +5444,15 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\vtun_gateway\x18\n" +
 	" \x01(\tR\n" +
 	"tunGateway\x120\n" +
-	"\x14sub_interval_minutes\x18\v \x01(\rR\x12subIntervalMinutes\"\x14\n" +
+	"\x14sub_interval_minutes\x18\v \x01(\rR\x12subIntervalMinutes\x12$\n" +
+	"\x0exray_log_level\x18\f \x01(\tR\fxrayLogLevel\"\x14\n" +
 	"\x12GetSettingsRequest\"\x83\x01\n" +
 	"\x13GetSettingsResponse\x125\n" +
 	"\bsettings\x18\x01 \x01(\v2\x19.masir.daemon.v1.SettingsR\bsettings\x125\n" +
 	"\bdefaults\x18\x02 \x01(\v2\x19.masir.daemon.v1.SettingsR\bdefaults\"$\n" +
 	"\n" +
 	"StringList\x12\x16\n" +
-	"\x06values\x18\x01 \x03(\tR\x06values\"\xdf\x03\n" +
+	"\x06values\x18\x01 \x03(\tR\x06values\"\x9d\x04\n" +
 	"\x15UpdateSettingsRequest\x12+\n" +
 	"\x0falways_on_proxy\x18\x01 \x01(\bH\x00R\ralwaysOnProxy\x88\x01\x01\x12 \n" +
 	"\tallow_lan\x18\x02 \x01(\bH\x01R\ballowLan\x88\x01\x01\x12\"\n" +
@@ -5421,7 +5464,8 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\atun_dns\x18\x06 \x01(\v2\x1b.masir.daemon.v1.StringListR\x06tunDns\x12$\n" +
 	"\vtun_gateway\x18\a \x01(\tH\x04R\n" +
 	"tunGateway\x88\x01\x01\x125\n" +
-	"\x14sub_interval_minutes\x18\b \x01(\rH\x05R\x12subIntervalMinutes\x88\x01\x01B\x12\n" +
+	"\x14sub_interval_minutes\x18\b \x01(\rH\x05R\x12subIntervalMinutes\x88\x01\x01\x12)\n" +
+	"\x0exray_log_level\x18\t \x01(\tH\x06R\fxrayLogLevel\x88\x01\x01B\x12\n" +
 	"\x10_always_on_proxyB\f\n" +
 	"\n" +
 	"_allow_lanB\r\n" +
@@ -5429,7 +5473,8 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\n" +
 	"\b_doh_dnsB\x0e\n" +
 	"\f_tun_gatewayB\x17\n" +
-	"\x15_sub_interval_minutes\"O\n" +
+	"\x15_sub_interval_minutesB\x11\n" +
+	"\x0f_xray_log_level\"O\n" +
 	"\x16UpdateSettingsResponse\x125\n" +
 	"\bsettings\x18\x01 \x01(\v2\x19.masir.daemon.v1.SettingsR\bsettings\"!\n" +
 	"\x0fSetPowerRequest\x12\x0e\n" +
@@ -5440,9 +5485,11 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x13SetFallbackResponse\"0\n" +
 	"\x14SetTunEnabledRequest\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\"\x17\n" +
-	"\x15SetTunEnabledResponse\"+\n" +
+	"\x15SetTunEnabledResponse\"^\n" +
 	"\x11StreamLogsRequest\x12\x16\n" +
-	"\x06follow\x18\x01 \x01(\bR\x06follow\"E\n" +
+	"\x06follow\x18\x01 \x01(\bR\x06follow\x12\x14\n" +
+	"\x05lines\x18\x02 \x01(\rR\x05lines\x12\x1b\n" +
+	"\tmin_level\x18\x03 \x01(\tR\bminLevel\"E\n" +
 	"\x12StreamLogsResponse\x12/\n" +
 	"\x05entry\x18\x01 \x01(\v2\x19.masir.daemon.v1.LogEntryR\x05entry\"]\n" +
 	"\bLogEntry\x12!\n" +
@@ -5649,10 +5696,11 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	" \x01(\tR\tstagedDir\"\x14\n" +
 	"\x12CheckUpdateRequest\"M\n" +
 	"\x13CheckUpdateResponse\x126\n" +
-	"\arelease\x18\x01 \x01(\v2\x1c.masir.daemon.v1.ReleaseInfoR\arelease\"a\n" +
+	"\arelease\x18\x01 \x01(\v2\x1c.masir.daemon.v1.ReleaseInfoR\arelease\"\x86\x01\n" +
 	"\x12StartUpdateRequest\x125\n" +
 	"\x06target\x18\x01 \x01(\x0e2\x1d.masir.daemon.v1.UpdateTargetR\x06target\x12\x14\n" +
-	"\x05force\x18\x02 \x01(\bR\x05force\"C\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force\x12#\n" +
+	"\rclient_binary\x18\x03 \x01(\tR\fclientBinary\"C\n" +
 	"\x13StartUpdateResponse\x12,\n" +
 	"\x03job\x18\x01 \x01(\v2\x1a.masir.daemon.v1.UpdateJobR\x03job\"K\n" +
 	"\x12PauseUpdateRequest\x125\n" +

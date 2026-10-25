@@ -26,7 +26,13 @@ type Masir struct {
 	// file that this (root) daemon may write; it's updated too, so the service doesn't
 	// start an old version at the next boot.
 	ServiceBinary string
-	WorkDir       string
+	// ClientBinary is the CLI's own copy, when this daemon is privileged enough to
+	// replace it. It's best effort: the CLI finishes the job if this fails.
+	ClientBinary string
+	// Privileged reports whether this daemon runs with root/Administrator rights, so it
+	// may write a client binary owned by that account.
+	Privileged bool
+	WorkDir    string
 	// Restart is called once the new binary is in place; the daemon then exits and
 	// starts the new version.
 	Restart func()
@@ -99,6 +105,11 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	if m.ServiceBinary != "" && m.ServiceBinary != m.Binary {
 		// Best effort: the CLI checks afterwards and copies it with sudo if this failed.
 		_ = replaceFile(filepath.Join(staged, exe("masir")), m.ServiceBinary)
+	}
+	if m.Privileged && m.ClientBinary != "" && m.ClientBinary != m.Binary && m.ClientBinary != m.ServiceBinary {
+		// The daemon already runs with the rights the CLI's copy needs. Still best
+		// effort: the CLI checks content afterwards and finishes it with sudo if needed.
+		_ = replaceFile(filepath.Join(staged, exe("masir")), m.ClientBinary)
 	}
 	r.State(pb.UpdateState_UPDATE_STATE_RESTARTING)
 	if m.Restart != nil {
@@ -344,6 +355,7 @@ func replaceFile(src, dst string) error {
 	if err := copyFile(src, tmp, 0o755); err != nil {
 		return err
 	}
+	preserveOwner(tmp, dst)
 	if runtime.GOOS == "windows" {
 		os.Remove(dst + ".old")
 		if err := os.Rename(dst, dst+".old"); err != nil && !os.IsNotExist(err) {

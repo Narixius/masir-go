@@ -72,16 +72,35 @@ func (s *Server) runner(t pb.UpdateTarget) (*update.Runner, error) {
 	return nil, status.Error(codes.InvalidArgument, "target must be masir or geo")
 }
 
-func (s *Server) masirTask(force bool) update.Task {
+func (s *Server) masirTask(force bool, clientBinary string) update.Task {
 	return update.Masir{
 		Clients:       s.clients(),
 		Current:       Version,
 		Force:         force,
 		Binary:        executable(),
 		ServiceBinary: s.serviceBinary(),
+		ClientBinary:  s.clientBinary(clientBinary),
+		Privileged:    s.id.Privileged,
 		WorkDir:       filepath.Join(s.dir, "updates", "masir"),
 		Restart:       s.restartForUpdate,
 	}.Run
+}
+
+// clientBinary accepts the CLI's path only when this daemon has the rights to replace
+// it and it looks like a masir binary, so a client can't ask root to overwrite anything.
+func (s *Server) clientBinary(path string) string {
+	if !s.id.Privileged || path == "" || s.id.UID < 0 {
+		return "" // Windows has no numeric owner to preserve; the CLI elevates itself
+	}
+	name := filepath.Base(path)
+	if name != "masir" && name != "masir.exe" {
+		return ""
+	}
+	fi, err := os.Stat(path)
+	if err != nil || !fi.Mode().IsRegular() {
+		return ""
+	}
+	return path
 }
 
 func (s *Server) geoTask(force bool) update.Task {
@@ -139,7 +158,7 @@ func (s *Server) StartUpdate(_ context.Context, req *pb.StartUpdateRequest) (*pb
 	}
 	task := s.geoTask(req.Force)
 	if req.Target == pb.UpdateTarget_UPDATE_TARGET_MASIR {
-		task = s.masirTask(req.Force)
+		task = s.masirTask(req.Force, req.ClientBinary)
 	}
 	job, err := r.Start(task)
 	if err != nil {

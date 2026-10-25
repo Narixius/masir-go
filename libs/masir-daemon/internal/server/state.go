@@ -53,6 +53,7 @@ func (s *Server) applyLocked(ctx context.Context, st store.State) error {
 		State:   st,
 		Proxy:   runs,
 		Tun:     tun,
+		LogDir:  s.dir,
 		Active:  active.Outbound,
 		Resolve: s.resolveTarget,
 	}

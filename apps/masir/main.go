@@ -74,7 +74,7 @@ func writeElevatedResult(ok bool) {
 
 func handleError(_ io.Writer, _ fang.Styles, err error) {
 	lastErr = err.Error()
-	ui.Error(ui.Red(capitalize(err.Error())) + "\n" + ui.Dim("Run `masir --help` for usage."))
+	ui.Problem(capitalize(err.Error()), "Run `masir --help` for usage.")
 }
 
 // report prints a command's error the clack way and returns the exit code: 130 when
@@ -89,7 +89,7 @@ func report(err error) int {
 		return 1
 	default:
 		lastErr = message(err)
-		ui.Error(ui.Red(lastErr))
+		showError(err)
 		return 1
 	}
 }
@@ -201,6 +201,8 @@ func rootCmd() *cobra.Command {
 		"masir rules add\n" +
 		"# Send Iranian websites direct\n" +
 		"masir rules add --domain geosite:category-ir -o direct\n" +
+		"# Send Russian websites through the proxy\n" +
+		"masir rules add --domain geosite:category-ru -o proxy\n" +
 		"# Send Telegram, with its helper processes, through the proxy\n" +
 		"masir rules add --app /Applications/Telegram.app/ -o proxy\n" +
 		"# Always use one specific proxy for Netflix\n" +
@@ -257,10 +259,14 @@ func rootCmd() *cobra.Command {
 	syncSvc := leaf("sync-service", "Copy a new masir binary into the system service's location", daemonSyncService, cobra.NoArgs,
 		flagSpec{names: []string{"from"}, help: "The new masir binary"})
 	syncSvc.Hidden = true // masir update runs it with root rights
+	syncSelf := leaf("sync-self", "Replace a masir binary with a staged one", daemonSyncSelf, cobra.NoArgs,
+		flagSpec{names: []string{"from"}, help: "The new masir binary"},
+		flagSpec{names: []string{"to"}, help: "The binary to replace; default: this masir"})
+	syncSelf.Hidden = true // masir update runs it with root rights
 	daemonGroup := group("daemon", "Manage the masir daemon",
 		leaf("start", "Start the daemon in the background", daemonStart, cobra.NoArgs),
 		leaf("stop", "Stop the daemon", daemonStop, cobra.NoArgs),
-		restart, enable, disable, runDaemon, syncSvc)
+		restart, enable, disable, runDaemon, syncSvc, syncSelf)
 
 	targetArg := cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs)
 	targets := []string{"masir\tthe app itself", "geo\tgeosite.dat and geoip.dat"}
@@ -297,8 +303,15 @@ func rootCmd() *cobra.Command {
 
 	// Help lists commands in this order, most used first; cobra appends completion and help.
 	cobra.EnableCommandSorting = false
+	logs := leaf("logs", "Show recent daemon activity, then follow it", cmdLogs, cobra.NoArgs,
+		flagSpec{names: []string{"follow"}, bool: true, def: true, help: "keep printing new entries"},
+		flagSpec{names: []string{"no-follow"}, bool: true, help: "print the recent log and exit"},
+		flagSpec{names: []string{"level"}, help: "only this level and above: debug, info, warn, error"},
+		flagSpec{names: []string{"lines", "n"}, help: "how many recent entries to show (default 200)"},
+		flagSpec{names: []string{"json"}, bool: true, help: "one JSON object per entry"})
+	logs.Aliases = []string{"log"}
 	root.AddCommand(connect, disconnect, status, use, mode, sub, rules, settings,
-		leaf("logs", "Follow the daemon's log", cmdLogs, cobra.NoArgs),
+		logs,
 		daemonGroup, updateCmd, getConfig,
 		leaf("menu", "Pick a command from an interactive menu", func(args) error { return menu() }, cobra.NoArgs),
 		leaf("version", "Print the versions of masir, its daemon and Xray", cmdVersion, cobra.NoArgs))

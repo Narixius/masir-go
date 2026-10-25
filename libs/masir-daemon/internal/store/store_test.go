@@ -109,11 +109,12 @@ func TestLoadSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !st.Settings.AllowLAN || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackDirect {
+	if !st.Settings.AllowLAN || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackDirect || st.Settings.XrayLogLevel != "warning" {
 		t.Fatalf("defaults = %+v", st.Settings)
 	}
 
 	st.Settings.Power = true
+	st.Settings.XrayLogLevel = "info"
 	_ = st.AddRule("r", []byte(`{"domain":["full:a.com"]}`), Target{Kind: TargetConfig, SubscriptionID: "s", ConfigID: "c", Name: "n"}, false)
 	_ = st.AddOutbound("wg", []byte(`{"protocol":"freedom"}`))
 	if err := Save(dir, st); err != nil {
@@ -128,7 +129,7 @@ func TestLoadSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !back.Settings.Power || len(back.Rules) != 1 || back.Rules[0].Target.Name != "n" || len(back.Outbounds) != 1 {
+	if !back.Settings.Power || back.Settings.XrayLogLevel != "info" || len(back.Rules) != 1 || back.Rules[0].Target.Name != "n" || len(back.Outbounds) != 1 {
 		t.Fatalf("round trip = %+v", back)
 	}
 
@@ -150,6 +151,7 @@ func TestSettingsValidate(t *testing.T) {
 		"dns":      func(s *Settings) { s.DNSServers = []string{"dns.google"} },
 		"no dns":   func(s *Settings) { s.DNSServers = nil },
 		"gateway":  func(s *Settings) { s.TunGateway = "fd00::1/64" },
+		"log":      func(s *Settings) { s.XrayLogLevel = "verbose" },
 	} {
 		s := DefaultSettings()
 		mutate(&s)
@@ -159,6 +161,9 @@ func TestSettingsValidate(t *testing.T) {
 	}
 	if err := DefaultSettings().Validate(); err != nil {
 		t.Fatalf("defaults invalid: %v", err)
+	}
+	if got := NormalizeXrayLogLevel(" WARN "); got != "warning" {
+		t.Fatalf("NormalizeXrayLogLevel = %q, want warning", got)
 	}
 }
 

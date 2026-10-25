@@ -62,7 +62,7 @@ func New(xc *xray.Core, id identity.Identity) *Server {
 	if xc == nil {
 		panic("server.New: xray core is nil")
 	}
-	return &Server{
+	s := &Server{
 		xray:      xc,
 		id:        id,
 		startedAt: time.Now(),
@@ -72,6 +72,8 @@ func New(xc *xray.Core, id identity.Identity) *Server {
 		tests:     map[string]context.CancelFunc{},
 		stopped:   make(chan struct{}),
 	}
+	xray.SetLogSink(s.Log)
+	return s
 }
 
 // Boot loads state from dir, brings Xray to what the settings ask for, and until ctx is

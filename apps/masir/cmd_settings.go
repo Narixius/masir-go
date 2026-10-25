@@ -20,7 +20,7 @@ import (
 type setting struct {
 	key, label, desc string
 	aliases          []string
-	kind             string // "bool", "list", "mode", or "" for text
+	kind             string // "bool", "list", "mode", "level", or "" for text
 	get              func(*pb.Settings) string
 	validate         func(string) error
 	// apply turns a value into a change; mode has its own RPC.
@@ -82,6 +82,21 @@ var settingsTable = []setting{
 		get:      func(s *pb.Settings) string { return strings.Join(s.GetTunDns(), ",") },
 		validate: requireIPs(false),
 		apply:    func(r *pb.UpdateSettingsRequest, v string) { r.TunDns = &pb.StringList{Values: splitList(v)} }},
+	{key: "logLevel", label: "Xray log level", desc: "debug, info, warning, error, or none", aliases: []string{"xraylog", "log"}, kind: "level",
+		get: func(s *pb.Settings) string {
+			if s.GetXrayLogLevel() == "" {
+				return "warning"
+			}
+			return s.GetXrayLogLevel()
+		},
+		validate: func(v string) error {
+			switch v {
+			case "debug", "info", "warning", "error", "none":
+				return nil
+			}
+			return fail("log level is debug, info, warning, error, or none")
+		},
+		apply: func(r *pb.UpdateSettingsRequest, v string) { r.XrayLogLevel = &v }},
 	{key: "gateway", label: "TUN gateway", desc: "IPv4 range for the TUN interface", aliases: []string{"tungateway"},
 		get: func(s *pb.Settings) string { return s.GetTunGateway() },
 		validate: func(v string) error {
@@ -179,6 +194,11 @@ func normValue(s setting, v string) (string, error) {
 		v = strings.Join(splitList(strings.ReplaceAll(v, " ", ",")), ",")
 	case "mode":
 		v = strings.ToLower(v)
+	case "level":
+		v = strings.ToLower(strings.TrimSpace(v))
+		if v == "warn" {
+			v = "warning"
+		}
 	}
 	if s.validate != nil {
 		if err := s.validate(v); err != nil {
@@ -222,6 +242,9 @@ func applySetting(s setting, v string) error {
 	if s.kind == "minutes" { // the daemon's own schedule, not Xray's: in effect at once
 		note = "the daemon uses it from now on"
 	}
+	if s.key == "logLevel" && st.XrayRunning {
+		note = "Xray restarts for a moment to use it"
+	}
 	ui.Success(fmt.Sprintf("%s set to %s (%s).", s.label, ui.Visual(shown), note))
 	if (s.key == "mixedPort" || s.key == "allowLan") && st.ProxyRunning {
 		ui.Info("Proxy now on " + st.ProxyAddress + ".")
@@ -241,6 +264,8 @@ func displayValue(s setting, v string) string {
 		if n, err := strconv.Atoi(v); err == nil {
 			return ui.Cyan(v+" min") + ui.Dim(" ("+humanMinutes(n)+")")
 		}
+	case s.kind == "level":
+		return ui.Cyan(v)
 	}
 	return ui.Cyan(strings.ReplaceAll(v, ",", ", "))
 }
@@ -278,7 +303,7 @@ func cmdSettings(a args) error {
 			return err
 		}
 		if err := editSetting(s, res); err != nil && !ui.IsCancel(err) {
-			ui.Error(ui.Red(message(err)))
+			showError(err)
 		}
 	}
 }
@@ -309,6 +334,14 @@ func editSetting(s setting, res *pb.GetSettingsResponse) error {
 		v, err = ui.Select(s.label+" (catch-all at the end of rules)", []ui.Option[string]{
 			{Label: "Proxy", Hint: "route unmatched traffic through the active proxy", Value: "proxy"},
 			{Label: "Direct", Hint: "send unmatched traffic directly without proxy", Value: "direct"},
+		}, cur)
+	case "level":
+		v, err = ui.Select(s.label, []ui.Option[string]{
+			{Label: "Debug", Hint: "everything, including connection details", Value: "debug"},
+			{Label: "Info", Hint: "startup and notable events", Value: "info"},
+			{Label: "Warning", Hint: "warnings and errors only (default)", Value: "warning"},
+			{Label: "Error", Hint: "errors only", Value: "error"},
+			{Label: "None", Hint: "turn Xray's own logging off", Value: "none"},
 		}, cur)
 	default:
 		v, err = ui.Text(fmt.Sprintf("%s (%s)", s.label, s.desc), cur, func(in string) error {

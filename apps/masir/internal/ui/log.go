@@ -49,12 +49,31 @@ func Warn(msg string)    { log(Yellow(symbols.WARN), msg, os.Stderr, "warning: "
 // puts them in display order itself.
 func Error(msg string) { log(Red(symbols.ERROR), Visual(msg), os.Stderr, "error: ") }
 
+// Problem prints a failure with a next step on the rail below it.
+func Problem(msg, hint string) {
+	Error(msg)
+	if hint == "" {
+		return
+	}
+	if styled {
+		Message(Dim(hint))
+		return
+	}
+	fmt.Fprintln(os.Stderr, hint)
+}
+
 func log(symbol, msg string, plain *os.File, prefix string) {
 	if !styled {
 		fmt.Fprintln(plain, prefix+msg)
 		return
 	}
 	logLine(symbol, msg)
+}
+
+// Command prints a line exactly as given, so it can be copied without rail characters
+// or colors.
+func Command(cmd string) {
+	fmt.Println(cmd)
 }
 
 // Message prints lines on the rail without a symbol.

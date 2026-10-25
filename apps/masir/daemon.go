@@ -283,6 +283,7 @@ func copyFile(from, to string, mode os.FileMode) error {
 	if err := out.Close(); err != nil {
 		return err
 	}
+	preserveOwner(tmp, to)
 	return os.Rename(tmp, to) // replacing in place keeps a running copy intact
 }
 

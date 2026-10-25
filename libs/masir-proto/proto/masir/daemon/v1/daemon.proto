@@ -131,6 +131,7 @@ message Settings {
   repeated string tun_dns = 9;     // DNS the TUN interface advertises; empty means dns_servers
   string tun_gateway = 10;         // IPv4 CIDR for the TUN interface
   uint32 sub_interval_minutes = 11; // background subscription refresh; a subscription's own interval wins
+  string xray_log_level = 12;       // debug, info, warning, error, or none; default warning
 }
 
 message GetSettingsRequest {}
@@ -152,6 +153,7 @@ message UpdateSettingsRequest {
   StringList tun_dns = 6;
   optional string tun_gateway = 7;
   optional uint32 sub_interval_minutes = 8; // 5 to 43200
+  optional string xray_log_level = 9;       // debug, info, warning, error, or none
 }
 message UpdateSettingsResponse { Settings settings = 1; }
 
@@ -168,7 +170,11 @@ message SetFallbackResponse {}
 message SetTunEnabledRequest { bool enabled = 1; }
 message SetTunEnabledResponse {}
 
-message StreamLogsRequest { bool follow = 1; }
+message StreamLogsRequest {
+  bool follow = 1;       // send history, then keep streaming
+  uint32 lines = 2;      // most recent entries to send first; 0 means all buffered
+  string min_level = 3;  // debug, info, warn, error; empty means all
+}
 message StreamLogsResponse { LogEntry entry = 1; }
 
 message LogEntry {
@@ -432,6 +438,9 @@ message CheckUpdateResponse { ReleaseInfo release = 1; }
 message StartUpdateRequest {
   UpdateTarget target = 1;
   bool force = 2; // install even when not newer, or from a development build
+  // The CLI's own binary, so a privileged daemon can update that copy too. Unset when
+  // the caller doesn't know it.
+  string client_binary = 3;
 }
 message StartUpdateResponse { UpdateJob job = 1; }
 

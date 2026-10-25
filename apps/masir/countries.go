@@ -3,6 +3,8 @@
 
 package main
 
+import "strings"
+
 // countryNames maps geoip.dat's two-letter country codes to English names.
 var countryNames = map[string]string{
 	"ad": "Andorra",
@@ -255,4 +257,86 @@ var countryNames = map[string]string{
 	"za": "South Africa",
 	"zm": "Zambia",
 	"zw": "Zimbabwe",
+}
+
+// countryAdjectives are the forms used in website category labels, e.g. "Russian
+// websites". Countries without an entry read "<Name> websites".
+var countryAdjectives = map[string]string{
+	"ae": "Emirati", "af": "Afghan", "al": "Albanian", "am": "Armenian", "ar": "Argentine",
+	"at": "Austrian", "au": "Australian", "az": "Azerbaijani", "ba": "Bosnian", "bd": "Bangladeshi",
+	"be": "Belgian", "bg": "Bulgarian", "br": "Brazilian", "by": "Belarusian", "ca": "Canadian",
+	"ch": "Swiss", "cl": "Chilean", "cn": "Chinese", "co": "Colombian", "cu": "Cuban",
+	"cy": "Cypriot", "cz": "Czech", "de": "German", "dk": "Danish", "dz": "Algerian",
+	"ec": "Ecuadorian", "ee": "Estonian", "eg": "Egyptian", "es": "Spanish", "et": "Ethiopian",
+	"fi": "Finnish", "fr": "French", "gb": "British", "ge": "Georgian", "gr": "Greek",
+	"hk": "Hong Kong", "hr": "Croatian", "hu": "Hungarian", "id": "Indonesian", "ie": "Irish",
+	"il": "Israeli", "in": "Indian", "iq": "Iraqi", "ir": "Iranian", "is": "Icelandic",
+	"it": "Italian", "jo": "Jordanian", "jp": "Japanese", "ke": "Kenyan", "kg": "Kyrgyz",
+	"kh": "Cambodian", "kp": "North Korean", "kr": "South Korean", "kw": "Kuwaiti", "kz": "Kazakh",
+	"lb": "Lebanese", "lk": "Sri Lankan", "lt": "Lithuanian", "lu": "Luxembourgish", "lv": "Latvian",
+	"ly": "Libyan", "ma": "Moroccan", "md": "Moldovan", "me": "Montenegrin", "mk": "Macedonian",
+	"mm": "Burmese", "mn": "Mongolian", "mx": "Mexican", "my": "Malaysian", "ng": "Nigerian",
+	"nl": "Dutch", "no": "Norwegian", "np": "Nepali", "nz": "New Zealander", "om": "Omani",
+	"pe": "Peruvian", "ph": "Filipino", "pk": "Pakistani", "pl": "Polish", "pt": "Portuguese",
+	"qa": "Qatari", "ro": "Romanian", "rs": "Serbian", "ru": "Russian", "sa": "Saudi",
+	"se": "Swedish", "sg": "Singaporean", "si": "Slovenian", "sk": "Slovak", "sy": "Syrian",
+	"th": "Thai", "tm": "Turkmen", "tn": "Tunisian", "tr": "Turkish", "tw": "Taiwanese",
+	"ua": "Ukrainian", "us": "American", "uy": "Uruguayan", "uz": "Uzbek", "ve": "Venezuelan",
+	"vn": "Vietnamese", "ye": "Yemeni", "za": "South African",
+}
+
+// countryAliases add other names people type when searching, without changing labels.
+var countryAliases = map[string]string{
+	"ae": "uae emirates", "cz": "czechia", "gb": "uk britain", "kp": "north korea",
+	"kr": "south korea", "mm": "burma", "nl": "holland", "us": "usa america",
+}
+
+// normalizeCountryCode turns the spellings geo data and people use into the two-letter
+// code in countryNames. geoip.dat uses gb for the United Kingdom, not uk.
+func normalizeCountryCode(code string) string {
+	code = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(code), "!"))
+	if code == "uk" {
+		return "gb"
+	}
+	return code
+}
+
+// countryAdjective is the adjective for a country code, or the country's name.
+func countryAdjective(code string) string {
+	code = normalizeCountryCode(code)
+	if a := countryAdjectives[code]; a != "" {
+		return a
+	}
+	if n := countryNames[code]; n != "" {
+		return n
+	}
+	return ""
+}
+
+// countrySearch is the text a country search also matches: name, adjective and common
+// aliases. Empty when value names no country.
+func countrySearch(value string) string {
+	code := value
+	for _, prefix := range []string{"geosite:", "geoip:"} {
+		if rest, ok := strings.CutPrefix(code, prefix); ok {
+			code = rest
+			break
+		}
+	}
+	if i := strings.LastIndex(code, "-"); i >= 0 {
+		code = code[i+1:]
+	}
+	code = normalizeCountryCode(code)
+	name := countryNames[code]
+	if name == "" {
+		return ""
+	}
+	parts := []string{name}
+	if a := countryAdjectives[code]; a != "" {
+		parts = append(parts, a)
+	}
+	if a := countryAliases[code]; a != "" {
+		parts = append(parts, a)
+	}
+	return strings.Join(parts, " ")
 }

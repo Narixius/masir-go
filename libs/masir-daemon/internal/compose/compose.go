@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -35,6 +36,7 @@ type Input struct {
 	Proxy   bool            // the mixed proxy inbound
 	Tun     bool            // the TUN inbound
 	TunName string          // interface name; empty lets Xray pick
+	LogDir  string          // where Xray writes its error log; empty keeps it on stdout
 	Active  json.RawMessage // the selected config's outbound; nil when nothing is selected
 	// Resolve finds a pinned config, following it by name when its ID changed upstream.
 	Resolve func(store.Target) (subs.Config, bool)
@@ -228,8 +230,18 @@ func Build(in Input) (Output, error) {
 		strategy = "IPIfNonMatch"
 	}
 
+	level := store.NormalizeXrayLogLevel(st.Settings.XrayLogLevel)
+	if level == "" {
+		level = "warning"
+	}
+	log := obj{"loglevel": level}
+	if in.LogDir != "" {
+		// A file log lets the daemon tee Xray's own warnings into `masir logs` (see
+		// xray.SetLogSink) without also capturing temporary latency-test instances.
+		log["error"] = filepath.Join(in.LogDir, "xray-error.log")
+	}
 	cfg, err := json.Marshal(obj{
-		"log":       obj{"loglevel": "warning"},
+		"log":       log,
 		"dns":       obj{"servers": dnsServers},
 		"inbounds":  orEmpty(inbounds),
 		"outbounds": outbounds,

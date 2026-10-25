@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 )
 
 type Fallback string
@@ -28,6 +29,8 @@ type Settings struct {
 	// SubIntervalMinutes is how often subscriptions refresh in the background, unless a
 	// subscription sets its own interval.
 	SubIntervalMinutes int `json:"subIntervalMinutes"`
+	// XrayLogLevel is Xray's own log level: debug, info, warning, error, or none.
+	XrayLogLevel string `json:"xrayLogLevel"`
 }
 
 // Bounds for subscription refresh intervals, in minutes: the daemon looks for due
@@ -58,7 +61,27 @@ func DefaultSettings() Settings {
 		TunGateway: "10.10.20.1/24",
 
 		SubIntervalMinutes: 12 * 60,
+		XrayLogLevel:       "warning",
 	}
+}
+
+// NormalizeXrayLogLevel lowercases a level and turns Xray's "warn" shorthand into
+// "warning", the spelling Xray itself accepts.
+func NormalizeXrayLogLevel(level string) string {
+	level = strings.ToLower(strings.TrimSpace(level))
+	if level == "warn" {
+		return "warning"
+	}
+	return level
+}
+
+// ValidXrayLogLevel checks Xray's log level.
+func ValidXrayLogLevel(level string) error {
+	switch NormalizeXrayLogLevel(level) {
+	case "debug", "info", "warning", "error", "none":
+		return nil
+	}
+	return fmt.Errorf("xray log level must be debug, info, warning, error, or none, not %q: %w", level, ErrInvalid)
 }
 
 // XrayRuns reports whether settings call for a running Xray.
@@ -87,5 +110,8 @@ func (s Settings) Validate() error {
 	if ip, _, err := net.ParseCIDR(s.TunGateway); err != nil || ip.To4() == nil {
 		return fmt.Errorf("tun gateway %q must be an IPv4 CIDR: %w", s.TunGateway, ErrInvalid)
 	}
-	return ValidSubInterval(s.SubIntervalMinutes)
+	if err := ValidSubInterval(s.SubIntervalMinutes); err != nil {
+		return err
+	}
+	return ValidXrayLogLevel(s.XrayLogLevel)
 }

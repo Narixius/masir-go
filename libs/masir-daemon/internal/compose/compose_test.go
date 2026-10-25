@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -20,6 +21,7 @@ const (
 )
 
 type config struct {
+	Log map[string]any `json:"log"`
 	DNS struct {
 		Servers []map[string]any `json:"servers"`
 	} `json:"dns"`
@@ -237,5 +239,25 @@ func TestTunBlocksDNSLeaksOnWindows(t *testing.T) {
 	}
 	if got := leak("darwin"); got != nil {
 		t.Errorf("the filter is Windows-only, got %v on macOS", got)
+	}
+}
+
+func TestXrayLogSettings(t *testing.T) {
+	dir := t.TempDir()
+	st := testState(t)
+	st.Settings.XrayLogLevel = "info"
+	_, c := build(t, Input{State: st, LogDir: dir})
+	if c.Log["loglevel"] != "info" {
+		t.Fatalf("loglevel = %v, want info", c.Log["loglevel"])
+	}
+	if got, _ := c.Log["error"].(string); got != filepath.Join(dir, "xray-error.log") {
+		t.Fatalf("error log = %q", got)
+	}
+
+	// Without a log directory the config stays on stdout, which is what tests and
+	// callers that only inspect the config want.
+	_, c = build(t, Input{State: st})
+	if _, ok := c.Log["error"]; ok {
+		t.Fatalf("error log should be unset without LogDir: %v", c.Log)
 	}
 }

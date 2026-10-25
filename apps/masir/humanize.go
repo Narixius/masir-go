@@ -10,9 +10,8 @@ import (
 // China)", google-cn "Google (China)", geoip de "🇩🇪 Germany".
 
 var siteSpecial = map[string]string{
-	"cn":                   "Chinese websites",
+	"cn":                   "🇨🇳 Chinese websites",
 	"private":              "Local network names",
-	"category-ir":          "Iranian websites",
 	"category-ads-all":     "Ads and trackers",
 	"geolocation-cn":       "Websites in China",
 	"geolocation-!cn":      "Websites outside China",
@@ -53,14 +52,22 @@ func humanizeSite(code string) string {
 		return s
 	}
 	category := strings.HasPrefix(code, "category-")
-	parts := strings.Split(strings.TrimPrefix(code, "category-"), "-")
+	base := strings.TrimPrefix(code, "category-")
+	if category {
+		if _, ok := countryNames[normalizeCountryCode(base)]; ok {
+			return flag(base) + " " + countryAdjective(base) + " websites"
+		}
+	}
+	parts := strings.Split(base, "-")
 	region := ""
 	if n := len(parts); n > 1 {
 		last := parts[n-1]
-		if name, ok := countryNames[strings.TrimPrefix(last, "!")]; ok {
-			region = name
+		cc := normalizeCountryCode(last)
+		if name, ok := countryNames[cc]; ok {
 			if strings.HasPrefix(last, "!") {
 				region = "outside " + name
+			} else {
+				region = flag(cc) + " " + name
 			}
 			parts = parts[:n-1]
 		}
@@ -94,6 +101,7 @@ func humanizeIP(code string) string {
 	if s, ok := ipSpecial[code]; ok {
 		return s
 	}
+	code = normalizeCountryCode(code)
 	if name, ok := countryNames[code]; ok {
 		return flag(code) + " " + name
 	}
@@ -102,6 +110,7 @@ func humanizeIP(code string) string {
 
 // flag is a country's flag emoji, from its two-letter code.
 func flag(code string) string {
+	code = normalizeCountryCode(code)
 	if len(code) != 2 {
 		return ""
 	}

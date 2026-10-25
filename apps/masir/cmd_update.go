@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,10 +57,28 @@ func cmdUpdate(a args) error {
 			return err
 		}
 	}
+	if self, err := self(); err == nil && !writableDir(filepath.Dir(self)) {
+		if st, err := currentStatus(); err == nil && !st.Privileged {
+			ui.Note(fmt.Sprintf("The daemon isn't running with %s, so it can't update your copy at %s directly.\nmasir will ask for permission at the end, after the daemon is updated.",
+				privilegeOwner, self), ui.Yellow("▲ Your copy needs permission"))
+		}
+	}
 	if err := startUpdate(pb.UpdateTarget_UPDATE_TARGET_MASIR, force); err != nil {
 		return err
 	}
 	return watchUpdate(pb.UpdateTarget_UPDATE_TARGET_MASIR)
+}
+
+// writableDir reports whether this user may create a file in dir.
+func writableDir(dir string) bool {
+	f, err := os.CreateTemp(dir, ".masir-write-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	f.Close()
+	os.Remove(name)
+	return true
 }
 
 func cmdUpdateGeo(a args) error {
@@ -70,8 +89,9 @@ func cmdUpdateGeo(a args) error {
 }
 
 func startUpdate(target pb.UpdateTarget, force bool) error {
+	client, _ := self()
 	_, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.StartUpdateResponse, error) {
-		return c.StartUpdate(ctx, &pb.StartUpdateRequest{Target: target, Force: force})
+		return c.StartUpdate(ctx, &pb.StartUpdateRequest{Target: target, Force: force, ClientBinary: client})
 	})
 	return err
 }
@@ -219,14 +239,13 @@ func watchUpdate(target pb.UpdateTarget) error {
 	if err != nil {
 		return err
 	}
-	sp := ui.SpinWith("Starting the "+updateWord(target)+" update", "Stopped watching")
-	speed := newSpeed()
+	pr := ui.NewProgress("Starting the " + updateWord(target) + " update")
 	var job *pb.UpdateJob
 	for {
 		res, err := stream.Recv()
 		if err != nil {
 			if appCtx.Err() != nil {
-				ui.Info("The update goes on in the background: `masir update status` follows it, `masir update pause` or `stop` controls it.")
+				pr.Stop("Stopped watching. The update goes on in the background: `masir update status` follows it, `masir update pause` or `stop` controls it.")
 				return nil
 			}
 			if errors.Is(err, io.EOF) {
@@ -235,52 +254,63 @@ func watchUpdate(target pb.UpdateTarget) error {
 			if job != nil && job.State == pb.UpdateState_UPDATE_STATE_RESTARTING {
 				break // the daemon went away to restart, as expected
 			}
-			sp.Fail(message(err))
+			pr.Fail(message(err))
 			return errReported
 		}
 		job = res.Job
-		if job.State == pb.UpdateState_UPDATE_STATE_DOWNLOADING {
-			sp.Message(fmt.Sprintf("Downloading %s  %s%s", job.File, progressText(job), speed.text(job.BytesDone)))
-		} else {
-			sp.Message(stateText(job))
+		switch job.State {
+		case pb.UpdateState_UPDATE_STATE_DOWNLOADING:
+			pr.SetLabel("Downloading " + job.File)
+			pr.Set(job.BytesDone, job.BytesTotal)
+		case pb.UpdateState_UPDATE_STATE_CHECKING, pb.UpdateState_UPDATE_STATE_VERIFYING, pb.UpdateState_UPDATE_STATE_INSTALLING:
+			pr.SetLabel(stateText(job))
+			pr.Set(0, 0)
+		default:
+			pr.SetLabel(stateText(job))
 		}
 	}
 	if job == nil {
-		sp.Fail("the daemon didn't report the update")
+		pr.Fail("the daemon didn't report the update")
 		return errReported
 	}
 
 	switch job.State {
 	case pb.UpdateState_UPDATE_STATE_DONE:
 		if target == pb.UpdateTarget_UPDATE_TARGET_GEO {
-			sp.Stop(fmt.Sprintf("Geo data updated to %s; Xray is using it now.", job.Version))
+			pr.Stop(fmt.Sprintf("Geo data updated to %s; Xray is using it now.", job.Version))
 		} else {
-			sp.Stop("Update installed.")
+			pr.Stop("Update installed.")
 		}
 	case pb.UpdateState_UPDATE_STATE_UP_TO_DATE:
 		if target == pb.UpdateTarget_UPDATE_TARGET_GEO {
-			sp.Stop(fmt.Sprintf("Geo data is already the latest (%s).", job.Version))
+			pr.Stop(fmt.Sprintf("Geo data is already the latest (%s).", job.Version))
 		} else {
-			sp.Stop(fmt.Sprintf("masir %s is already installed.", job.Version))
+			pr.Stop(fmt.Sprintf("masir %s is already installed.", job.Version))
 		}
 	case pb.UpdateState_UPDATE_STATE_PAUSED:
-		sp.Stop(fmt.Sprintf("Paused at %s. `masir update resume` continues it.", progressText(job)))
+		pr.Stop(fmt.Sprintf("Paused at %s. `masir update resume` continues it.", progressText(job)))
 	case pb.UpdateState_UPDATE_STATE_STOPPED:
-		sp.Stop("The update was stopped.")
+		pr.Stop("The update was stopped.")
 	case pb.UpdateState_UPDATE_STATE_FAILED:
-		sp.Fail("Update failed: " + job.Error)
+		pr.Fail("Update failed: " + friendlyUpdateError(job.Error))
 		return errReported
 	case pb.UpdateState_UPDATE_STATE_RESTARTING:
-		sp.Message("Starting masir " + job.Version)
+		pr.SetLabel("Starting masir " + job.Version)
+		failed := false
 		if err := awaitDaemon(job.Version); err != nil {
-			sp.Fail(err.Error())
+			pr.Fail(err.Error())
+			failed = true
+		}
+		if failed {
 			return errReported
 		}
-		sp.Stop(fmt.Sprintf("The masir %s daemon is running.", job.Version))
+		pr.Stop(fmt.Sprintf("The masir %s daemon is running.", job.Version))
 		if err := updateSelf(job); err != nil {
 			return err
 		}
 		return syncServiceBinary(job)
+	default:
+		pr.Stop("Update finished.")
 	}
 	return nil
 }
@@ -333,11 +363,113 @@ func updateSelf(job *pb.UpdateJob) error {
 		return nil
 	}
 	if err := replaceSelf(src, self); err != nil {
-		ui.Warn(fmt.Sprintf("The daemon is updated, but this copy of masir couldn't replace itself (%v). Run:\n  sudo cp %q %q", err, src, self))
+		if os.IsPermission(err) || errors.Is(err, fs.ErrPermission) {
+			return finishSelfWithElevation(job, src, self)
+		}
+		ui.Warn(fmt.Sprintf("The daemon is updated to %s, but this copy of masir couldn't replace itself: %s", job.Version, friendlyFileError(err, self)))
 		return nil
 	}
 	ui.Success("masir " + job.Version + " is installed.")
 	return nil
+}
+
+// finishSelfWithElevation finishes the CLI update when the file needs root: the daemon
+// may already be privileged and have done it; otherwise masir asks once, and if that is
+// refused leaves a copyable command rather than a raw cp.
+func finishSelfWithElevation(job *pb.UpdateJob, src, self string) error {
+	if !ui.Interactive() {
+		selfUpdateHint(src, self)
+		return nil
+	}
+	ui.Note(fmt.Sprintf("The daemon is updated to %s, but your copy of masir at %s is owned by %s.\n"+
+		"masir can finish the update for you; %s.", job.Version, self, privilegeOwner, elevationAsk),
+		ui.Yellow("▲ One more step"))
+	if err := elevate("daemon", "sync-self", "--from", src, "--to", self); err == nil {
+		ui.Success("masir " + job.Version + " is installed.")
+		return nil
+	} else if cancelled(err) {
+		return err
+	}
+	selfUpdateHint(src, self)
+	return nil
+}
+
+// selfUpdateHint leaves one copyable command when masir can't finish by itself.
+func selfUpdateHint(src, dst string) {
+	ui.Warn("The daemon is updated, but this copy of masir still has the old version.")
+	if runtime.GOOS == "windows" {
+		ui.Message("Run this once as Administrator:")
+	} else {
+		ui.Message("To finish it yourself, run:")
+	}
+	ui.Command(syncSelfCommand(src, dst))
+}
+
+// syncSelfCommand is the manual fallback, safe to copy as one line.
+func syncSelfCommand(src, dst string) string {
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("%s daemon sync-self --from %s --to %s", quoteArg(dst), quoteArg(src), quoteArg(dst))
+	}
+	return fmt.Sprintf("sudo %s daemon sync-self --from %s --to %s", quoteArg(dst), quoteArg(src), quoteArg(dst))
+}
+
+// quoteArg quotes a path for the shell the fallback command is copied into.
+func quoteArg(s string) string {
+	if runtime.GOOS == "windows" {
+		return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// friendlyFileError explains a failed file replacement without a raw Go error.
+func friendlyFileError(err error, path string) string {
+	msg := err.Error()
+	switch {
+	case os.IsPermission(err) || strings.Contains(msg, "permission denied"):
+		return fmt.Sprintf("it doesn't have permission to write %s", path)
+	case strings.Contains(msg, "read-only file system"):
+		return fmt.Sprintf("%s is on a read-only filesystem", path)
+	case strings.Contains(msg, "no space left on device"):
+		return "the disk is full"
+	case strings.Contains(msg, "text file busy"):
+		return "the file is still running; try again in a moment"
+	case strings.Contains(msg, "being used by another process"):
+		return "another process is using the file; close it and try again"
+	}
+	return msg
+}
+
+// installPath pulls the path out of the daemon's "install <path>: <error>" message.
+func installPath(raw string) string {
+	rest, ok := strings.CutPrefix(raw, "install ")
+	if !ok {
+		return ""
+	}
+	if i := strings.Index(rest, ": "); i > 0 {
+		return rest[:i]
+	}
+	return ""
+}
+
+// friendlyUpdateError turns the daemon's raw update failure into what to do next.
+func friendlyUpdateError(raw string) string {
+	target := installPath(raw)
+	if target == "" {
+		target = "the daemon's binary"
+	}
+	switch {
+	case strings.Contains(raw, "permission denied"):
+		return fmt.Sprintf("masir doesn't have permission to replace %s. Run `masir daemon enable` to install the root service, or move masir to a writable directory.", target)
+	case strings.Contains(raw, "read-only file system"):
+		return fmt.Sprintf("%s is read-only; move masir to a writable directory.", target)
+	case strings.Contains(raw, "no space left on device"):
+		return "the disk is full; free some space and run `masir update` again."
+	case strings.Contains(raw, "text file busy"), strings.Contains(raw, "being used by another process"):
+		return "the binary is in use; close the other masir process and run `masir update` again."
+	case strings.Contains(raw, "checksum"):
+		return raw + " Run `masir update` again to download a fresh copy."
+	}
+	return raw
 }
 
 // syncServiceBinary brings the system service's own copy of masir up to the new
@@ -386,6 +518,28 @@ func daemonSyncService(a args) error {
 		return elevate("daemon", "sync-service", "--from", a.str("from"))
 	}
 	return syncService(a.str("from"))
+}
+
+// daemonSyncSelf replaces a masir binary with a staged one. It's what updateSelf runs
+// with root rights when the CLI's own copy is root-owned.
+func daemonSyncSelf(a args) error {
+	src, dst := a.str("from"), a.str("to")
+	if src == "" {
+		return fail("--from names the new masir binary")
+	}
+	if dst == "" {
+		var err error
+		if dst, err = self(); err != nil {
+			return err
+		}
+	}
+	if !elevated() {
+		return elevate("daemon", "sync-self", "--from", src, "--to", dst)
+	}
+	if err := replaceSelf(src, dst); err != nil {
+		return fail("replace %s: %s", dst, friendlyFileError(err, dst))
+	}
+	return nil
 }
 
 func syncService(src string) error {
@@ -465,9 +619,9 @@ func stateText(j *pb.UpdateJob) string {
 
 func progressText(j *pb.UpdateJob) string {
 	if j.BytesTotal <= 0 {
-		return formatBytes(j.BytesDone)
+		return ui.Bytes(j.BytesDone)
 	}
-	return fmt.Sprintf("%d%% · %s of %s", j.BytesDone*100/j.BytesTotal, formatBytes(j.BytesDone), formatBytes(j.BytesTotal))
+	return fmt.Sprintf("%d%% · %s of %s", j.BytesDone*100/j.BytesTotal, ui.Bytes(j.BytesDone), ui.Bytes(j.BytesTotal))
 }
 
 func jobSummary(j *pb.UpdateJob) string {
@@ -490,30 +644,4 @@ func jobSummary(j *pb.UpdateJob) string {
 		return "stopped" + when
 	}
 	return stateText(j)
-}
-
-// speed averages download speed over the last few seconds.
-type speed struct {
-	samples []sample
-}
-
-type sample struct {
-	at    time.Time
-	bytes int64
-}
-
-func newSpeed() *speed { return &speed{} }
-
-func (s *speed) text(done int64) string {
-	now := time.Now()
-	s.samples = append(s.samples, sample{now, done})
-	for len(s.samples) > 1 && now.Sub(s.samples[0].at) > 5*time.Second {
-		s.samples = s.samples[1:]
-	}
-	first := s.samples[0]
-	dt := now.Sub(first.at).Seconds()
-	if dt < 0.5 || done <= first.bytes {
-		return ""
-	}
-	return " · " + formatBytes(int64(float64(done-first.bytes)/dt)) + "/s"
 }

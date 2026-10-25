@@ -26,6 +26,8 @@ type geoEntry struct{ value, label string }
 var (
 	siteCountries = []geoEntry{
 		{"geosite:category-ir", "🇮🇷 Iranian websites"},
+		{"geosite:category-ru", "🇷🇺 Russian websites"},
+		{"geosite:category-tm", "🇹🇲 Turkmen websites"},
 		{"geosite:cn", "🇨🇳 Chinese websites"},
 	}
 	siteServices = []geoEntry{
@@ -38,11 +40,14 @@ var (
 		{"geosite:category-ads-all", "Ads and trackers"}, {"geosite:private", "Local network names"},
 	}
 	ipCountries = []geoEntry{
-		{"geoip:ir", "🇮🇷 Iran"}, {"geoip:cn", "🇨🇳 China"}, {"geoip:ru", "🇷🇺 Russia"}, {"geoip:us", "🇺🇸 United States"},
-		{"geoip:de", "🇩🇪 Germany"}, {"geoip:nl", "🇳🇱 Netherlands"}, {"geoip:gb", "🇬🇧 United Kingdom"},
-		{"geoip:fr", "🇫🇷 France"}, {"geoip:fi", "🇫🇮 Finland"}, {"geoip:se", "🇸🇪 Sweden"}, {"geoip:tr", "🇹🇷 Turkey"},
-		{"geoip:ae", "🇦🇪 United Arab Emirates"}, {"geoip:ca", "🇨🇦 Canada"}, {"geoip:jp", "🇯🇵 Japan"},
-		{"geoip:sg", "🇸🇬 Singapore"},
+		{"geoip:ir", "🇮🇷 Iran"}, {"geoip:ru", "🇷🇺 Russia"}, {"geoip:cn", "🇨🇳 China"},
+		{"geoip:tm", "🇹🇲 Turkmenistan"}, {"geoip:pk", "🇵🇰 Pakistan"}, {"geoip:af", "🇦🇫 Afghanistan"},
+		{"geoip:by", "🇧🇾 Belarus"}, {"geoip:cu", "🇨🇺 Cuba"}, {"geoip:kp", "🇰🇵 North Korea"},
+		{"geoip:mm", "🇲🇲 Myanmar"}, {"geoip:sy", "🇸🇾 Syria"}, {"geoip:ve", "🇻🇪 Venezuela"},
+		{"geoip:tr", "🇹🇷 Turkey"}, {"geoip:us", "🇺🇸 United States"}, {"geoip:de", "🇩🇪 Germany"},
+		{"geoip:nl", "🇳🇱 Netherlands"}, {"geoip:gb", "🇬🇧 United Kingdom"}, {"geoip:fr", "🇫🇷 France"},
+		{"geoip:fi", "🇫🇮 Finland"}, {"geoip:se", "🇸🇪 Sweden"}, {"geoip:ae", "🇦🇪 United Arab Emirates"},
+		{"geoip:ca", "🇨🇦 Canada"}, {"geoip:jp", "🇯🇵 Japan"}, {"geoip:sg", "🇸🇬 Singapore"},
 	}
 	ipOther = []geoEntry{
 		{"geoip:private", "Private networks (LAN)"},
@@ -90,11 +95,15 @@ func geoSource(kind pb.GeoKind) *ui.PickSource {
 		items := make([]ui.PickItem, len(res.Categories))
 		for i, cat := range res.Categories {
 			n := int(cat.Entries)
+			search := cat.Code
+			if more := countrySearch(prefix + cat.Code); more != "" {
+				search += " " + more
+			}
 			items[i] = ui.PickItem{
 				Value:  prefix + cat.Code,
 				Label:  name(cat.Code),
 				Hint:   ui.Dim(fmt.Sprintf("%s%s · %d %s%s", prefix, cat.Code, n, unit, plural(n))),
-				Search: cat.Code,
+				Search: search,
 			}
 		}
 		return items, nil
@@ -104,7 +113,11 @@ func geoSource(kind pb.GeoKind) *ui.PickSource {
 func geoGroup(label string, entries []geoEntry) ui.PickGroup {
 	g := ui.PickGroup{Label: label}
 	for _, e := range entries {
-		g.Items = append(g.Items, ui.PickItem{Value: e.value, Label: e.label, Hint: ui.Dim(e.value), Search: e.value})
+		search := e.value
+		if more := countrySearch(e.value); more != "" {
+			search += " " + more
+		}
+		g.Items = append(g.Items, ui.PickItem{Value: e.value, Label: e.label, Hint: ui.Dim(e.value), Search: search})
 	}
 	return g
 }

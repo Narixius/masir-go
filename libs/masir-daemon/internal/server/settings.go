@@ -48,6 +48,9 @@ func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsReque
 		if req.SubIntervalMinutes != nil {
 			set.SubIntervalMinutes = int(*req.SubIntervalMinutes)
 		}
+		if req.XrayLogLevel != nil {
+			set.XrayLogLevel = store.NormalizeXrayLogLevel(*req.XrayLogLevel)
+		}
 		out = *set
 		return set.Validate()
 	})
@@ -149,5 +152,6 @@ func toPBSettings(s store.Settings) *pb.Settings {
 		TunGateway:    s.TunGateway,
 
 		SubIntervalMinutes: uint32(s.SubIntervalMinutes),
+		XrayLogLevel:       s.XrayLogLevel,
 	}
 }

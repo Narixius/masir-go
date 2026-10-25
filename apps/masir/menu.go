@@ -43,7 +43,7 @@ func menu() error {
 			item = sub
 		}
 		if err := item.run(); err != nil && !ui.IsCancel(err) && err != errReported {
-			ui.Error(ui.Red(message(err)))
+			showError(err)
 		}
 	}
 }
@@ -122,6 +122,7 @@ func mainMenu(st *pb.Status) []menuItem {
 			{label: "Update status", run: with(cmdUpdateStatus)},
 		}},
 		{label: "Status", hint: "daemon, xray and connectivity", run: with(cmdStatus)},
+		{label: "Logs", hint: "recent activity and live tail", run: with(cmdLogs)},
 		{label: "Quit"},
 	}
 }

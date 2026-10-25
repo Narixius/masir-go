@@ -43,7 +43,7 @@ Connectivity
 
 **TUN or proxy, your choice.** TUN routes the whole system without touching your DNS settings; proxy mode gives you SOCKS5 and HTTP on one port, shareable over your LAN.
 
-**Keeps itself current.** `masir update` and `masir update geo` install verified releases and fresh geo data, with pause, resume and stop.
+**Keeps itself current.** `masir update` and `masir update geo` install verified releases and fresh geo data, with a compact progress bar, pause, resume and stop. If your copy of masir is root-owned, the daemon updates it when it has the rights; otherwise masir asks for sudo once, and leaves a copyable command if you decline.
 
 **Scriptable, and built to be built on.** Plain output when piped, `--json` where it matters, smart shell completions, and a gRPC API for your own tools or a GUI.
 
@@ -130,6 +130,9 @@ Each rule sends its traffic to one of:
 # Iranian websites and addresses go direct
 masir rules add --domain geosite:category-ir --ip geoip:ir -o direct
 
+# Russian websites go through the proxy
+masir rules add --domain geosite:category-ru -o proxy
+
 # Telegram, with all its helper processes, through the proxy
 masir rules add --app /Applications/Telegram.app/ -o proxy
 
@@ -163,6 +166,8 @@ Manage them with `masir rules` (list), `masir rules edit <name>` (an interactive
 
 Geo data comes from [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), refreshed daily upstream: `geosite:` is the v2fly domain list with hundreds of thousands of extra domains (a far larger ad and tracker list, for one), and `geoip:` covers every country by its two-letter code (`ir`, `de`, `us`, ...) plus lists such as `private`, `google`, `telegram`, `netflix`, `twitter` and `cloudflare`.
 
+The rule wizard's website and address pickers include a country shortlist (Iran, Russia, China, Turkmenistan, Pakistan, and other restricted networks) and search every country in the installed data. Type a country name, adjective or code — `russia`, `russian`, `ru`, `turkmenistan`, `uae` — and the flags follow.
+
 ## Commands
 
 | Command | What it does |
@@ -178,7 +183,7 @@ Geo data comes from [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldi
 | `masir update [--check]` | Install the latest masir release |
 | `masir update geo` | Refresh geosite.dat and geoip.dat |
 | `masir update pause\|resume\|stop\|status` | Control an update in progress |
-| `masir logs` | Follow the daemon's log |
+| `masir logs [--no-follow] [--level debug\|info\|warn\|error]` | Show recent daemon and Xray activity, then follow it |
 | `masir get-config` | Print the exact Xray config masir runs |
 | `masir daemon start\|stop\|restart\|enable\|disable` | Manage the daemon and the system service |
 | `masir menu` | Every command, one pick away |
@@ -203,6 +208,8 @@ masir settings reset mixedPort
 | `dnsServers` | `1.1.1.1, 8.8.8.8` | Plain DNS, sent direct, used to resolve proxy server names |
 | `tunDns` | empty | DNS servers the TUN interface advertises; empty uses `dnsServers` |
 | `gateway` | `10.10.20.1/24` | IPv4 range for the TUN interface |
+| `subInterval` | `720` | Minutes between background subscription refreshes (5 to 43200) |
+| `logLevel` | `warning` | Xray's own log level: `debug`, `info`, `warning`, `error`, or `none`; `masir logs` shows these |
 
 ## How it works
 

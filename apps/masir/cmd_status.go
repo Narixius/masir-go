@@ -121,6 +121,9 @@ func printStatus(st *pb.Status) {
 		[2]string{"DoH DNS", set.GetDohDns()},
 		[2]string{"DNS Servers", strings.Join(set.GetDnsServers(), ", ")},
 	)
+	if lvl := set.GetXrayLogLevel(); lvl != "" {
+		rows = append(rows, [2]string{"Xray Log", lvl})
+	}
 	switch geo := st.GeoUpdatedAt; {
 	case geo == "":
 		rows = append(rows, [2]string{"Geo Data", ui.Yellow("missing; geosite:/geoip: rules won't work") + ui.Dim(" — `masir update geo` ("+st.GeoDir+")")})
