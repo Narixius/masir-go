@@ -204,7 +204,7 @@ func TestPauseResumeStop(t *testing.T) {
 	geoip := bytes.Repeat([]byte("i"), 8<<10)
 	gh.publish(GeoRepo, "20261024", map[string][]byte{
 		"geosite.dat": geosite, "geosite.dat.sha256sum": []byte(sum(geosite) + "  geosite.dat\n"),
-		"geoip-lite.dat": geoip, "geoip-lite.dat.sha256sum": []byte(sum(geoip) + "  geoip-lite.dat\n"),
+		"geoip.dat": geoip, "geoip.dat.sha256sum": []byte(sum(geoip) + "  geoip.dat\n"),
 	})
 	gh.slow["geosite.dat"] = true
 
@@ -254,7 +254,7 @@ func TestPauseResumeStop(t *testing.T) {
 		t.Error("geosite.dat should be complete and correct after resuming")
 	}
 	if got, _ := os.ReadFile(filepath.Join(assets, "geoip.dat")); !bytes.Equal(got, geoip) {
-		t.Error("geoip-lite.dat is installed as geoip.dat")
+		t.Error("geoip.dat should be complete and correct")
 	}
 	if reloads.Load() != 1 {
 		t.Errorf("reloads = %d", reloads.Load())
@@ -291,7 +291,7 @@ func TestGeoRollsBackWhenXrayRejectsTheData(t *testing.T) {
 	geosite, geoip := []byte("new site"), []byte("new ip")
 	gh.publish(GeoRepo, "20261024", map[string][]byte{
 		"geosite.dat": geosite, "geosite.dat.sha256sum": []byte(sum(geosite) + "  geosite.dat"),
-		"geoip-lite.dat": geoip, "geoip-lite.dat.sha256sum": []byte(sum(geoip)),
+		"geoip.dat": geoip, "geoip.dat.sha256sum": []byte(sum(geoip)),
 	})
 	assets := t.TempDir()
 	os.WriteFile(filepath.Join(assets, "geosite.dat"), []byte("old site"), 0o644)

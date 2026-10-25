@@ -145,8 +145,9 @@ func explain(msg string) string {
 		return "TUN on Windows needs wintun.dll beside masir.exe; the service writes it there from masir.exe " +
 			"when it starts. Reinstall the service with `masir daemon enable` and see `masir logs` if this persists."
 	case strings.Contains(msg, "failed to load code") || strings.Contains(msg, "failed to check code"):
-		return "That category isn't in the installed geo data. masir uses XTLS/Xray-rules-dat, whose geoip.dat has " +
-			"only ir, cn, ru, private and service lists (google, telegram, netflix, …); `masir rules add` lists them."
+		return "That category isn't in the installed geo data (Loyalsoldier/v2ray-rules-dat): geoip.dat has every " +
+			"two-letter country code plus lists such as private, google, telegram, netflix and cloudflare; " +
+			"`masir update geo` fetches the latest."
 	case strings.Contains(msg, "geosite") || strings.Contains(msg, "geoip.dat"):
 		return "geosite:/geoip: rules need geoip.dat and geosite.dat next to the masir executable: `masir update geo` downloads them."
 	}

@@ -19,8 +19,9 @@ const (
 	// ReleaseRepo publishes masir's releases: one archive per OS and architecture,
 	// plus checksums.txt.
 	ReleaseRepo = "narixius/masir-go"
-	// GeoRepo publishes geosite.dat and geoip-lite.dat, each with a .sha256sum.
-	GeoRepo = "XTLS/Xray-rules-dat"
+	// GeoRepo publishes geosite.dat and geoip.dat, each with a .sha256sum: the v2fly
+	// domain list with many more domains added (ads, regional lists), and every country.
+	GeoRepo = "Loyalsoldier/v2ray-rules-dat"
 )
 
 // apiBase is GitHub's API; tests point it at a local server.

@@ -126,11 +126,10 @@ type Geo struct {
 	Reload func() error
 }
 
-// geoFiles maps what XTLS publishes to the names Xray reads. The lite GeoIP is what
-// Xray itself ships as geoip.dat.
+// geoFiles maps what GeoRepo publishes to the names Xray reads.
 var geoFiles = []struct{ remote, local string }{
 	{"geosite.dat", "geosite.dat"},
-	{"geoip-lite.dat", "geoip.dat"},
+	{"geoip.dat", "geoip.dat"},
 }
 
 func (g Geo) Run(ctx context.Context, r *Reporter) error {

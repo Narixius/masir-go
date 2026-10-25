@@ -16,9 +16,9 @@ import (
 
 type geoEntry struct{ value, label string }
 
-// Categories in the geo data masir installs from XTLS/Xray-rules-dat: geosite is the
-// v2fly domain list; geoip is the lite file, which has only the regional sets below
-// plus service and block lists (no other countries). Anything else can still be typed.
+// Common categories in the geo data masir installs from Loyalsoldier/v2ray-rules-dat:
+// geosite is the extended v2fly domain list, geoip has every country by its two-letter
+// code plus the service lists below. Anything else can still be typed.
 var (
 	siteCountries = []geoEntry{
 		{"geosite:category-ir", "🇮🇷 Iranian websites"},
@@ -34,11 +34,14 @@ var (
 		{"geosite:category-ads-all", "Ads and trackers"}, {"geosite:private", "Local network names"},
 	}
 	ipCountries = []geoEntry{
-		{"geoip:ir", "🇮🇷 Iran"}, {"geoip:cn", "🇨🇳 China"}, {"geoip:ru", "🇷🇺 Russia"},
+		{"geoip:ir", "🇮🇷 Iran"}, {"geoip:cn", "🇨🇳 China"}, {"geoip:ru", "🇷🇺 Russia"}, {"geoip:us", "🇺🇸 United States"},
+		{"geoip:de", "🇩🇪 Germany"}, {"geoip:nl", "🇳🇱 Netherlands"}, {"geoip:gb", "🇬🇧 United Kingdom"},
+		{"geoip:fr", "🇫🇷 France"}, {"geoip:fi", "🇫🇮 Finland"}, {"geoip:se", "🇸🇪 Sweden"}, {"geoip:tr", "🇹🇷 Turkey"},
+		{"geoip:ae", "🇦🇪 United Arab Emirates"}, {"geoip:ca", "🇨🇦 Canada"}, {"geoip:jp", "🇯🇵 Japan"},
+		{"geoip:sg", "🇸🇬 Singapore"},
 	}
 	ipOther = []geoEntry{
 		{"geoip:private", "Private networks (LAN)"},
-		{"geoip:blacklist-ir", "Addresses blocked in Iran"}, {"geoip:blacklist-ru", "Addresses blocked in Russia"},
 		{"geoip:telegram", "Telegram servers"}, {"geoip:google", "Google"}, {"geoip:netflix", "Netflix"},
 		{"geoip:twitter", "X (Twitter)"}, {"geoip:facebook", "Facebook"}, {"geoip:cloudflare", "Cloudflare"},
 		{"geoip:cloudfront", "Amazon CloudFront"}, {"geoip:fastly", "Fastly"}, {"geoip:tor", "Tor relays"},

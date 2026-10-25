@@ -161,7 +161,7 @@ Matchers combine within a rule (all must match), and each accepts a comma-separa
 
 Manage them with `masir rules` (list), `masir rules edit <name>` (an interactive editor, or flags such as `--rename`, `--append`, `--unset`), `masir rules rm`, and `masir rules test <domain|ip>` to see exactly where a destination would go right now.
 
-Geo data comes from [XTLS/Xray-rules-dat](https://github.com/XTLS/Xray-rules-dat): `geosite:` holds the full v2fly domain list, and `geoip:` is the lite file Xray itself ships, with `ir`, `cn`, `ru`, `private`, and service lists such as `google`, `telegram`, `netflix`, `twitter`, `cloudflare` and `blacklist-ir`.
+Geo data comes from [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), refreshed daily upstream: `geosite:` is the v2fly domain list with hundreds of thousands of extra domains (a far larger ad and tracker list, for one), and `geoip:` covers every country by its two-letter code (`ir`, `de`, `us`, ...) plus lists such as `private`, `google`, `telegram`, `netflix`, `twitter` and `cloudflare`.
 
 ## Commands
 

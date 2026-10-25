@@ -266,7 +266,7 @@ func rootCmd() *cobra.Command {
 		c.ValidArgs = targets
 		return c
 	}
-	updateGeo := leaf("geo", "Download the latest geosite.dat and geoip.dat from XTLS/Xray-rules-dat", cmdUpdateGeo, cobra.NoArgs,
+	updateGeo := leaf("geo", "Download the latest geosite.dat and geoip.dat from Loyalsoldier/v2ray-rules-dat", cmdUpdateGeo, cobra.NoArgs,
 		flagSpec{names: []string{"force"}, bool: true, help: "download even if the installed files are current"})
 	updateStatus := control("status", "Show update jobs, following one that's running", cmdUpdateStatus)
 	updateCmd := group("update", "Update masir to the latest release, or refresh geo data",

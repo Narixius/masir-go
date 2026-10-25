@@ -1,10 +1,9 @@
 #!/bin/sh
-# Downloads the latest geo data from XTLS/Xray-rules-dat into build/geo, verified
-# against the published SHA-256 sums, for bundling into release archives. The lite
-# GeoIP is what Xray itself ships as geoip.dat.
+# Downloads the latest geo data from Loyalsoldier/v2ray-rules-dat into build/geo,
+# verified against the published SHA-256 sums, for bundling into release archives.
 set -eu
 
-base=https://github.com/XTLS/Xray-rules-dat/releases/latest/download
+base=https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download
 out=build/geo
 mkdir -p "$out"
 
@@ -24,4 +23,4 @@ fetch() { # remote name, local name
 }
 
 fetch geosite.dat geosite.dat
-fetch geoip-lite.dat geoip.dat
+fetch geoip.dat geoip.dat

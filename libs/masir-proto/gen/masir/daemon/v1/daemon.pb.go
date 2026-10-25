@@ -76,7 +76,7 @@ type UpdateTarget int32
 const (
 	UpdateTarget_UPDATE_TARGET_UNSPECIFIED UpdateTarget = 0
 	UpdateTarget_UPDATE_TARGET_MASIR       UpdateTarget = 1 // masir and masird, from this project's GitHub releases
-	UpdateTarget_UPDATE_TARGET_GEO         UpdateTarget = 2 // geosite.dat and geoip.dat, from XTLS/Xray-rules-dat
+	UpdateTarget_UPDATE_TARGET_GEO         UpdateTarget = 2 // geosite.dat and geoip.dat, from Loyalsoldier/v2ray-rules-dat
 )
 
 // Enum value maps for UpdateTarget.

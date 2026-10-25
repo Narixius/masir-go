@@ -378,7 +378,7 @@ message GetActiveConfigResponse {
 enum UpdateTarget {
   UPDATE_TARGET_UNSPECIFIED = 0;
   UPDATE_TARGET_MASIR = 1; // masir and masird, from this project's GitHub releases
-  UPDATE_TARGET_GEO = 2;   // geosite.dat and geoip.dat, from XTLS/Xray-rules-dat
+  UPDATE_TARGET_GEO = 2;   // geosite.dat and geoip.dat, from Loyalsoldier/v2ray-rules-dat
 }
 
 enum UpdateState {
