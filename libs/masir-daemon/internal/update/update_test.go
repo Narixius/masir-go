@@ -141,7 +141,9 @@ func TestMasirUpdateInstallsAndRestarts(t *testing.T) {
 	os.WriteFile(bin, []byte("old masir"), 0o755)
 	var restarted atomic.Bool
 	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, t.TempDir())
-	task := Masir{Clients: clients(), Current: "0.1.0", Binary: bin, WorkDir: r.workDir, Restart: func() { restarted.Store(true) }}
+	svcBin := filepath.Join(t.TempDir(), exe("masir"))
+	os.WriteFile(svcBin, []byte("old service masir"), 0o755)
+	task := Masir{Clients: clients(), Current: "0.1.0", Binary: bin, ServiceBinary: svcBin, WorkDir: r.workDir, Restart: func() { restarted.Store(true) }}
 	if _, err := r.Start(task.Run); err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +153,9 @@ func TestMasirUpdateInstallsAndRestarts(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(bin); string(got) != "new masir" {
 		t.Errorf("the running binary = %q, want the new one", got)
+	}
+	if got, _ := os.ReadFile(svcBin); string(got) != "new masir" {
+		t.Errorf("the service's own copy = %q, want the new one too", got)
 	}
 	if fi, _ := os.Stat(bin); fi.Mode().Perm()&0o100 == 0 && runtime.GOOS != "windows" {
 		t.Error("the new binary must be executable")

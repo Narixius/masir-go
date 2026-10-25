@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
+	"github.com/narixius/masir-go/libs/masir-core/service"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
@@ -276,7 +277,10 @@ func watchUpdate(target pb.UpdateTarget) error {
 			return errReported
 		}
 		sp.Stop(fmt.Sprintf("The masir %s daemon is running.", job.Version))
-		return updateSelf(job)
+		if err := updateSelf(job); err != nil {
+			return err
+		}
+		return syncServiceBinary(job)
 	}
 	return nil
 }
@@ -334,6 +338,65 @@ func updateSelf(job *pb.UpdateJob) error {
 	}
 	ui.Success("masir " + job.Version + " is installed.")
 	return nil
+}
+
+// syncServiceBinary brings the system service's own copy of masir up to the new
+// version when the update didn't (it ran in a daemon that isn't the service, without
+// the rights to write there). Only when the service is installed and its binary exists.
+func syncServiceBinary(job *pb.UpdateJob) error {
+	if job.StagedDir == "" || !service.Installed() {
+		return nil
+	}
+	dst := service.BinaryPath()
+	if _, err := os.Stat(dst); err != nil {
+		return nil
+	}
+	name := "masir"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	src := filepath.Join(job.StagedDir, name)
+	if same, _ := sameContent(src, dst); same {
+		return nil
+	}
+	if !elevated() {
+		ui.Note(fmt.Sprintf("masir's system service runs its own copy at %s, which only %s can change.\n"+
+			"To update it to %s as well, so the service doesn't start the old version, "+elevationAsk+".",
+			dst, privilegeOwner, job.Version), ui.Yellow("▲ Updating the system service"))
+		if err := elevate("daemon", "sync-service", "--from", src); err != nil {
+			if !errors.Is(err, errReported) {
+				ui.Warn(fmt.Sprintf("The service still has the old version (%s). `masir daemon enable` updates it.", message(err)))
+			}
+			return nil
+		}
+		ui.Success("The system service is updated to " + job.Version + ".")
+		return nil
+	}
+	if err := syncService(src); err != nil {
+		return err
+	}
+	ui.Success("The system service is updated to " + job.Version + ".")
+	return nil
+}
+
+// daemonSyncService copies a new masir binary into the service's location. It's what
+// syncServiceBinary runs with root rights.
+func daemonSyncService(a args) error {
+	if !elevated() {
+		return elevate("daemon", "sync-service", "--from", a.str("from"))
+	}
+	return syncService(a.str("from"))
+}
+
+func syncService(src string) error {
+	if src == "" {
+		return fail("--from names the new masir binary")
+	}
+	if _, err := os.Stat(src); err != nil {
+		return err
+	}
+	stopServiceForInstall() // Windows can't replace a running executable
+	return copyFile(src, service.BinaryPath(), 0o755)
 }
 
 func replaceSelf(src, dst string) error {

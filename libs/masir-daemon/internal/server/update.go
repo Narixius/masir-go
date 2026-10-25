@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/narixius/masir-go/libs/masir-core/service"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/update"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
@@ -73,12 +74,13 @@ func (s *Server) runner(t pb.UpdateTarget) (*update.Runner, error) {
 
 func (s *Server) masirTask(force bool) update.Task {
 	return update.Masir{
-		Clients: s.clients(),
-		Current: Version,
-		Force:   force,
-		Binary:  executable(),
-		WorkDir: filepath.Join(s.dir, "updates", "masir"),
-		Restart: s.restartForUpdate,
+		Clients:       s.clients(),
+		Current:       Version,
+		Force:         force,
+		Binary:        executable(),
+		ServiceBinary: s.serviceBinary(),
+		WorkDir:       filepath.Join(s.dir, "updates", "masir"),
+		Restart:       s.restartForUpdate,
 	}.Run
 }
 
@@ -248,6 +250,19 @@ func (s *Server) geoAge() (time.Duration, bool) {
 		return 0, false
 	}
 	return time.Since(fi.ModTime()), true
+}
+
+// serviceBinary is the installed service's copy of masir, if this daemon is privileged
+// enough to replace it and it's not the binary already being replaced.
+func (s *Server) serviceBinary() string {
+	if !s.id.Privileged || !service.Installed() {
+		return ""
+	}
+	p := service.BinaryPath()
+	if _, err := os.Stat(p); err != nil || p == executable() {
+		return ""
+	}
+	return p
 }
 
 // executable is the running binary, resolved through symlinks so the file itself is

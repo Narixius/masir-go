@@ -14,6 +14,12 @@ const privilegeName = "root"
 // elevationNote explains, before it happens, how masir gets privileges.
 const elevationNote = "masir starts its daemon as root for this session; sudo asks for your password."
 
+// privilegeOwner is who may change the service's files.
+const privilegeOwner = "root"
+
+// elevationAsk finishes "To do X, ..." with how masir gets the rights.
+const elevationAsk = "sudo asks for your password"
+
 // enableTip says how to stop being asked, once a session daemon runs as root.
 const enableTip = "Tip: `masir daemon enable` starts the daemon as root at boot, so connecting won't ask for your password again."
 
@@ -59,10 +65,6 @@ func elevate(args ...string) error { return asRoot(args...) }
 
 // currentUser is who the service should serve: this user's uid.
 func currentUser() string { return strconv.Itoa(os.Getuid()) }
-
-// installDir holds the service's own copy of masir: a root daemon must not run a
-// binary the user can modify.
-func installDir() string { return "/usr/local/lib/masir" }
 
 // stopServiceForInstall is a no-op: on Unix, a running binary can be renamed over.
 func stopServiceForInstall() {}

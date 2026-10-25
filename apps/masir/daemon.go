@@ -94,7 +94,7 @@ func daemonDisable(args) error {
 	if err := uninstallService(); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(installDir()); err != nil {
+	if err := os.RemoveAll(service.InstallDir()); err != nil {
 		return err
 	}
 	ui.Success("The masir service is removed. The daemon runs in the background again when masir needs it.")
@@ -236,11 +236,11 @@ func ensurePrivileged() error {
 	return nil
 }
 
-// installBinary copies this executable and the geo data beside it into installDir(),
+// installBinary copies this executable and the geo data beside it into service.InstallDir(),
 // which only root or Administrators can change: the service must never run a binary
 // the user can modify. (On Windows the service writes the Wintun driver it embeds.)
 func installBinary(src string) (string, error) {
-	dir := installDir()
+	dir := service.InstallDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

@@ -254,10 +254,13 @@ func rootCmd() *cobra.Command {
 		flagSpec{names: []string{"user"}, help: "As root: the user to serve (name or uid); default SUDO_UID"},
 		flagSpec{names: []string{"idle"}, bool: true, help: "Start with masir off and Xray down until it's turned on"})
 	runDaemon.Hidden = true // the background daemon and the service run this
+	syncSvc := leaf("sync-service", "Copy a new masir binary into the system service's location", daemonSyncService, cobra.NoArgs,
+		flagSpec{names: []string{"from"}, help: "The new masir binary"})
+	syncSvc.Hidden = true // masir update runs it with root rights
 	daemonGroup := group("daemon", "Manage the masir daemon",
 		leaf("start", "Start the daemon in the background", daemonStart, cobra.NoArgs),
 		leaf("stop", "Stop the daemon", daemonStop, cobra.NoArgs),
-		restart, enable, disable, runDaemon)
+		restart, enable, disable, runDaemon, syncSvc)
 
 	targetArg := cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs)
 	targets := []string{"masir\tthe app itself", "geo\tgeosite.dat and geoip.dat"}

@@ -22,7 +22,11 @@ type Masir struct {
 	Current string // the running version
 	Force   bool   // install even when not newer
 	Binary  string // the running masir executable, replaced by the new one
-	WorkDir string
+	// ServiceBinary is the system service's own copy of masir, when it's a different
+	// file that this (root) daemon may write; it's updated too, so the service doesn't
+	// start an old version at the next boot.
+	ServiceBinary string
+	WorkDir       string
 	// Restart is called once the new binary is in place; the daemon then exits and
 	// starts the new version.
 	Restart func()
@@ -91,6 +95,10 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	// the staged binary.
 	if err := replaceFile(filepath.Join(staged, exe("masir")), m.Binary); err != nil {
 		return fmt.Errorf("install %s: %w", m.Binary, err)
+	}
+	if m.ServiceBinary != "" && m.ServiceBinary != m.Binary {
+		// Best effort: the CLI checks afterwards and copies it with sudo if this failed.
+		_ = replaceFile(filepath.Join(staged, exe("masir")), m.ServiceBinary)
 	}
 	r.State(pb.UpdateState_UPDATE_STATE_RESTARTING)
 	if m.Restart != nil {

@@ -17,6 +17,10 @@ const privilegeName = "Administrator rights"
 
 const elevationNote = "masir starts its daemon as Administrator for this session; Windows asks for permission."
 
+const privilegeOwner = "Administrators"
+
+const elevationAsk = "Windows asks for permission"
+
 const enableTip = "Tip: `masir daemon enable` installs the daemon as a Windows service that starts at boot, so connecting won't ask for permission again."
 
 const elevationHint = "Windows may ask for permission"
@@ -105,14 +109,4 @@ func currentUser() string {
 		return u.Uid
 	}
 	return ""
-}
-
-// installDir holds the service's own copy of masir, which only Administrators can
-// change.
-func installDir() string {
-	pf := os.Getenv("ProgramFiles")
-	if pf == "" {
-		pf = `C:\Program Files`
-	}
-	return filepath.Join(pf, "masir")
 }
