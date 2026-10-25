@@ -2,6 +2,8 @@ package xray
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"strings"
 	"sync"
 
@@ -33,31 +35,47 @@ func currentLogSink() func(level, msg string) {
 }
 
 func fileLogHandler(_ applog.LogType, options applog.HandlerCreatorOptions) (clog.Handler, error) {
-	writer, err := clog.CreateFileLogWriter(options.Path)
+	f, err := os.OpenFile(options.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	return &teeHandler{file: clog.NewLogger(writer), sink: currentLogSink()}, nil
+	return &teeHandler{
+		file:   f,
+		logger: log.New(f, "", log.Ldate|log.Ltime|log.Lmicroseconds),
+		sink:   currentLogSink(),
+	}, nil
 }
 
 // teeHandler keeps Xray's error log file and also feeds the daemon's log stream.
+// It writes the file directly rather than through Xray's background logger, so Close
+// actually releases the file (important on Windows, where an open log file blocks
+// temp-directory cleanup and reinstalls).
 type teeHandler struct {
-	file clog.Handler
-	sink func(level, msg string)
+	mu     sync.Mutex
+	file   *os.File
+	logger *log.Logger
+	sink   func(level, msg string)
 }
 
-// Close closes the file logger when Xray shuts down.
+// Close closes the file synchronously when Xray shuts down.
 func (h *teeHandler) Close() error {
-	if c, ok := h.file.(interface{ Close() error }); ok {
-		return c.Close()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.file == nil {
+		return nil
 	}
-	return nil
+	err := h.file.Close()
+	h.file, h.logger = nil, nil
+	return err
 }
 
 func (h *teeHandler) Handle(msg clog.Message) {
-	if h.file != nil {
-		h.file.Handle(msg)
+	h.mu.Lock()
+	if h.logger != nil {
+		h.logger.Print(msg.String())
 	}
+	h.mu.Unlock()
+
 	if h.sink == nil {
 		return
 	}
