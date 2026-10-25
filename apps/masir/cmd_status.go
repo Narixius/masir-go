@@ -52,7 +52,6 @@ func cmdStatus(a args) error {
 	if check {
 		showConnectivity(c, st)
 	}
-	fmt.Println()
 	return appCtx.Err()
 }
 

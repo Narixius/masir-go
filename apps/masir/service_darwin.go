@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/narixius/masir-go/libs/masir-core/service"
 )
@@ -44,15 +46,50 @@ func installService(bin, user string) error {
 	if err != nil {
 		return fail("the service's user must be a uid, not %q", user)
 	}
-	_ = exec.Command("launchctl", "bootout", "system/"+service.Label).Run() // replace an earlier install
+	bootout() // replace an earlier install
 	if err := os.WriteFile(service.DefinitionPath(), []byte(servicePlist(bin, uid)), 0o644); err != nil {
 		return err
 	}
-	return run("launchctl", "bootstrap", "system", service.DefinitionPath())
+	return bootstrap()
+}
+
+// bootout unloads the service and waits until launchd has really let go of it:
+// launchctl returns while the old daemon is still exiting, and a bootstrap in that
+// window fails with error 5 (Input/output error).
+func bootout() {
+	target := "system/" + service.Label
+	if exec.Command("launchctl", "print", target).Run() != nil {
+		return // not loaded
+	}
+	_ = exec.Command("launchctl", "bootout", target).Run()
+	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		if exec.Command("launchctl", "print", target).Run() != nil {
+			return
+		}
+	}
+}
+
+// bootstrap loads the service, retrying briefly on error 5, which launchd also returns
+// for a moment after an unload.
+func bootstrap() error {
+	var out []byte
+	var err error
+	for i := 0; i < 20; i++ {
+		out, err = exec.Command("launchctl", "bootstrap", "system", service.DefinitionPath()).CombinedOutput()
+		var exit *exec.ExitError
+		if err == nil || !errors.As(err, &exit) || exit.ExitCode() != 5 {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if err != nil {
+		return fmt.Errorf("launchctl bootstrap: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func uninstallService() error {
-	_ = exec.Command("launchctl", "bootout", "system/"+service.Label).Run()
+	bootout()
 	if err := os.Remove(service.DefinitionPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}

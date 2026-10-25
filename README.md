@@ -103,7 +103,7 @@ masir connect                                          # turn masir on (TUN mode
 masir status                                           # see what's running
 ```
 
-`masir connect` uses TUN mode, which needs root (Administrator rights on Windows). The first time, masir explains why, installs its daemon as a system service, and asks once: sudo for your password on macOS and Linux, the Windows permission prompt on Windows. After that, connecting never asks again, and the service survives reboots. Prefer not to? `masir connect --proxy` runs proxy mode only, as your normal user.
+`masir connect` uses TUN mode, which needs root (Administrator rights on Windows). If its daemon isn't running with those rights, masir starts it that way for the session: sudo asks for your password on macOS and Linux (unless it remembers you), Windows shows its permission prompt. To never be asked again, run `masir daemon enable` once: it installs the daemon as a system service that starts at boot. Prefer not to? `masir connect --proxy` runs proxy mode only, as your normal user.
 
 Then make it yours:
 
@@ -211,7 +211,7 @@ masir is one executable with two roles:
 - **The CLI**, which you use.
 - **The daemon** (`masir daemon run`), which owns everything else: Xray, your settings, rules and subscriptions, and the gRPC API every client talks to.
 
-When a command needs the daemon and none is running, masir starts it in the background. A daemon started this way stays idle, managing subscriptions, rules and updates without starting Xray, until you connect. For TUN mode, `masir daemon enable` (or your first `masir connect`) installs a copy only root or Administrators can change (`/usr/local/lib/masir`, or `Program Files\masir` on Windows) as a launchd, systemd or Windows service. It serves only you: the daemon's socket (a named pipe on Windows) accepts connections from root or Administrators and from the user it serves, nobody else.
+When a command needs the daemon and none is running, masir starts it in the background. A daemon started this way stays idle, managing subscriptions, rules and updates without starting Xray, until you connect. For TUN mode, `masir connect` starts the daemon as root (or Administrator) for the session, and `masir daemon enable` installs a copy only root or Administrators can change (`/usr/local/lib/masir`, or `Program Files\masir` on Windows) as a launchd, systemd or Windows service. It serves only you: the daemon's socket (a named pipe on Windows) accepts connections from root or Administrators and from the user it serves, nobody else.
 
 Xray runs embedded in the daemon. masir composes its configuration from your state, writes the result to `xray.json` for you to inspect, and applies changes live through Xray's gRPC API whenever possible.
 

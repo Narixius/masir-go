@@ -182,9 +182,10 @@ func enableTun() error {
 	return err
 }
 
-// ensurePrivileged makes sure a privileged daemon is answering, as TUN needs: if the
-// one running isn't, it installs the service (sudo or Windows asks once) and waits for
-// it to take over from the background daemon.
+// ensurePrivileged makes sure a privileged daemon is answering, as TUN needs. If the
+// one running isn't, it starts the daemon as root (Administrator on Windows) for this
+// session, which takes over from the background daemon. It installs nothing: `masir
+// daemon enable` is the user's choice, offered once it worked.
 func ensurePrivileged() error {
 	st, err := currentStatus()
 	if err != nil {
@@ -193,16 +194,27 @@ func ensurePrivileged() error {
 	if st.Privileged {
 		return nil
 	}
-	if !service.Supported() {
-		return fail("TUN mode needs a system service, which masir can't install on this OS yet; use `masir connect --proxy`")
+	if !canElevateSilently() { // only warn when a prompt is actually coming
+		ui.Note("TUN mode routes all system traffic, which needs "+privilegeName+".\n"+elevationNote,
+			ui.Yellow("▲ Elevated Privileges Required"))
 	}
-	ui.Note("TUN mode routes all system traffic, which needs "+privilegeName+".\n"+elevationNote,
-		ui.Yellow("▲ Elevated Privileges Required"))
-	if err := enableService(currentUser()); err != nil {
+	dir, err := paths.ConfigDir()
+	if err != nil {
 		return err
 	}
-	cachedClient = nil // the root daemon has taken over the socket
-	s := ui.Spin("Connecting to the privileged daemon")
+	logPath := filepath.Join(dir, "masird.log")
+	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	err = startElevatedDaemon(currentUser(), logf)
+	logf.Close()
+	if err != nil {
+		return err
+	}
+
+	cachedClient = nil // the privileged daemon takes over the socket
+	s := ui.Spin("Starting the daemon with " + privilegeName)
 	err = waitFor(func() bool {
 		c, ok := runningDaemon()
 		if !ok {
@@ -212,12 +224,15 @@ func ensurePrivileged() error {
 		defer cancel()
 		res, err := c.GetStatus(ctx, &pb.GetStatusRequest{})
 		return err == nil && res.Status.Privileged
-	}, 30*time.Second, "the root service didn't come up; check /var/log/masird.log")
+	}, 30*time.Second, "the privileged daemon didn't start; see "+logPath)
 	if err != nil {
 		s.Fail(err.Error())
 		return errReported
 	}
-	s.Stop("Connected to the privileged daemon.")
+	s.Stop("The daemon runs with " + privilegeName + ".")
+	if service.Supported() && !service.Installed() {
+		ui.Info(enableTip)
+	}
 	return nil
 }
 
@@ -280,10 +295,17 @@ func asRoot(args ...string) error {
 	return sudo(append([]string{exe}, args...)...)
 }
 
+// sudo runs argv as root, attached to the terminal for the password prompt. When the
+// command fails, it has already said why (as have sudo and launchctl), so the error
+// reports nothing more.
 func sudo(argv ...string) error {
 	cmd := exec.Command("sudo", append([]string{"--"}, argv...)...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return errReported
+		}
 		return fmt.Errorf("sudo %s: %w", filepath.Base(argv[0]), err)
 	}
 	return nil
