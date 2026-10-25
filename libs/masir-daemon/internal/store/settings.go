@@ -51,11 +51,11 @@ func ValidSubInterval(minutes int) error {
 	return nil
 }
 
-// DefaultSettings are the out-of-the-box settings. Fallback starts direct because proxy
-// needs a selected config.
+// DefaultSettings are the out-of-the-box settings. The fallback is proxy once a config
+// is selected; with no selection the composer still has to use direct.
 func DefaultSettings() Settings {
 	return Settings{
-		Fallback:   FallbackDirect,
+		Fallback:   FallbackProxy,
 		AllowLAN:   true,
 		ProxyPort:  7890,
 		DoHDNS:     "https://1.1.1.1/dns-query",

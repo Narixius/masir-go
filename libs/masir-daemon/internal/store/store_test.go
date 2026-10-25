@@ -109,7 +109,7 @@ func TestLoadSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !st.Settings.AllowLAN || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackDirect || st.Settings.XrayLogLevel != "warning" || !st.Settings.Analytics {
+	if !st.Settings.AllowLAN || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackProxy || st.Settings.XrayLogLevel != "warning" || !st.Settings.Analytics {
 		t.Fatalf("defaults = %+v", st.Settings)
 	}
 

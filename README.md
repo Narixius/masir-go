@@ -15,7 +15,7 @@ Masir Daemon 0.1.0 ● Active (privileged, service)
 
 Xray Core v26.10.21 ● Active
 ├─ Mode:         TUN (system-wide routing)
-├─ Routing Mode: direct (unmatched traffic skips the proxy)
+├─ Routing Fallback: Proxy (unmatched traffic goes through the active proxy)
 ├─ Proxy Port:   0.0.0.0:7890 (LAN allowed)
 ├─ DoH DNS:      https://1.1.1.1/dns-query
 ├─ DNS Servers:  1.1.1.1, 8.8.8.8
@@ -109,14 +109,66 @@ Then make it yours:
 
 ```sh
 masir rules add                                        # the guided rule wizard
-masir mode proxy                                       # send everything no rule matches through the proxy
+masir mode direct                                      # (optional) send unmatched traffic direct
 ```
 
 Run `masir` with no arguments for the full command list, or `masir menu` for an interactive menu of everything.
 
+## Shell completion
+
+Enable tab completion for your shell:
+
+```sh
+# zsh
+masir completion zsh > "${fpath[1]}/_masir"
+exec zsh
+
+# bash (user-local; the exact directory depends on your distro)
+mkdir -p ~/.local/share/bash-completion/completions
+masir completion bash > ~/.local/share/bash-completion/completions/masir
+
+# fish
+masir completion fish > ~/.config/fish/completions/masir.fish
+```
+
+PowerShell:
+
+```powershell
+# current session
+masir completion powershell | Out-String | Invoke-Expression
+
+# permanent
+Add-Content $PROFILE 'masir completion powershell | Out-String | Invoke-Expression'
+```
+
+Create `$PROFILE` first with `New-Item -ItemType File -Force $PROFILE` if it doesn't
+exist.
+
+## Right-to-left text
+
+masir automatically shapes and reorders Persian/Arabic text on terminals that don’t
+do bidi themselves. On Windows it leaves the text to the terminal by default, because
+the current Windows terminal handles the shaping and ordering itself.
+
+Override the guess with `MASIR_BIDI`:
+
+```powershell
+$env:MASIR_BIDI = "on"    # force masir's shaping/reordering
+$env:MASIR_BIDI = "off"   # leave the text to the terminal
+```
+
+```sh
+MASIR_BIDI=on masir use
+MASIR_BIDI=off masir use
+```
+
+Use `on` if your Windows terminal shows reversed or disconnected Persian text. Use
+`off` if your terminal already renders RTL correctly and masir’s extra shaping is
+reversing it.
+
 ## Routing rules
 
-Rules are checked top to bottom; the first match wins. Traffic no rule matches goes to the **routing mode**: `direct` (the default) or `proxy`, switched with `masir mode`. Local network traffic and DNS are handled by built-in rules, so you never lock yourself out.
+Rules are checked top to bottom; the first match wins. Traffic no rule matches goes to the **routing mode**: `proxy` (the default) or `direct`, switched with `masir mode`. With no server selected yet, masir has to send it direct until you pick one. Local network traffic and DNS are handled by built-in rules, so you never lock yourself out.
 
 Each rule sends its traffic to one of:
 
@@ -200,7 +252,7 @@ masir settings reset mixedPort
 
 | Key | Default | What it does |
 |---|---|---|
-| `routingMode` | `direct` | Where traffic no rule matches goes: `proxy` or `direct` |
+| `routingMode` | `proxy` | Where traffic no rule matches goes: `proxy` or `direct` |
 | `mixedPort` | `7890` | The local proxy port, SOCKS5 and HTTP on one port |
 | `allowLan` | `on` | Let other devices on your network use the proxy |
 | `alwaysOnProxy` | `off` | Keep the proxy port up even while masir is off |
@@ -302,7 +354,7 @@ The API covers everything the CLI does and more: custom inbounds and outbounds, 
 | System service | launchd | systemd | Windows service |
 | Updates | yes | yes | yes |
 
-On Windows, TUN runs on the [Wintun](https://www.wintun.net) driver, built into `masir.exe` and written beside the service's copy when it starts, and masir keeps DNS queries inside the tunnel with Xray's Windows Filtering Platform rules, so lookups can't leak through other network adapters. Windows TUN support is new: if something doesn't work on your setup, please open an issue with the output of `masir logs`.
+On Windows, TUN runs on the [Wintun](https://www.wintun.net) driver, built into `masir.exe` and written beside the service's copy when it starts, and masir keeps DNS queries inside the tunnel with Xray's Windows Filtering Platform rules, so lookups can't leak through other network adapters. Windows TUN support is new: if something doesn't work on your setup, please open an issue with the output of `masir logs`. On Windows, masir leaves Persian/Arabic text shaping to the terminal by default; set `MASIR_BIDI=on` if your terminal doesn't render RTL text correctly.
 
 ## Building from source
 

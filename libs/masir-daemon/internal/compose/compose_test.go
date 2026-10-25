@@ -186,6 +186,7 @@ func TestBuildWithoutSelection(t *testing.T) {
 
 func TestBuildPinnedFallsBackToProxy(t *testing.T) {
 	st := testState(t)
+	st.Settings.Fallback = store.FallbackDirect
 	_ = st.AddRule("gone", []byte(`{"domain":["full:g.test"]}`),
 		store.Target{Kind: store.TargetConfig, SubscriptionID: "s", ConfigID: "missing"}, false)
 	out, c := build(t, Input{State: st, Proxy: true, Active: json.RawMessage(activeOut),

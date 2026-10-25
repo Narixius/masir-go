@@ -224,8 +224,16 @@ func TestFallbackNeedsSelection(t *testing.T) {
 	if _, err := s.SelectConfig(ctx, &pb.SelectConfigRequest{SubscriptionId: sub, ConfigId: ids["Main"]}); err != nil {
 		t.Fatal(err)
 	}
+	// Proxy is the default, so selecting a config immediately routes unruled
+	// traffic through it.
+	if got := route(t, s, "anything.test"); got != "proxy" {
+		t.Fatalf("default proxy fallback after selecting -> %s", got)
+	}
+	if _, err := s.SetFallback(ctx, &pb.SetFallbackRequest{Fallback: pb.Fallback_FALLBACK_DIRECT}); err != nil {
+		t.Fatal(err)
+	}
 	if got := route(t, s, "anything.test"); got != "direct" {
-		t.Fatalf("selecting alone shouldn't change fallback; got %s", got)
+		t.Fatalf("direct fallback -> %s", got)
 	}
 	if _, err := s.SetFallback(ctx, &pb.SetFallbackRequest{Fallback: pb.Fallback_FALLBACK_PROXY}); err != nil {
 		t.Fatal(err)

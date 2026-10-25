@@ -124,11 +124,6 @@ func printStatus(st *pb.Status) {
 	if lvl := set.GetXrayLogLevel(); lvl != "" {
 		rows = append(rows, [2]string{"Xray Log", lvl})
 	}
-	analyticsState := ui.Gray("off")
-	if set.GetAnalytics() {
-		analyticsState = ui.Green("on") + ui.Dim(" (anonymous)")
-	}
-	rows = append(rows, [2]string{"Analytics", analyticsState})
 	switch geo := st.GeoUpdatedAt; {
 	case geo == "":
 		rows = append(rows, [2]string{"Geo Data", ui.Yellow("missing; geosite:/geoip: rules won't work") + ui.Dim(" — `masir update geo` ("+st.GeoDir+")")})

@@ -4,6 +4,7 @@ package ui
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -32,6 +33,12 @@ func SetupBidi() {
 }
 
 func terminalDoesBidi() bool {
+	// Windows Terminal and the modern Windows console shape and order Persian/
+	// Arabic themselves; applying masir's own visual reordering on top reverses
+	// the text. Users on a terminal that doesn't can set MASIR_BIDI=on.
+	if runtime.GOOS == "windows" {
+		return true
+	}
 	return os.Getenv("TERM_PROGRAM") == "Apple_Terminal" ||
 		os.Getenv("VTE_VERSION") != "" ||
 		os.Getenv("KONSOLE_VERSION") != "" ||
