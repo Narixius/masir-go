@@ -37,9 +37,11 @@ func freePort(t *testing.T) int {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	xc := xray.New("")
-	t.Cleanup(func() { _ = xc.Close() })
 	s := New(xc, identity.Identity{UID: os.Getuid(), GID: os.Getgid(), Name: "tester"})
 	s.dir = t.TempDir()
+	// Cleanups run last-in-first-out: close Xray before TempDir removes the dir,
+	// otherwise Windows refuses to delete the still-open xray-error.log.
+	t.Cleanup(func() { _ = xc.Close() })
 	s.state.Settings.AllowLAN = false
 	s.state.Settings.ProxyPort = freePort(t)
 	m, err := subs.NewManager(filepath.Join(s.dir, "subscriptions"), filepath.Join(s.dir, "active.json"), nil)
