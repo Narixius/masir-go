@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -69,8 +71,12 @@ func TestAddAndList(t *testing.T) {
 	if s.Name != "Provider Title" || len(s.Configs) != 4 || s.Usage == nil || s.Usage.Total != 100 {
 		t.Fatalf("added = %+v", s)
 	}
-	if s.Interval() != 6*time.Hour {
-		t.Fatalf("interval = %v, want the provider's 6h", s.Interval())
+	if s.ProviderIntervalMinutes != 6*60 || m.Interval(s) != DefaultInterval {
+		t.Fatalf("interval = %v (provider suggests %dm); the user's setting wins over the provider's", m.Interval(s), s.ProviderIntervalMinutes)
+	}
+	m.SetInterval(45 * time.Minute)
+	if m.Interval(s) != 45*time.Minute {
+		t.Fatalf("interval = %v, want the 45m setting", m.Interval(s))
 	}
 	info, err := os.Stat(m.path(s.ID))
 	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
@@ -160,7 +166,7 @@ func TestAlterAndRemove(t *testing.T) {
 
 	name, interval := "new", uint32(90)
 	a, err := m.Alter(ctx, s.ID, &name, nil, &interval)
-	if err != nil || a.Name != "new" || a.Interval() != 90*time.Minute {
+	if err != nil || a.Name != "new" || m.Interval(a) != 90*time.Minute {
 		t.Fatalf("alter = %+v, %v", a, err)
 	}
 	empty := " "
@@ -251,15 +257,18 @@ func TestFollowActive(t *testing.T) {
 func TestDue(t *testing.T) {
 	now := time.Now()
 	s := Subscription{CreatedAt: now.Add(-time.Hour), CheckedAt: now.Add(-time.Hour)}
-	if s.due(now) {
+	if s.due(now, DefaultInterval) {
 		t.Error("due an hour into a 12h interval")
 	}
+	if !s.due(now, 30*time.Minute) {
+		t.Error("not due an hour into a 30m setting")
+	}
 	s.CustomIntervalMinutes = 30
-	if !s.due(now) {
-		t.Error("not due an hour into a 30m interval")
+	if !s.due(now, DefaultInterval) {
+		t.Error("its own 30m interval wins over the setting")
 	}
 	s = Subscription{CheckedAt: now.Add(-45 * time.Minute), LastError: "boom"}
-	if !s.due(now) {
+	if !s.due(now, DefaultInterval) {
 		t.Error("a failed subscription should retry after 30m")
 	}
 }
@@ -305,4 +314,52 @@ func TestTestLatency(t *testing.T) {
 func sameJSON(a, b []byte) bool {
 	var ca, cb bytes.Buffer
 	return json.Compact(&ca, a) == nil && json.Compact(&cb, b) == nil && bytes.Equal(ca.Bytes(), cb.Bytes())
+}
+
+func TestBackgroundRefreshIsParallelWithATimeoutEach(t *testing.T) {
+	ctx := context.Background()
+	m := newTestManager(t, nil)
+
+	// One healthy provider and three that hang once added.
+	good := newProvider(t, links())
+	var hang atomic.Bool
+	stuck := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hang.Load() {
+			<-r.Context().Done()
+			return
+		}
+		_, _ = w.Write([]byte(links()))
+	}))
+	t.Cleanup(stuck.Close)
+
+	goodSub, err := m.Add(ctx, good.srv.URL+"/sub", "good", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 3 {
+		if _, err := m.Add(ctx, fmt.Sprintf("%s/sub%d", stuck.URL, i), fmt.Sprintf("stuck%d", i), 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hang.Store(true)
+
+	refreshTimeout = 400 * time.Millisecond
+	t.Cleanup(func() { refreshTimeout = 2 * time.Minute })
+	later := time.Now().Add(13 * time.Hour) // everything is due
+	m.now = func() time.Time { return later }
+
+	start := time.Now()
+	m.refreshDue(ctx)
+	if took := time.Since(start); took > 1100*time.Millisecond {
+		t.Fatalf("refresh took %v: subscriptions must refresh in parallel, each with its own timeout", took)
+	}
+	all, _ := m.List()
+	for _, s := range all {
+		switch {
+		case s.ID == goodSub.ID && (s.LastError != "" || !s.CheckedAt.Equal(later)):
+			t.Errorf("the healthy subscription should refresh despite the stuck ones: %+v", s)
+		case s.ID != goodSub.ID && s.LastError == "":
+			t.Errorf("%s hung and should have timed out with an error", s.Name)
+		}
+	}
 }

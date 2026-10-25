@@ -102,3 +102,16 @@ func TestIPCatalogMatchesGeoData(t *testing.T) {
 		}
 	}
 }
+
+func TestRefreshMinutes(t *testing.T) {
+	for v, ok := range map[string]bool{"720": true, "5": true, "43200": true, "4": false, "43201": false, "0": false, "-5": false, "12h": false, "": false, " 60 ": true} {
+		if err := validateMinutes(v); (err == nil) != ok {
+			t.Errorf("validateMinutes(%q) = %v, want ok=%v", v, err, ok)
+		}
+	}
+	for n, want := range map[int]string{720: "12h", 90: "1h 30m", 5: "5m", 43200: "30d", 1500: "1d 1h"} {
+		if got := humanMinutes(n); got != want {
+			t.Errorf("humanMinutes(%d) = %q, want %q", n, got, want)
+		}
+	}
+}

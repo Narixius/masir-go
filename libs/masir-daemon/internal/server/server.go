@@ -88,6 +88,7 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 	}
 	m.Log = s.Log
 	m.OnChange = s.subscriptionsChanged
+	m.SetInterval(time.Duration(st.Settings.SubIntervalMinutes) * time.Minute)
 	s.subs = m
 
 	if s.idle.Load() && st.Settings.Power { // masir is off while the daemon is idle

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
@@ -44,6 +45,9 @@ func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsReque
 		if req.TunGateway != nil {
 			set.TunGateway = *req.TunGateway
 		}
+		if req.SubIntervalMinutes != nil {
+			set.SubIntervalMinutes = int(*req.SubIntervalMinutes)
+		}
 		out = *set
 		return set.Validate()
 	})
@@ -53,6 +57,7 @@ func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsReque
 		}
 		return nil, err
 	}
+	s.subs.SetInterval(time.Duration(out.SubIntervalMinutes) * time.Minute)
 	return &pb.UpdateSettingsResponse{Settings: toPBSettings(out)}, nil
 }
 
@@ -142,5 +147,7 @@ func toPBSettings(s store.Settings) *pb.Settings {
 		DnsServers:    s.DNSServers,
 		TunDns:        s.TunDNS,
 		TunGateway:    s.TunGateway,
+
+		SubIntervalMinutes: uint32(s.SubIntervalMinutes),
 	}
 }

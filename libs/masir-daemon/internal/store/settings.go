@@ -25,6 +25,25 @@ type Settings struct {
 	DNSServers    []string `json:"dnsServers"`
 	TunDNS        []string `json:"tunDns"`
 	TunGateway    string   `json:"tunGateway"`
+	// SubIntervalMinutes is how often subscriptions refresh in the background, unless a
+	// subscription sets its own interval.
+	SubIntervalMinutes int `json:"subIntervalMinutes"`
+}
+
+// Bounds for subscription refresh intervals, in minutes: the daemon looks for due
+// subscriptions every 5 minutes, so less couldn't run sooner; 30 days at most.
+const (
+	MinSubIntervalMinutes = 5
+	MaxSubIntervalMinutes = 30 * 24 * 60
+)
+
+// ValidSubInterval checks a refresh interval in minutes.
+func ValidSubInterval(minutes int) error {
+	if minutes < MinSubIntervalMinutes || minutes > MaxSubIntervalMinutes {
+		return fmt.Errorf("subscription refresh interval must be %d to %d minutes, not %d: %w",
+			MinSubIntervalMinutes, MaxSubIntervalMinutes, minutes, ErrInvalid)
+	}
+	return nil
 }
 
 // DefaultSettings are the out-of-the-box settings. Fallback starts direct because proxy
@@ -37,6 +56,8 @@ func DefaultSettings() Settings {
 		DoHDNS:     "https://1.1.1.1/dns-query",
 		DNSServers: []string{"1.1.1.1", "8.8.8.8"},
 		TunGateway: "10.10.20.1/24",
+
+		SubIntervalMinutes: 12 * 60,
 	}
 }
 
@@ -66,5 +87,5 @@ func (s Settings) Validate() error {
 	if ip, _, err := net.ParseCIDR(s.TunGateway); err != nil || ip.To4() == nil {
 		return fmt.Errorf("tun gateway %q must be an IPv4 CIDR: %w", s.TunGateway, ErrInvalid)
 	}
-	return nil
+	return ValidSubInterval(s.SubIntervalMinutes)
 }

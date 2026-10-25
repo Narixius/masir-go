@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
@@ -72,20 +73,23 @@ type Active struct {
 }
 
 // Interval is how often the subscription refreshes: custom, else the provider's, else the default.
-func (s *Subscription) Interval() time.Duration {
-	switch {
-	case s.CustomIntervalMinutes > 0:
+// interval is how often s refreshes: its own interval if it has one, else def (the
+// user's setting). The provider's suggested interval is kept for display only.
+// refreshTimeout bounds one subscription's background refresh: a direct fetch, a retry
+// through the proxy, and parsing. Refreshes run in parallel, so one dead provider never
+// holds up the others. A variable for tests.
+var refreshTimeout = 2 * time.Minute
+
+func (s *Subscription) interval(def time.Duration) time.Duration {
+	if s.CustomIntervalMinutes > 0 {
 		return time.Duration(s.CustomIntervalMinutes) * time.Minute
-	case s.ProviderIntervalMinutes > 0:
-		return time.Duration(s.ProviderIntervalMinutes) * time.Minute
-	default:
-		return DefaultInterval
 	}
+	return def
 }
 
-func (s *Subscription) due(now time.Time) bool {
+func (s *Subscription) due(now time.Time, def time.Duration) bool {
 	last := cmp.Or(s.CheckedAt, s.CreatedAt)
-	wait := s.Interval()
+	wait := s.interval(def)
 	if s.LastError != "" {
 		wait = min(wait, retryAfterFailure)
 	}
@@ -102,6 +106,7 @@ func (s *Subscription) config(id string) (Config, bool) {
 }
 
 type Manager struct {
+	interval   atomic.Int64 // default refresh interval (a time.Duration); 0 means DefaultInterval
 	dir        string
 	activePath string
 	direct     *http.Client
@@ -404,6 +409,23 @@ func (m *Manager) SetActive(a Active) error {
 }
 
 // Run refreshes due subscriptions until ctx is done.
+// SetInterval sets how often subscriptions without their own interval refresh.
+func (m *Manager) SetInterval(d time.Duration) {
+	if d > 0 {
+		m.interval.Store(int64(d))
+	}
+}
+
+// Interval is how often s refreshes in the background.
+func (m *Manager) Interval(s *Subscription) time.Duration { return s.interval(m.defaultInterval()) }
+
+func (m *Manager) defaultInterval() time.Duration {
+	if d := time.Duration(m.interval.Load()); d > 0 {
+		return d
+	}
+	return DefaultInterval
+}
+
 func (m *Manager) Run(ctx context.Context) {
 	t := time.NewTicker(checkEvery)
 	defer t.Stop()
@@ -423,19 +445,25 @@ func (m *Manager) refreshDue(ctx context.Context) {
 		m.log("error", "list subscriptions: "+err.Error())
 		return
 	}
+	def := m.defaultInterval()
+	var wg sync.WaitGroup
 	for _, s := range all {
-		if ctx.Err() != nil {
-			return
-		}
-		if !s.due(m.now()) {
+		if !s.due(m.now(), def) {
 			continue
 		}
-		if u, err := m.Update(ctx, s.ID); err != nil {
-			m.log("warn", fmt.Sprintf("subscription %s: %v", s.Name, err))
-		} else {
-			m.log("info", fmt.Sprintf("subscription %s refreshed (%d configs)", u.Name, len(u.Configs)))
-		}
+		wg.Add(1)
+		go func(s Subscription) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
+			defer cancel()
+			if u, err := m.Update(ctx, s.ID); err != nil {
+				m.log("warn", fmt.Sprintf("subscription %s: %v", s.Name, err))
+			} else {
+				m.log("info", fmt.Sprintf("subscription %s refreshed (%d configs)", u.Name, len(u.Configs)))
+			}
+		}(s)
 	}
+	wg.Wait()
 }
 
 // configsChanged runs after s got new configs. If the selection's ID is gone but a

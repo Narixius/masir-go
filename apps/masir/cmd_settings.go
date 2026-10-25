@@ -56,6 +56,15 @@ var settingsTable = []setting{
 	{key: "alwaysOnProxy", label: "Always-on proxy", desc: "keep the proxy port up even when masir is off", aliases: []string{"alwayson"}, kind: "bool",
 		get:   func(s *pb.Settings) string { return strconv.FormatBool(s.GetAlwaysOnProxy()) },
 		apply: func(r *pb.UpdateSettingsRequest, v string) { b := v == "true"; r.AlwaysOnProxy = &b }},
+	{key: "subInterval", label: "Subscription refresh", desc: "minutes between background subscription refreshes",
+		aliases: []string{"subrefresh", "subscriptioninterval", "refresh"}, kind: "minutes",
+		get:      func(s *pb.Settings) string { return strconv.Itoa(int(s.GetSubIntervalMinutes())) },
+		validate: validateMinutes,
+		apply: func(r *pb.UpdateSettingsRequest, v string) {
+			n, _ := strconv.Atoi(strings.TrimSpace(v))
+			m := uint32(n)
+			r.SubIntervalMinutes = &m
+		}},
 	{key: "dohDns", label: "DNS over HTTPS", desc: "resolves names, through the proxy", aliases: []string{"doh"},
 		get: func(s *pb.Settings) string { return s.GetDohDns() },
 		validate: func(v string) error {
@@ -82,6 +91,37 @@ var settingsTable = []setting{
 			return nil
 		},
 		apply: func(r *pb.UpdateSettingsRequest, v string) { r.TunGateway = &v }},
+}
+
+// Subscription refresh intervals, in minutes: the daemon looks for due subscriptions
+// every 5 minutes, so less couldn't run sooner; 30 days at most.
+const minRefreshMinutes, maxRefreshMinutes = 5, 30 * 24 * 60
+
+func validateMinutes(v string) error {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return fail("enter a whole number of minutes, like 720 for 12 hours")
+	}
+	if n < minRefreshMinutes || n > maxRefreshMinutes {
+		return fail("enter %d to %d minutes (5 minutes to 30 days)", minRefreshMinutes, maxRefreshMinutes)
+	}
+	return nil
+}
+
+// humanMinutes reads a number of minutes as days, hours and minutes: 90 is "1h 30m".
+func humanMinutes(n int) string {
+	d, h, m := n/(24*60), n/60%24, n%60
+	var parts []string
+	if d > 0 {
+		parts = append(parts, strconv.Itoa(d)+"d")
+	}
+	if h > 0 {
+		parts = append(parts, strconv.Itoa(h)+"h")
+	}
+	if m > 0 || len(parts) == 0 {
+		parts = append(parts, strconv.Itoa(m)+"m")
+	}
+	return strings.Join(parts, " ")
 }
 
 func requireIPs(required bool) func(string) error {
@@ -178,7 +218,11 @@ func applySetting(s setting, v string) error {
 		return err
 	}
 	shown := displayValue(s, v)
-	ui.Success(fmt.Sprintf("%s set to %s (%s).", s.label, ui.Visual(shown), appliedNote(st)))
+	note := appliedNote(st)
+	if s.kind == "minutes" { // the daemon's own schedule, not Xray's: in effect at once
+		note = "the daemon uses it from now on"
+	}
+	ui.Success(fmt.Sprintf("%s set to %s (%s).", s.label, ui.Visual(shown), note))
 	if (s.key == "mixedPort" || s.key == "allowLan") && st.ProxyRunning {
 		ui.Info("Proxy now on " + st.ProxyAddress + ".")
 	}
@@ -193,6 +237,10 @@ func displayValue(s setting, v string) string {
 		return ui.Gray("off")
 	case v == "":
 		return ui.Dim("(none)")
+	case s.kind == "minutes":
+		if n, err := strconv.Atoi(v); err == nil {
+			return ui.Cyan(v+" min") + ui.Dim(" ("+humanMinutes(n)+")")
+		}
 	}
 	return ui.Cyan(strings.ReplaceAll(v, ",", ", "))
 }

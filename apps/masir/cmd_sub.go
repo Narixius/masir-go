@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
@@ -46,10 +48,10 @@ func cmdSubAdd(a args) error {
 	}
 	var interval uint32
 	if v := a.str("interval"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			return fail("--interval must be minutes")
+		if err := validateMinutes(v); err != nil {
+			return fail("--interval: %v", err)
 		}
+		n, _ := strconv.Atoi(v)
 		interval = uint32(n)
 	}
 
@@ -181,24 +183,68 @@ func cmdSubUpdate(a args) error {
 		ui.Info("No subscriptions to update. Add one with `masir sub add <url>`.")
 		return nil
 	}
-	failed := 0
-	for _, s := range targets {
-		sp := ui.Spin(fmt.Sprintf("Updating %q", ui.Visual(s.sub.Name)))
-		res, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.UpdateSubscriptionResponse, error) {
-			return c.UpdateSubscription(ctx, &pb.UpdateSubscriptionRequest{Id: s.sub.Id})
-		})
-		if err != nil {
-			failed++
-			sp.Fail(fmt.Sprintf("%s: %s (kept the %d configs it had)", s.sub.Name, message(err), s.sub.ConfigCount))
-			continue
-		}
-		sp.Stop(fmt.Sprintf("%q updated (%d config%s).", ui.Visual(res.Subscription.Name), res.Subscription.ConfigCount, plural(int(res.Subscription.ConfigCount))))
+	c, err := daemon()
+	if err != nil {
+		return err
 	}
-	if failed > 0 {
+	update := func(s subNodes) (*pb.Subscription, error) {
+		ctx, cancel := context.WithTimeout(appCtx, subUpdateTimeout)
+		defer cancel()
+		res, err := c.UpdateSubscription(ctx, &pb.UpdateSubscriptionRequest{Id: s.sub.Id})
+		if err != nil {
+			return nil, err
+		}
+		return res.Subscription, nil
+	}
+
+	if len(targets) == 1 {
+		s := targets[0]
+		sp := ui.Spin(fmt.Sprintf("Updating %q", ui.Visual(s.sub.Name)))
+		sub, err := update(s)
+		if err != nil {
+			sp.Fail(fmt.Sprintf("%s: %s (kept the %d configs it had)", s.sub.Name, message(err), s.sub.ConfigCount))
+			return errReported
+		}
+		sp.Stop(fmt.Sprintf("%q updated (%d config%s).", ui.Visual(sub.Name), sub.ConfigCount, plural(int(sub.ConfigCount))))
+		return nil
+	}
+
+	// All at once, each with its own timeout and row: a slow provider holds up no one.
+	fmt.Println(ui.Bold(fmt.Sprintf("Updating %d subscriptions", len(targets))))
+	rows := make([]ui.LiveRow, len(targets))
+	for i, s := range targets {
+		rows[i] = ui.LiveRow{Label: ui.Visual(s.sub.Name)}
+	}
+	live := ui.NewLive(rows...)
+	var failed atomic.Int32
+	var wg sync.WaitGroup
+	for i, s := range targets {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sub, err := update(s)
+			if err != nil {
+				failed.Add(1)
+				live.Set(i, ui.Red("✖ "+ui.Visual(shortErr(err)))+ui.Dim(fmt.Sprintf(" (kept its %d configs)", s.sub.ConfigCount)))
+				return
+			}
+			live.Set(i, ui.Green("✔")+fmt.Sprintf(" %d config%s", sub.ConfigCount, plural(int(sub.ConfigCount))))
+		}()
+	}
+	wg.Wait()
+	live.Stop()
+	if appCtx.Err() != nil {
+		return appCtx.Err()
+	}
+	if failed.Load() > 0 {
 		return errReported
 	}
 	return nil
 }
+
+// subUpdateTimeout bounds each subscription's refresh, as the daemon's background
+// refresh does: a direct fetch, a retry through the proxy, and parsing.
+const subUpdateTimeout = 2 * time.Minute
 
 func cmdSubRemove(a args) error {
 	all, err := loadNodes()

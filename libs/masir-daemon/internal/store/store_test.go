@@ -201,3 +201,16 @@ func TestRenameAndMoveRules(t *testing.T) {
 		t.Errorf("move missing: %v", err)
 	}
 }
+
+func TestSubIntervalBounds(t *testing.T) {
+	for minutes, ok := range map[int]bool{4: false, 5: true, 720: true, 43200: true, 43201: false, 0: false, -1: false} {
+		s := DefaultSettings()
+		s.SubIntervalMinutes = minutes
+		if err := s.Validate(); (err == nil) != ok {
+			t.Errorf("%d minutes: valid=%v, want %v (%v)", minutes, err == nil, ok, err)
+		}
+	}
+	if DefaultSettings().SubIntervalMinutes != 720 {
+		t.Error("the default is 12 hours")
+	}
+}
