@@ -309,12 +309,14 @@ func (s *Server) maintainUpdates(ctx context.Context) {
 				s.Log("warn", "update check: "+err.Error())
 			} else {
 				lastCheck = time.Now()
-				s.track("update_checked", map[string]any{
-					"trigger":         "daily",
-					"available":       info.Available,
-					"current_version": info.CurrentVersion,
-					"latest_version":  info.LatestVersion,
-				})
+				if info.Available {
+					s.track("update_checked", map[string]any{
+						"trigger":         "daily",
+						"available":       true,
+						"current_version": info.CurrentVersion,
+						"latest_version":  info.LatestVersion,
+					})
+				}
 			}
 			cancel()
 		}

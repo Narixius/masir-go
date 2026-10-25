@@ -254,7 +254,7 @@ func probeProxy(c pb.DaemonServiceClient, st *pb.Status) probeResult {
 	ctx, cancel := context.WithTimeout(appCtx, 15*time.Second)
 	defer cancel()
 	var r probeResult
-	err := probe(ctx, c, st.ActiveSubscriptionId, []string{st.ActiveConfigId}, "status", func(_ string, l *pb.LatencyResult) {
+	err := probe(ctx, c, st.ActiveSubscriptionId, []string{st.ActiveConfigId}, func(_ string, l *pb.LatencyResult) {
 		if l.Error != "" {
 			r = probeResult{Error: shortErr(errors.New(l.Error))}
 		} else {

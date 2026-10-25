@@ -39,7 +39,6 @@ type Server struct {
 	tests  map[string]context.CancelFunc // test ID -> its cancel function
 
 	analytics *analytics.Client
-	xrayLogs  *xrayLogTracker
 
 	logs    *hub
 	changes *signal
@@ -74,16 +73,12 @@ func New(xc *xray.Core, id identity.Identity) *Server {
 		id:        id,
 		startedAt: time.Now(),
 		state:     store.State{Settings: store.DefaultSettings()},
-		xrayLogs:  newXrayLogTracker(),
 		logs:      newHub(),
 		changes:   newSignal(),
 		tests:     map[string]context.CancelFunc{},
 		stopped:   make(chan struct{}),
 	}
-	xray.SetLogSink(func(level, msg string) {
-		s.Log(level, msg)
-		s.trackXrayLog(level, msg)
-	})
+	xray.SetLogSink(s.Log)
 	return s
 }
 

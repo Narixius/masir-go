@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -340,90 +339,6 @@ func (s *Server) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
-type xrayLogTracker struct {
-	mu     sync.Mutex
-	seen   map[string]time.Time
-	window time.Duration
-	limit  int
-	events []time.Time
-}
-
-func newXrayLogTracker() *xrayLogTracker {
-	return &xrayLogTracker{seen: map[string]time.Time{}, window: 5 * time.Minute, limit: 20}
-}
-
-func (t *xrayLogTracker) allow(fingerprint string, now time.Time) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if last, ok := t.seen[fingerprint]; ok && now.Sub(last) < t.window {
-		return false
-	}
-	if len(t.seen) > 500 {
-		for k, at := range t.seen {
-			if now.Sub(at) >= t.window {
-				delete(t.seen, k)
-			}
-		}
-	}
-	cutoff := now.Add(-time.Minute)
-	kept := t.events[:0]
-	for _, at := range t.events {
-		if at.After(cutoff) {
-			kept = append(kept, at)
-		}
-	}
-	t.events = kept
-	if len(t.events) >= t.limit {
-		return false
-	}
-	t.seen[fingerprint] = now
-	t.events = append(t.events, now)
-	return true
-}
-
-func (s *Server) trackXrayLog(level, msg string) {
-	if s.analytics == nil {
-		return
-	}
-	level = strings.ToLower(level)
-	if level != "warn" && level != "warning" && level != "error" {
-		return
-	}
-	lower := strings.ToLower(msg)
-	if strings.Contains(lower, "xray") && strings.Contains(lower, "started") {
-		return
-	}
-	if strings.Contains(lower, "logger started") || strings.Contains(lower, "logger closing") {
-		return
-	}
-	fp := analytics.Fingerprint(msg)
-	if s.xrayLogs == nil || !s.xrayLogs.allow(fp, time.Now()) {
-		return
-	}
-	// Do not take s.mu here: Xray can log while applyLocked holds it.
-	s.analytics.TrackError("xray_warning", fmt.Errorf("%s", msg), map[string]any{
-		"app_version":  Version,
-		"xray_version": s.xray.GetVersion(),
-		"severity":     level,
-		"category":     xrayLogCategory(lower),
-		"fingerprint":  fp,
-	}, false)
-}
-
-func xrayLogCategory(msg string) string {
-	switch {
-	case strings.Contains(msg, "dns"):
-		return "dns"
-	case strings.Contains(msg, "tls") || strings.Contains(msg, "transport") || strings.Contains(msg, "dial"):
-		return "transport"
-	case strings.Contains(msg, "config") || strings.Contains(msg, "failed to load"):
-		return "config"
-	case strings.Contains(msg, "route") || strings.Contains(msg, "routing"):
-		return "routing"
-	}
-	return "other"
-}
-
 func matcherKinds(raw string) []string {
 	var m map[string]json.RawMessage
 	if json.Unmarshal([]byte(raw), &m) != nil {
@@ -489,20 +404,17 @@ func configCountries(configs []subs.Config) []string {
 
 // trackSubscriptionRefresh is the background refresher's event hook.
 func (s *Server) trackSubscriptionRefresh(sub *subs.Subscription, err error, took time.Duration) {
+	if err == nil {
+		return // routine background success isn't worth an event
+	}
 	props := map[string]any{
 		"trigger":     "background",
 		"duration_ms": took.Milliseconds(),
 	}
 	if sub != nil {
 		props["config_count"] = len(sub.Configs)
-		props["protocols"] = configProtocols(sub.Configs)
 	}
-	if err != nil {
-		s.trackError("subscription_refreshed", err, props, false)
-		return
-	}
-	props["success"] = true
-	s.track("subscription_refreshed", props)
+	s.trackError("subscription_refreshed", err, props, false)
 }
 
 func containsString(list []string, want string) bool {

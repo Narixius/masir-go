@@ -99,7 +99,7 @@ func fastest(all []subNodes) (string, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = probe(appCtx, c, s.sub.Id, ids, "use_fastest", func(cfgID string, l *pb.LatencyResult) {
+			_ = probe(appCtx, c, s.sub.Id, ids, func(cfgID string, l *pb.LatencyResult) {
 				mu.Lock()
 				defer mu.Unlock()
 				done++

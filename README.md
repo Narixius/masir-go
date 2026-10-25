@@ -284,7 +284,7 @@ masir settings set analytics off
 - Active config country parsed from its flag emoji, plus protocol/transport/security
 - Safe settings: routing fallback, TUN/LAN/always-on, proxy port and whether it's default, Xray log level, subscription interval, DNS/DoH provider categories and counts
 - Counts of rules, inbounds, outbounds, subscriptions, and configs
-- Update, subscription refresh, latency, Xray start/stop/apply-failure, and daemon start/stop events
+- Update, subscription refresh (user actions and background failures), Xray start/stop/apply-failure, and daemon start/stop events
 
 **What is never sent**
 
@@ -293,6 +293,7 @@ masir settings set analytics off
 - Rule domains, IPs, process names or app paths
 - Raw DNS/DoH addresses or URLs
 - Local file paths, usernames, hostnames, or raw logs
+- Xray warning/log text (warnings stay in `masir logs` and `xray-error.log`)
 - IP-based geolocation (PostHog GeoIP is disabled)
 
 Analytics tries a direct connection first and falls back to the running proxy when the direct route is blocked. Events captured while the daemon is unavailable wait in a local spool and are sent on the next daemon start. Person profiles are deliberately disabled (`$process_person_profile: false`), so events are anonymous and don't create PostHog person profiles.

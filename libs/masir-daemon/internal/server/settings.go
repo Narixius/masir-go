@@ -172,6 +172,9 @@ func (s *Server) SetTunEnabled(ctx context.Context, req *pb.SetTunEnabledRequest
 		s.trackError("tun_failed", err, map[string]any{"enabled": true}, false)
 		return nil, err
 	}
+	s.mu.Lock()
+	prevTun := s.state.Settings.Tun
+	s.mu.Unlock()
 	err := s.change(ctx, fmt.Sprintf("tun enabled: %v", req.Enabled), func(st *store.State) error {
 		st.Settings.Tun = req.Enabled
 		return nil
@@ -180,7 +183,9 @@ func (s *Server) SetTunEnabled(ctx context.Context, req *pb.SetTunEnabledRequest
 		s.trackError("tun_failed", err, map[string]any{"enabled": req.Enabled}, false)
 		return nil, err
 	}
-	s.trackWithActive("tun_changed", map[string]any{"enabled": req.Enabled})
+	if prevTun != req.Enabled {
+		s.trackWithActive("tun_changed", map[string]any{"enabled": req.Enabled})
+	}
 	return &pb.SetTunEnabledResponse{}, nil
 }
 

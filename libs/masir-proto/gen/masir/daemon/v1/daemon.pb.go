@@ -4322,7 +4322,6 @@ type TestSubscriptionLatencyRequest struct {
 	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
 	ConfigIds      []string               `protobuf:"bytes,2,rep,name=config_ids,json=configIds,proto3" json:"config_ids,omitempty"`
 	ProbeUrl       string                 `protobuf:"bytes,3,opt,name=probe_url,json=probeUrl,proto3" json:"probe_url,omitempty"`
-	Reason         string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"` // status, use_fastest, picker, or other
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -4374,13 +4373,6 @@ func (x *TestSubscriptionLatencyRequest) GetConfigIds() []string {
 func (x *TestSubscriptionLatencyRequest) GetProbeUrl() string {
 	if x != nil {
 		return x.ProbeUrl
-	}
-	return ""
-}
-
-func (x *TestSubscriptionLatencyRequest) GetReason() string {
-	if x != nil {
-		return x.Reason
 	}
 	return ""
 }
@@ -5802,13 +5794,12 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x19UpdateSubscriptionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"_\n" +
 	"\x1aUpdateSubscriptionResponse\x12A\n" +
-	"\fsubscription\x18\x01 \x01(\v2\x1d.masir.daemon.v1.SubscriptionR\fsubscription\"\x9d\x01\n" +
+	"\fsubscription\x18\x01 \x01(\v2\x1d.masir.daemon.v1.SubscriptionR\fsubscription\"\x85\x01\n" +
 	"\x1eTestSubscriptionLatencyRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1d\n" +
 	"\n" +
 	"config_ids\x18\x02 \x03(\tR\tconfigIds\x12\x1b\n" +
-	"\tprobe_url\x18\x03 \x01(\tR\bprobeUrl\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\"v\n" +
+	"\tprobe_url\x18\x03 \x01(\tR\bprobeUrl\"v\n" +
 	"\x1fTestSubscriptionLatencyResponse\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\tR\bconfigId\x126\n" +
 	"\x06result\x18\x02 \x01(\v2\x1e.masir.daemon.v1.LatencyResultR\x06result\"s\n" +

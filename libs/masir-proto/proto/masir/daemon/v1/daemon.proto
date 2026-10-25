@@ -373,7 +373,6 @@ message TestSubscriptionLatencyRequest {
   string subscription_id = 1;
   repeated string config_ids = 2;
   string probe_url = 3;
-  string reason = 4; // status, use_fastest, picker, or other
 }
 message TestSubscriptionLatencyResponse {
   string config_id = 1;

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/narixius/masir-go/libs/masir-daemon/internal/analytics"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
@@ -111,53 +110,16 @@ func (s *Server) UpdateSubscription(ctx context.Context, req *pb.UpdateSubscript
 
 func (s *Server) TestSubscriptionLatency(req *pb.TestSubscriptionLatencyRequest, stream pb.DaemonService_TestSubscriptionLatencyServer) error {
 	ctx := stream.Context()
-	names := map[string]string{}
-	if sub, err := s.subs.Get(req.SubscriptionId); err == nil {
-		for _, c := range sub.Configs {
-			names[c.ID] = c.Name
-		}
-	}
-	tested, succeeded, failed := 0, 0, 0
-	var fastest int64 = -1
-	fastestCountry := ""
 	err := s.subs.TestLatency(ctx, req.SubscriptionId, req.ConfigIds, req.ProbeUrl, func(id string, l subs.Latency) {
-		tested++
-		if l.Error == "" {
-			succeeded++
-			if fastest < 0 || l.Ms < fastest {
-				fastest = l.Ms
-				fastestCountry = analytics.CountryFromName(names[id])
-			}
-		} else {
-			failed++
-		}
 		// A send fails only once the client is gone, which also cancels ctx and stops the test.
 		_ = stream.Send(&pb.TestSubscriptionLatencyResponse{ConfigId: id, Result: toPBLatency(&l)})
 	})
 	if ctx.Err() != nil {
 		return nil
 	}
-	reason := req.Reason
-	if reason == "" {
-		reason = "other"
-	}
-	props := map[string]any{
-		"reason":        reason,
-		"tested_count":  tested,
-		"success_count": succeeded,
-		"failure_count": failed,
-	}
-	if fastest >= 0 {
-		props["fastest_ms"] = fastest
-		if fastestCountry != "" {
-			props["fastest_country"] = fastestCountry
-		}
-	}
 	if err != nil {
-		s.trackError("latency_tested", err, props, false)
 		return toStatus(err)
 	}
-	s.track("latency_tested", props)
 	return nil
 }
 
