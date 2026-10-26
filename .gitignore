@@ -3,6 +3,7 @@ outbound.json
 
 # binaries from `go build` run inside an app directory
 apps/masir/masir
+apps/masir-gui/masir-gui
 *.exe
 build
 go-clack
@@ -13,3 +14,9 @@ go-clack
 
 # local analytics key for builds
 .env
+
+# mygo dev builds
+apps/masir-gui/.mygo
+apps/masir-gui/resources/darwin-*/
+apps/masir-gui/resources/linux-*/
+apps/masir-gui/resources/windows-*/

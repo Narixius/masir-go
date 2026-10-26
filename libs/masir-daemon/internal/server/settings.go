@@ -54,6 +54,9 @@ func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsReque
 		if req.Analytics != nil {
 			set.Analytics = *req.Analytics
 		}
+		if req.RulesEnabled != nil {
+			set.RulesEnabled = *req.RulesEnabled
+		}
 		out = *set
 		return set.Validate()
 	})
@@ -184,5 +187,6 @@ func toPBSettings(s store.Settings) *pb.Settings {
 		SubIntervalMinutes: uint32(s.SubIntervalMinutes),
 		XrayLogLevel:       s.XrayLogLevel,
 		Analytics:          s.Analytics,
+		RulesEnabled:       s.RulesEnabled,
 	}
 }

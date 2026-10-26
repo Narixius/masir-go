@@ -1,7 +1,8 @@
-go 1.27.2
+go 1.27.3
 
 use (
 	./apps/masir
+	./apps/masir-gui
 	./libs/masir-core
 	./libs/masir-daemon
 	./libs/masir-proto

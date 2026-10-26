@@ -33,6 +33,9 @@ type Settings struct {
 	XrayLogLevel string `json:"xrayLogLevel"`
 	// Analytics sends anonymous usage and error events to PostHog.
 	Analytics bool `json:"analytics"`
+	// RulesEnabled false runs without the user's rules, which stay saved with their own
+	// disabled flags.
+	RulesEnabled bool `json:"rulesEnabled"`
 }
 
 // Bounds for subscription refresh intervals, in minutes: the daemon looks for due
@@ -66,6 +69,7 @@ func DefaultSettings() Settings {
 		SubIntervalMinutes: 12 * 60,
 		XrayLogLevel:       "warning",
 		Analytics:          true,
+		RulesEnabled:       true,
 	}
 }
 

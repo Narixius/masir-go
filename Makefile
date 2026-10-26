@@ -1,4 +1,4 @@
-.PHONY: proto proto-lint build snapshot
+.PHONY: proto proto-lint build snapshot gui gui-dev gui-windows gui-linux
 
 ANALYTICS_PKG := github.com/narixius/masir-go/libs/masir-daemon/internal/analytics
 -include .env
@@ -19,3 +19,48 @@ build:
 # All release archives, as CI builds them, into build/release (needs network for geo data).
 snapshot:
 	go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
+
+# The desktop app, as a macOS app bundle in apps/masir-gui/dist with masir inside it: the
+# daemon it starts, and the geo data beside it, in its bin folder. It is built for this machine's architecture.
+GUI_DIR := apps/masir-gui
+GUI_VERSION := $(shell sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' $(GUI_DIR)/mygo.json)
+GUI_ARCH := $(shell go env GOARCH)
+GUI_RES := $(GUI_DIR)/resources/darwin-$(GUI_ARCH)/bin
+
+gui:
+	@test -f build/geo/geoip.dat || sh scripts/fetch-geo.sh
+	mkdir -p $(GUI_RES)
+	GOOS=darwin GOARCH=$(GUI_ARCH) CGO_ENABLED=0 go build -ldflags "$(LDFLAGS) -X main.version=$(GUI_VERSION)" -o $(GUI_RES)/masir ./apps/masir
+	cp build/geo/geoip.dat build/geo/geosite.dat $(GUI_RES)/
+	cd $(GUI_DIR) && go tool mygo build -platform darwin/$(GUI_ARCH)
+	@echo "Built $(GUI_DIR)/dist/darwin-$(GUI_ARCH)/Masir.app"
+
+# Runs the desktop app from source, rebuilding as files change.
+gui-dev: build
+	cd $(GUI_DIR) && MASIR_BIN=$(CURDIR)/dist/masir go tool mygo dev
+
+# The desktop app for Windows (arm), built from any machine: apps/masir-gui/dist/windows-arm64
+# holds Masir.exe, with masir.exe and the geo data in its bin folder. The installer is made on Windows.
+GUI_WIN_RES := $(GUI_DIR)/resources/windows-arm64/bin
+
+gui-windows:
+	@test -f build/geo/geoip.dat || sh scripts/fetch-geo.sh
+	mkdir -p $(GUI_WIN_RES)
+	GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS) -X main.version=$(GUI_VERSION)" -o $(GUI_WIN_RES)/masir.exe ./apps/masir
+	cp build/geo/geoip.dat build/geo/geosite.dat $(GUI_WIN_RES)/
+	cd $(GUI_DIR) && go tool mygo build -platform windows/arm64
+	@echo "Built $(GUI_DIR)/dist/windows-arm64"
+
+# The desktop app for Linux (x86-64 by default; GUI_LINUX_ARCH=arm64 for ARM), built from any
+# machine: apps/masir-gui/dist/linux-<arch> holds the executable, a Debian package and a
+# tarball, with masir and the geo data in its bin folder.
+GUI_LINUX_ARCH ?= arm64
+GUI_LINUX_RES := $(GUI_DIR)/resources/linux-$(GUI_LINUX_ARCH)/bin
+
+gui-linux:
+	@test -f build/geo/geoip.dat || sh scripts/fetch-geo.sh
+	mkdir -p $(GUI_LINUX_RES)
+	GOOS=linux GOARCH=$(GUI_LINUX_ARCH) CGO_ENABLED=0 go build -ldflags "$(LDFLAGS) -X main.version=$(GUI_VERSION)" -o $(GUI_LINUX_RES)/masir ./apps/masir
+	cp build/geo/geoip.dat build/geo/geosite.dat $(GUI_LINUX_RES)/
+	cd $(GUI_DIR) && go tool mygo build -platform linux/$(GUI_LINUX_ARCH)
+	@echo "Built $(GUI_DIR)/dist/linux-$(GUI_LINUX_ARCH)"

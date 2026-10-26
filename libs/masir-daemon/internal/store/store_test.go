@@ -294,3 +294,17 @@ func TestDisabledRulesStayDisabledUntilTheUserEnablesThem(t *testing.T) {
 		t.Fatalf("routing.json mentions disabled for an enabled rule: %s", raw)
 	}
 }
+
+func TestSettingsFromBeforeTheRulesSwitchKeepRulesOn(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"proxyPort":7000,"fallback":"proxy","dohDns":"https://1.1.1.1/dns-query","dnsServers":["1.1.1.1"],"tunGateway":"10.10.20.1/24","subIntervalMinutes":60,"xrayLogLevel":"warning"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Settings.RulesEnabled {
+		t.Fatal("rules went off for settings saved before the switch existed")
+	}
+}

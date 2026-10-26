@@ -12,6 +12,9 @@ service DaemonService {
   // Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
   rpc StreamLogs(StreamLogsRequest) returns (stream StreamLogsResponse);
+  // Sends the current traffic speed every interval while Xray runs, until the client
+  // goes away. Nothing is sent while Xray is stopped.
+  rpc WatchTraffic(WatchTrafficRequest) returns (stream WatchTrafficResponse);
   // CaptureEvent records one anonymous client event for analytics. Events are dropped
   // silently when analytics is off.
   rpc CaptureEvent(CaptureEventRequest) returns (CaptureEventResponse);
@@ -109,6 +112,9 @@ message Status {
   // While any are listed, the daemon either runs without them (each marked suspended)
   // or isn't applying the config at all; last_error says which.
   repeated RuleProblem rule_problems = 24;
+  // Counts every change the daemon announces. A client that keeps lists (servers,
+  // rules) refetches them when it moves, instead of on every status.
+  uint64 revision = 25;
 }
 
 message GetStatusRequest {}
@@ -116,6 +122,16 @@ message GetStatusResponse { Status status = 1; }
 
 message WatchStatusRequest {}
 message WatchStatusResponse { Status status = 1; }
+
+message WatchTrafficRequest {
+  uint32 interval_ms = 1; // 0 means one second; at least 250
+}
+message WatchTrafficResponse {
+  uint64 uplink_bps = 1;     // bytes per second leaving, over the last interval
+  uint64 downlink_bps = 2;   // bytes per second arriving
+  uint64 uplink_total = 3;   // bytes since Xray started
+  uint64 downlink_total = 4;
+}
 
 message ShutdownRequest {}
 message ShutdownResponse {}
@@ -145,6 +161,7 @@ message Settings {
   uint32 sub_interval_minutes = 11; // background subscription refresh; a subscription's own interval wins
   string xray_log_level = 12;       // debug, info, warning, error, or none; default warning
   bool analytics = 13;              // send anonymous usage/error events to PostHog
+  bool rules_enabled = 14;          // false runs without the user's rules; each rule keeps its own disabled flag
 }
 
 message GetSettingsRequest {}
@@ -168,6 +185,7 @@ message UpdateSettingsRequest {
   optional uint32 sub_interval_minutes = 8; // 5 to 43200
   optional string xray_log_level = 9;       // debug, info, warning, error, or none
   optional bool analytics = 10;             // anonymous usage/error events
+  optional bool rules_enabled = 11;         // false runs without the user's rules, keeping them saved
 }
 message UpdateSettingsResponse { Settings settings = 1; }
 

@@ -1,0 +1,9 @@
+{
+  "name": "Masir",
+  "slug": "masir-desktop",
+  "identifier": "com.masir.app",
+  "version": "0.1.0",
+  "macos": {
+    "infoPlist": { "LSUIElement": true }
+  }
+}

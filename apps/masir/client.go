@@ -4,47 +4,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"regexp"
 	"strings"
 	"time"
 
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
+	"github.com/narixius/masir-go/libs/masir-core/client"
 	"github.com/narixius/masir-go/libs/masir-core/paths"
 	"github.com/narixius/masir-go/libs/masir-core/service"
-	"github.com/narixius/masir-go/libs/masir-core/transport"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
 var cachedClient pb.DaemonServiceClient
 
-// liveSocket is where a daemon answers right now: a root daemon's socket if there is
-// one, otherwise the socket of a daemon running as this user. Either way the CLI needs
-// no privileges to reach it.
-func liveSocket() (string, bool) {
-	socks, err := paths.Sockets()
-	if err != nil {
-		return "", false
-	}
-	for _, s := range socks {
-		if transport.Alive(s) {
-			return s, true
-		}
-	}
-	return "", false
-}
+// liveSocket is where a daemon answers right now.
+func liveSocket() (string, bool) { return client.LiveSocket() }
 
 // daemonAlive reports whether any daemon answers.
-func daemonAlive() bool {
-	_, ok := liveSocket()
-	return ok
-}
+func daemonAlive() bool { return client.Alive() }
 
 // daemon returns a client, starting a background daemon first if none answers.
 func daemon() (pb.DaemonServiceClient, error) {
@@ -70,27 +50,14 @@ func runningDaemon() (pb.DaemonServiceClient, bool) {
 	return c, err == nil
 }
 
-// dial connects to whichever daemon answers. The socket is looked up again on every
-// (re)connect: a root daemon taking over from this user's daemon listens somewhere else.
+// dial connects to whichever daemon answers; see client.Dial.
 func dial() (pb.DaemonServiceClient, error) {
-	userSock, err := paths.SocketPath()
+	_, c, err := client.Dial() // the process ends soon after; nothing to close
 	if err != nil {
 		return nil, err
 	}
-	conn, err := grpc.NewClient("passthrough:///masir-daemon",
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			sock, ok := liveSocket()
-			if !ok {
-				sock = userSock
-			}
-			return transport.DialContext(ctx, sock)
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, err
-	}
-	cachedClient = pb.NewDaemonServiceClient(conn) // the process ends soon after; nothing to close
-	return cachedClient, nil
+	cachedClient = c
+	return c, nil
 }
 
 // appCtx ends when the user quits: Ctrl-C, SIGTERM, or the terminal closing. Every
@@ -146,14 +113,7 @@ func call[T any](fn func(ctx context.Context, c pb.DaemonServiceClient) (T, erro
 }
 
 // errorReason is the masir ErrorInfo reason on a status error, e.g. "ROOT_REQUIRED".
-func errorReason(err error) string {
-	for _, d := range status.Convert(err).Details() {
-		if info, ok := d.(*errdetails.ErrorInfo); ok && info.Domain == "masir" {
-			return info.Reason
-		}
-	}
-	return ""
-}
+func errorReason(err error) string { return client.ErrorReason(err) }
 
 // message turns an error into what the user reads: the daemon's message without the
 // gRPC wrapping, or what to do when the daemon can't be reached.

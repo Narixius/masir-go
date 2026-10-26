@@ -25,6 +25,7 @@ const (
 	DaemonService_WatchStatus_FullMethodName             = "/masir.daemon.v1.DaemonService/WatchStatus"
 	DaemonService_Shutdown_FullMethodName                = "/masir.daemon.v1.DaemonService/Shutdown"
 	DaemonService_StreamLogs_FullMethodName              = "/masir.daemon.v1.DaemonService/StreamLogs"
+	DaemonService_WatchTraffic_FullMethodName            = "/masir.daemon.v1.DaemonService/WatchTraffic"
 	DaemonService_CaptureEvent_FullMethodName            = "/masir.daemon.v1.DaemonService/CaptureEvent"
 	DaemonService_TestLatency_FullMethodName             = "/masir.daemon.v1.DaemonService/TestLatency"
 	DaemonService_CancelLatencyTest_FullMethodName       = "/masir.daemon.v1.DaemonService/CancelLatencyTest"
@@ -80,6 +81,9 @@ type DaemonServiceClient interface {
 	// Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
 	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamLogsResponse], error)
+	// Sends the current traffic speed every interval while Xray runs, until the client
+	// goes away. Nothing is sent while Xray is stopped.
+	WatchTraffic(ctx context.Context, in *WatchTrafficRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchTrafficResponse], error)
 	// CaptureEvent records one anonymous client event for analytics. Events are dropped
 	// silently when analytics is off.
 	CaptureEvent(ctx context.Context, in *CaptureEventRequest, opts ...grpc.CallOption) (*CaptureEventResponse, error)
@@ -224,6 +228,25 @@ func (c *daemonServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequ
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DaemonService_StreamLogsClient = grpc.ServerStreamingClient[StreamLogsResponse]
+
+func (c *daemonServiceClient) WatchTraffic(ctx context.Context, in *WatchTrafficRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchTrafficResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[2], DaemonService_WatchTraffic_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchTrafficRequest, WatchTrafficResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_WatchTrafficClient = grpc.ServerStreamingClient[WatchTrafficResponse]
 
 func (c *daemonServiceClient) CaptureEvent(ctx context.Context, in *CaptureEventRequest, opts ...grpc.CallOption) (*CaptureEventResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -527,7 +550,7 @@ func (c *daemonServiceClient) UpdateSubscription(ctx context.Context, in *Update
 
 func (c *daemonServiceClient) TestSubscriptionLatency(ctx context.Context, in *TestSubscriptionLatencyRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TestSubscriptionLatencyResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[2], DaemonService_TestSubscriptionLatency_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[3], DaemonService_TestSubscriptionLatency_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -616,7 +639,7 @@ func (c *daemonServiceClient) StopUpdate(ctx context.Context, in *StopUpdateRequ
 
 func (c *daemonServiceClient) WatchUpdate(ctx context.Context, in *WatchUpdateRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchUpdateResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[3], DaemonService_WatchUpdate_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[4], DaemonService_WatchUpdate_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -656,6 +679,9 @@ type DaemonServiceServer interface {
 	// Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
 	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[StreamLogsResponse]) error
+	// Sends the current traffic speed every interval while Xray runs, until the client
+	// goes away. Nothing is sent while Xray is stopped.
+	WatchTraffic(*WatchTrafficRequest, grpc.ServerStreamingServer[WatchTrafficResponse]) error
 	// CaptureEvent records one anonymous client event for analytics. Events are dropped
 	// silently when analytics is off.
 	CaptureEvent(context.Context, *CaptureEventRequest) (*CaptureEventResponse, error)
@@ -740,6 +766,9 @@ func (UnimplementedDaemonServiceServer) Shutdown(context.Context, *ShutdownReque
 }
 func (UnimplementedDaemonServiceServer) StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[StreamLogsResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
+}
+func (UnimplementedDaemonServiceServer) WatchTraffic(*WatchTrafficRequest, grpc.ServerStreamingServer[WatchTrafficResponse]) error {
+	return status.Error(codes.Unimplemented, "method WatchTraffic not implemented")
 }
 func (UnimplementedDaemonServiceServer) CaptureEvent(context.Context, *CaptureEventRequest) (*CaptureEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CaptureEvent not implemented")
@@ -975,6 +1004,17 @@ func _DaemonService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DaemonService_StreamLogsServer = grpc.ServerStreamingServer[StreamLogsResponse]
+
+func _DaemonService_WatchTraffic_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchTrafficRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(DaemonServiceServer).WatchTraffic(m, &grpc.GenericServerStream[WatchTrafficRequest, WatchTrafficResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_WatchTrafficServer = grpc.ServerStreamingServer[WatchTrafficResponse]
 
 func _DaemonService_CaptureEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CaptureEventRequest)
@@ -1867,6 +1907,11 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamLogs",
 			Handler:       _DaemonService_StreamLogs_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "WatchTraffic",
+			Handler:       _DaemonService_WatchTraffic_Handler,
 			ServerStreams: true,
 		},
 		{

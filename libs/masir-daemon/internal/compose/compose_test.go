@@ -356,3 +356,21 @@ func TestDisabledAndSuspendedRulesAreLeftOut(t *testing.T) {
 		t.Errorf("resolved = %+v", out.Rules)
 	}
 }
+
+func TestRulesSwitchedOffLeavesAllUserRulesOut(t *testing.T) {
+	st := testState(t)
+	if err := st.AddRule("direct-site", []byte(`{"domain":["full:a.test"]}`), store.Target{Kind: store.TargetDirect}, false); err != nil {
+		t.Fatal(err)
+	}
+	st.Settings.RulesEnabled = false
+	out, c := build(t, Input{State: st, Proxy: true})
+	if slices.Contains(tags(c.Routing.Rules, "ruleTag"), "direct-site") || len(out.Rules) != 0 {
+		t.Errorf("rules = %v, resolved = %+v", tags(c.Routing.Rules, "ruleTag"), out.Rules)
+	}
+	if len(st.Rules) != 1 || st.Rules[0].Disabled {
+		t.Errorf("the saved rule changed: %+v", st.Rules)
+	}
+	if !slices.Contains(tags(c.Routing.Rules, "ruleTag"), "masir-default-route") {
+		t.Error("the fallback route is gone")
+	}
+}

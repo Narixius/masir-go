@@ -35,7 +35,11 @@ func (s *Server) geoData() rulecheck.Data {
 // less protected than the rule did. A suspended rule is not disabled: it comes back by
 // itself once the data can build it.
 func (s *Server) gate(st store.State, hasProxy, runs, attended bool) (skip map[string]bool, err error) {
-	problems := rulecheck.Check(st.Rules, s.geoData())
+	rules := st.Rules
+	if !st.Settings.RulesEnabled {
+		rules = nil // none of them runs, so none can fail to build
+	}
+	problems := rulecheck.Check(rules, s.geoData())
 	s.ruleProblems, s.suspended = problems, nil
 	if len(problems) == 0 || !runs {
 		return nil, nil // nothing to hold back, or nothing is starting

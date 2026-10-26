@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -53,6 +54,7 @@ func (s *Server) status() *pb.Status {
 		TunRunning:       s.running.tun,
 		LastError:        s.lastErr,
 		Settings:         toPBSettings(s.state.Settings),
+		Revision:         s.changes.revision.Load(),
 	}
 	if !s.id.Privileged {
 		st.TunUnavailableReason = "ROOT_REQUIRED"
@@ -83,8 +85,9 @@ func (s *Server) status() *pb.Status {
 // signal wakes every subscriber after a change. Each holds at most one pending wake-up,
 // so a slow watcher just sees the latest status, never a backlog.
 type signal struct {
-	mu   sync.Mutex
-	subs map[chan struct{}]struct{}
+	mu       sync.Mutex
+	subs     map[chan struct{}]struct{}
+	revision atomic.Uint64 // counts notifications: Status.revision
 }
 
 func newSignal() *signal { return &signal{subs: map[chan struct{}]struct{}{}} }
@@ -102,6 +105,7 @@ func (g *signal) subscribe() (<-chan struct{}, func()) {
 }
 
 func (g *signal) notify() {
+	g.revision.Add(1)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	for ch := range g.subs {

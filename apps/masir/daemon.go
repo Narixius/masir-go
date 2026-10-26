@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
+	"github.com/narixius/masir-go/libs/masir-core/client"
 	"github.com/narixius/masir-go/libs/masir-core/paths"
 	"github.com/narixius/masir-go/libs/masir-core/service"
-	"github.com/narixius/masir-go/libs/masir-core/transport"
 	masird "github.com/narixius/masir-go/libs/masir-daemon"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
@@ -126,34 +126,11 @@ func daemonRun(a args) error {
 // for subscriptions, rules or updates don't start proxying. `masir daemon start`
 // starts it normally, following the saved settings.
 func ensureDaemon(sock string, idle bool) error {
-	if daemonAlive() { // a root daemon's socket counts too
-		return nil
-	}
 	bin, err := self()
 	if err != nil {
 		return err
 	}
-	dir, err := paths.ConfigDir()
-	if err != nil {
-		return err
-	}
-	logf, err := os.OpenFile(filepath.Join(dir, "masird.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer logf.Close()
-	args := []string{"daemon", "run"}
-	if idle {
-		args = append(args, "--idle")
-	}
-	cmd := exec.Command(bin, args...)
-	cmd.Stdout, cmd.Stderr = logf, logf
-	cmd.SysProcAttr = detached()
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start the masir daemon: %w", err)
-	}
-	_ = cmd.Process.Release()
-	return waitFor(func() bool { return transport.Alive(sock) }, 10*time.Second, "the masir daemon didn't start; see "+logf.Name())
+	return client.Start(appCtx, bin, idle)
 }
 
 // enableService installs the daemon as a privileged service serving user (a uid, or a
@@ -336,17 +313,7 @@ func self() (string, error) {
 }
 
 func waitFor(ok func() bool, timeout time.Duration, failure string) error {
-	deadline := time.Now().Add(timeout)
-	for !ok() {
-		if appCtx.Err() != nil {
-			return appCtx.Err()
-		}
-		if time.Now().After(deadline) {
-			return errors.New(failure)
-		}
-		time.Sleep(150 * time.Millisecond)
-	}
-	return nil
+	return client.WaitFor(appCtx, ok, timeout, failure)
 }
 
 func run(name string, args ...string) error {

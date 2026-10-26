@@ -88,7 +88,7 @@ func Build(in Input) (Output, error) {
 	var resolved []ResolvedRule
 	pinned := map[string]bool{}
 	for _, r := range st.Rules {
-		if r.Disabled || in.Skip[r.Tag] {
+		if !st.Settings.RulesEnabled || r.Disabled || in.Skip[r.Tag] {
 			continue
 		}
 		rr := ResolvedRule{Rule: r}

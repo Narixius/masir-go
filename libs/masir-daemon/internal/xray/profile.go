@@ -160,6 +160,11 @@ func (p *Profile) bootstrap(apiPort int) ([]byte, error) {
 	if _, ok := top["stats"]; !ok {
 		top["stats"] = json.RawMessage(`{}`)
 	}
+	// Per-inbound counters are what Traffic reads: what the apps on this machine send
+	// and receive, whichever outbound it leaves by.
+	if _, ok := top["policy"]; !ok {
+		top["policy"] = json.RawMessage(`{"system":{"statsInboundUplink":true,"statsInboundDownlink":true}}`)
+	}
 
 	inbounds := append(rawItems(p.inbounds), json.RawMessage(fmt.Sprintf(
 		`{"tag":%q,"listen":"127.0.0.1","port":%d,"protocol":"dokodemo-door","settings":{"address":"127.0.0.1"}}`,

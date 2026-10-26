@@ -18,6 +18,7 @@ import (
 
 	proxymancmd "github.com/xtls/xray-core/app/proxyman/command"
 	routercmd "github.com/xtls/xray-core/app/router/command"
+	statscmd "github.com/xtls/xray-core/app/stats/command"
 	"github.com/xtls/xray-core/common/geodata"
 	corenet "github.com/xtls/xray-core/common/net"
 	xserial "github.com/xtls/xray-core/common/serial"
@@ -36,6 +37,7 @@ type Core struct {
 	conn    *grpc.ClientConn
 	handler proxymancmd.HandlerServiceClient
 	routing routercmd.RoutingServiceClient
+	stats   statscmd.StatsServiceClient
 	cur     *Profile
 }
 
@@ -150,6 +152,7 @@ func (c *Core) restartLocked(ctx context.Context, p *Profile) error {
 	c.inst, c.conn, c.cur = inst, conn, p
 	c.handler = proxymancmd.NewHandlerServiceClient(conn)
 	c.routing = routercmd.NewRoutingServiceClient(conn)
+	c.stats = statscmd.NewStatsServiceClient(conn)
 	if err := c.setFallback(ctx, p.fallback); err != nil {
 		c.stopLocked()
 		return err
@@ -164,7 +167,7 @@ func (c *Core) stopLocked() {
 	if c.inst != nil {
 		_ = c.inst.Close()
 	}
-	c.inst, c.conn, c.cur, c.handler, c.routing = nil, nil, nil, nil, nil
+	c.inst, c.conn, c.cur, c.handler, c.routing, c.stats = nil, nil, nil, nil, nil, nil
 }
 
 // applyLiveLocked order: sync inbounds, add/replace outbounds, swap rules, then drop outbounds nothing needs.
