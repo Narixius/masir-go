@@ -1,6 +1,6 @@
 // Package compose builds the full Xray config from masird's state. DNS is captured
 // inside Xray rather than by changing system settings, and fallback is the last
-// routing rule.
+// routing rule, pointing at a balancer the daemon can retarget without a rewrite.
 package compose
 
 import (
@@ -22,6 +22,11 @@ const (
 	ProxyInboundTag = "masir-proxy"
 	TunInboundTag   = "tun-in"
 	proxyTag        = "proxy"
+
+	// FallbackBalancer is the balancer the catch-all rule points at. Its selector names
+	// the outbound the fallback currently takes, and the daemon switches modes by
+	// overriding that target: one atomic call, so no rule or TUN has to be rebuilt.
+	FallbackBalancer = "masir-fallback"
 )
 
 // privateRanges stands in for geoip:private so the config builds without geoip.dat.
@@ -227,7 +232,7 @@ func Build(in Input) (Output, error) {
 	}
 	rules = append(rules,
 		obj{"ruleTag": "masir-lan-bypass", "ip": privateRanges, "outboundTag": "direct"},
-		obj{"ruleTag": "masir-default-route", "network": "tcp,udp", "outboundTag": fallback},
+		obj{"ruleTag": "masir-default-route", "network": "tcp,udp", "balancerTag": FallbackBalancer},
 	)
 
 	// IP rules only see IP destinations under AsIs; resolve unmatched domains so they apply too.
@@ -251,7 +256,11 @@ func Build(in Input) (Output, error) {
 		"dns":       obj{"servers": dnsServers},
 		"inbounds":  orEmpty(inbounds),
 		"outbounds": outbounds,
-		"routing":   obj{"domainStrategy": strategy, "rules": rules},
+		"routing": obj{
+			"domainStrategy": strategy,
+			"balancers":      []any{obj{"tag": FallbackBalancer, "selector": []string{fallback}}},
+			"rules":          rules,
+		},
 	})
 	if err != nil {
 		return Output{}, err

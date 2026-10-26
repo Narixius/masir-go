@@ -68,7 +68,7 @@ func (s *Server) applyLocked(ctx context.Context, st store.State, attended bool)
 		Resolve: s.resolveTarget,
 	}
 	if tun {
-		in.TunName = compose.TunName()
+		in.TunName = s.tunName()
 	}
 	out, err := compose.Build(in)
 	if err != nil {
@@ -101,7 +101,7 @@ func (s *Server) applyLocked(ctx context.Context, st store.State, attended bool)
 		return status.Error(codes.Internal, err.Error())
 	}
 	s.resolved = out.Rules
-	s.running = running{proxy: runs, tun: tun}
+	s.running = running{proxy: runs, tun: tun, tunName: in.TunName}
 	if !wasRunning && runs {
 		mode := "proxy"
 		if tun {
@@ -128,6 +128,16 @@ func (s *Server) applyLocked(ctx context.Context, st store.State, attended bool)
 		}
 	}
 	return nil
+}
+
+// tunName keeps the interface going while it runs. Xray can't rename a TUN through its
+// API, so picking a new number would mean tearing the interface and its routes down and
+// back up on every apply, dropping every connection that goes through it.
+func (s *Server) tunName() string {
+	if s.running.tun && s.running.tunName != "" {
+		return s.running.tunName
+	}
+	return compose.TunName()
 }
 
 // reconcileLocked applies the saved state when no caller is waiting on the result (boot,

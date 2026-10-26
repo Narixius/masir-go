@@ -21,11 +21,20 @@ type item struct {
 // Profile is an Xray config split into the part that needs a restart (base)
 // and the parts that can change live through the API (inbounds, outbounds, rules).
 type Profile struct {
-	base      map[string]json.RawMessage // everything except inbounds, outbounds and routing.rules
+	base      map[string]json.RawMessage // everything except inbounds, outbounds and the live routing parts
 	inbounds  []item
 	outbounds []item
 	rules     []item
-	hash      string // of base
+	balancers json.RawMessage // the fallback balancer, retargeted live instead of applied
+	fallback  fallback        // where that balancer points, i.e. the routing mode
+	hash      string          // of base
+}
+
+// fallback is the catch-all's balancer and the outbound it should send traffic to.
+// Switching it is one OverrideBalancerTarget call; none of the config is rewritten.
+type fallback struct {
+	balancer string
+	target   string
 }
 
 func ParseProfile(raw []byte) (*Profile, error) {
@@ -71,12 +80,38 @@ func ParseProfile(raw []byte) (*Profile, error) {
 			p.rules = items
 			delete(routing, "rules")
 		}
+		// The fallback balancer can't be changed through Xray's API (it can only be
+		// added, and never removed), so it rides along with the profile but outside the
+		// restart hash: a mode change retargets it instead of rebuilding the config.
+		if b, ok := routing["balancers"]; ok {
+			p.balancers = b
+			p.fallback = parseFallback(b)
+			delete(routing, "balancers")
+		}
 		top["routing"] = marshal(routing)
 	}
 
 	sum := sha256.Sum256(marshal(top)) // map keys marshal sorted, so this is stable
 	p.hash = hex.EncodeToString(sum[:])
 	return p, nil
+}
+
+// parseFallback reads the balancer compose builds: one balancer whose selector is the
+// outbound the catch-all currently takes. Nothing else in the config is balanced.
+func parseFallback(raw json.RawMessage) fallback {
+	var list []struct {
+		Tag      string   `json:"tag"`
+		Selector []string `json:"selector"`
+	}
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return fallback{}
+	}
+	for _, b := range list {
+		if b.Tag != "" && len(b.Selector) > 0 {
+			return fallback{balancer: b.Tag, target: b.Selector[0]}
+		}
+	}
+	return fallback{}
 }
 
 // parseItems decodes a JSON array of objects and makes sure each has a unique tag.
@@ -146,6 +181,9 @@ func (p *Profile) bootstrap(apiPort int) ([]byte, error) {
 		rules = append(rules, r.JSON)
 	}
 	routing["rules"] = marshal(rules)
+	if p.balancers != nil {
+		routing["balancers"] = p.balancers
+	}
 	top["routing"] = marshal(routing)
 
 	return json.Marshal(top)
@@ -164,7 +202,7 @@ func (p *Profile) Marshal() ([]byte, error) {
 	if len(p.outbounds) > 0 {
 		top["outbounds"] = marshal(rawItems(p.outbounds))
 	}
-	if v, ok := top["routing"]; ok || len(p.rules) > 0 {
+	if v, ok := top["routing"]; ok || len(p.rules) > 0 || p.balancers != nil {
 		routing := map[string]json.RawMessage{}
 		if ok {
 			if err := json.Unmarshal(v, &routing); err != nil {
@@ -172,6 +210,9 @@ func (p *Profile) Marshal() ([]byte, error) {
 			}
 		}
 		routing["rules"] = marshal(rawItems(p.rules))
+		if p.balancers != nil {
+			routing["balancers"] = p.balancers
+		}
 		top["routing"] = marshal(routing)
 	}
 	return json.MarshalIndent(top, "", "  ")

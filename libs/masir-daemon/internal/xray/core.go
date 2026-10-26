@@ -65,7 +65,7 @@ func (c *Core) Apply(ctx context.Context, p *Profile) error {
 	prev := c.cur
 	err := c.applyLocked(ctx, p)
 	if err != nil && c.inst == nil && prev != nil {
-		if rerr := c.restartLocked(prev); rerr != nil {
+		if rerr := c.restartLocked(context.WithoutCancel(ctx), prev); rerr != nil {
 			return errors.Join(err, rerr)
 		}
 	}
@@ -75,11 +75,11 @@ func (c *Core) Apply(ctx context.Context, p *Profile) error {
 // applyLocked is the only place that changes c.cur, so c.cur always describes what Xray runs.
 func (c *Core) applyLocked(ctx context.Context, p *Profile) error {
 	if c.inst == nil || p.needsRestart(c.cur) {
-		return c.restartLocked(p)
+		return c.restartLocked(ctx, p)
 	}
 	if err := c.applyLiveLocked(ctx, c.cur, p); err != nil {
 		// Live state is now partially applied. Rebuild from scratch rather than guess.
-		return c.restartLocked(p)
+		return c.restartLocked(context.WithoutCancel(ctx), p)
 	}
 	c.cur = p
 	return nil
@@ -117,7 +117,7 @@ func (c *Core) Close() error {
 	return nil
 }
 
-func (c *Core) restartLocked(p *Profile) error {
+func (c *Core) restartLocked(ctx context.Context, p *Profile) error {
 	c.stopLocked()
 
 	port, err := freePort()
@@ -150,6 +150,10 @@ func (c *Core) restartLocked(p *Profile) error {
 	c.inst, c.conn, c.cur = inst, conn, p
 	c.handler = proxymancmd.NewHandlerServiceClient(conn)
 	c.routing = routercmd.NewRoutingServiceClient(conn)
+	if err := c.setFallback(ctx, p.fallback); err != nil {
+		c.stopLocked()
+		return err
+	}
 	return nil
 }
 
@@ -164,6 +168,7 @@ func (c *Core) stopLocked() {
 }
 
 // applyLiveLocked order: sync inbounds, add/replace outbounds, swap rules, then drop outbounds nothing needs.
+// The fallback goes last: retargeting its balancer is atomic, so the mode changes all at once.
 func (c *Core) applyLiveLocked(ctx context.Context, old, next *Profile) error {
 	if err := c.syncInbounds(ctx, old.inbounds, next.inbounds); err != nil {
 		return err
@@ -187,13 +192,15 @@ func (c *Core) applyLiveLocked(ctx context.Context, old, next *Profile) error {
 		}
 	}
 
-	if !sameItems(old.rules, next.rules) {
-		for _, r := range old.rules {
-			if _, err := c.routing.RemoveRule(ctx, &routercmd.RemoveRuleRequest{RuleTag: r.Tag}); err != nil {
+	// Only the tail that differs is rewritten: Xray appends rules in order, so leaving
+	// the unchanged head alone keeps the order and leaves its rules untouched.
+	if n := commonPrefix(old.rules, next.rules); n < len(old.rules) || n < len(next.rules) {
+		for i := len(old.rules) - 1; i >= n; i-- {
+			if _, err := c.routing.RemoveRule(ctx, &routercmd.RemoveRuleRequest{RuleTag: old.rules[i].Tag}); err != nil {
 				return err
 			}
 		}
-		for _, r := range next.rules {
+		for _, r := range next.rules[n:] {
 			if err := c.addRule(ctx, r); err != nil {
 				return err
 			}
@@ -207,7 +214,30 @@ func (c *Core) applyLiveLocked(ctx context.Context, old, next *Profile) error {
 			}
 		}
 	}
+
+	if old.fallback != next.fallback {
+		if err := c.setFallback(ctx, next.fallback); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// setFallback points the catch-all's balancer at an outbound. One call, so no rule is
+// removed and no connection notices; the balancer's selector is only the start-up value.
+func (c *Core) setFallback(ctx context.Context, f fallback) error {
+	if f.balancer == "" || c.routing == nil {
+		return nil
+	}
+	// The mode is daemon state, not a request: a cancelled caller must not leave the
+	// fallback half-applied, so finish it regardless and cap how long that can take.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	_, err := c.routing.OverrideBalancerTarget(ctx, &routercmd.OverrideBalancerTargetRequest{
+		BalancerTag: f.balancer,
+		Target:      f.target,
+	})
+	return err
 }
 
 // Removals go first so a re-added inbound can take over the port of the one it replaces.
@@ -279,6 +309,16 @@ func sameItems(a, b []item) bool {
 		}
 	}
 	return true
+}
+
+// commonPrefix is how many leading items are identical, tag and JSON. A change only
+// rewrites the rules after it, so an unchanged rule is never removed and re-added.
+func commonPrefix(a, b []item) int {
+	n := 0
+	for n < len(a) && n < len(b) && a[n].Tag == b[n].Tag && bytes.Equal(a[n].JSON, b[n].JSON) {
+		n++
+	}
+	return n
 }
 
 func freePort() (int, error) {

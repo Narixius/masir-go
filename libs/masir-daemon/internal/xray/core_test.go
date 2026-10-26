@@ -30,6 +30,20 @@ func profile(t *testing.T, inbounds, outbounds, rules string) *Profile {
 	return p
 }
 
+// profileWithFallback is a config like compose builds: the catch-all points at a
+// balancer whose selector is the outbound the fallback currently takes.
+func profileWithFallback(t *testing.T, port int, target string) *Profile {
+	t.Helper()
+	outs := baseOutbounds + `,{"tag":"alt","protocol":"freedom"}`
+	p, err := ParseProfile([]byte(fmt.Sprintf(
+		`{"inbounds":[%s],"outbounds":[%s],"routing":{"balancers":[{"tag":"fb","selector":[%q]}],"rules":[{"ruleTag":"last","network":"tcp,udp","balancerTag":"fb"}]}}`,
+		socks(port), outs, target)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func socks(port int) string {
 	return fmt.Sprintf(`{"tag":"socks-in","listen":"127.0.0.1","port":%d,"protocol":"socks"}`, port)
 }
@@ -94,6 +108,25 @@ func TestRuleChangesApplyLive(t *testing.T) {
 	}
 }
 
+// A mode switch retargets the catch-all's balancer: no rule is touched and Xray keeps
+// every connection it is carrying.
+func TestFallbackSwitchAppliesLive(t *testing.T) {
+	port := mustFreePort(t)
+	c := startCore(t, profileWithFallback(t, port, "direct"))
+	inst := c.inst
+	wantRoute(t, c, "example.com", "direct", true)
+
+	apply(t, c, profileWithFallback(t, port, "alt"))
+	wantRoute(t, c, "example.com", "alt", true)
+
+	apply(t, c, profileWithFallback(t, port, "direct"))
+	wantRoute(t, c, "example.com", "direct", true)
+
+	if c.inst != inst {
+		t.Fatal("xray restarted; a mode switch must not rebuild it")
+	}
+}
+
 func TestInboundChangesApplyLive(t *testing.T) {
 	in := socks(mustFreePort(t))
 	c := startCore(t, profile(t, in, baseOutbounds, ""))
@@ -144,7 +177,8 @@ func TestMarshalRoundTrip(t *testing.T) {
 		"log": {"loglevel":"warning"},
 		"inbounds":  [{"tag":"in","port":1080,"protocol":"socks"}],
 		"outbounds": [{"tag":"direct","protocol":"freedom"}],
-		"routing":   {"domainStrategy":"AsIs","rules":[{"domain":["full:a.com"],"outboundTag":"direct"}]}
+		"routing":   {"domainStrategy":"AsIs","balancers":[{"tag":"fb","selector":["direct"]}],
+		              "rules":[{"domain":["full:a.com"],"outboundTag":"direct"},{"network":"tcp,udp","balancerTag":"fb"}]}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -161,8 +195,31 @@ func TestMarshalRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if back.needsRestart(p) || !sameItems(back.inbounds, p.inbounds) ||
-		!sameItems(back.outbounds, p.outbounds) || !sameItems(back.rules, p.rules) {
+		!sameItems(back.outbounds, p.outbounds) || !sameItems(back.rules, p.rules) ||
+		back.fallback != p.fallback {
 		t.Fatalf("round trip changed the profile:\n%s", raw)
+	}
+}
+
+func TestCommonPrefix(t *testing.T) {
+	mk := func(tag, out string) item {
+		return item{Tag: tag, JSON: marshal(map[string]any{"ruleTag": tag, "outboundTag": out})}
+	}
+	cases := []struct {
+		name string
+		a, b []item
+		want int
+	}{
+		{"same", []item{mk("a", "x"), mk("b", "y")}, []item{mk("a", "x"), mk("b", "y")}, 2},
+		{"empty", nil, []item{mk("a", "x")}, 0},
+		{"last changed", []item{mk("a", "x"), mk("b", "y")}, []item{mk("a", "x"), mk("b", "z")}, 1},
+		{"middle changed", []item{mk("a", "x"), mk("b", "y"), mk("c", "z")}, []item{mk("a", "x"), mk("b", "q"), mk("c", "z")}, 1},
+		{"inserted", []item{mk("a", "x"), mk("c", "z")}, []item{mk("a", "x"), mk("b", "y"), mk("c", "z")}, 1},
+	}
+	for _, c := range cases {
+		if got := commonPrefix(c.a, c.b); got != c.want {
+			t.Errorf("%s: commonPrefix = %d, want %d", c.name, got, c.want)
+		}
 	}
 }
 

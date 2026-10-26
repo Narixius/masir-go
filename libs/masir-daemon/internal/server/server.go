@@ -67,6 +67,7 @@ type running struct {
 	proxy     bool
 	proxyAddr string
 	tun       bool
+	tunName   string // kept while the TUN runs: Xray can't rename one
 }
 
 func New(xc *xray.Core, id identity.Identity) *Server {

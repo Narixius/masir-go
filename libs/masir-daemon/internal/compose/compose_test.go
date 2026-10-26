@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -29,6 +30,7 @@ type config struct {
 	Outbounds []map[string]any `json:"outbounds"`
 	Routing   struct {
 		DomainStrategy string           `json:"domainStrategy"`
+		Balancers      []map[string]any `json:"balancers"`
 		Rules          []map[string]any `json:"rules"`
 	} `json:"routing"`
 }
@@ -82,6 +84,17 @@ func ruleByTag(c config, tag string) map[string]any {
 	return nil
 }
 
+// fallbackSelector is where the catch-all's balancer sends traffic.
+func fallbackSelector(c config) []any {
+	for _, b := range c.Routing.Balancers {
+		if b["tag"] == FallbackBalancer {
+			s, _ := b["selector"].([]any)
+			return s
+		}
+	}
+	return nil
+}
+
 func TestBuildFollowsMasirTS(t *testing.T) {
 	st := testState(t)
 	st.Settings.Fallback = store.FallbackProxy
@@ -106,7 +119,10 @@ func TestBuildFollowsMasirTS(t *testing.T) {
 	if got := tags(c.Routing.Rules, "ruleTag"); !slices.Equal(got, want) {
 		t.Errorf("rules = %v\nwant    %v", got, want)
 	}
-	if r := ruleByTag(c, "masir-default-route"); r["outboundTag"] != "proxy" {
+	if sel := fallbackSelector(c); !slices.Equal(sel, []any{"proxy"}) {
+		t.Errorf("fallback balancer = %v", c.Routing.Balancers)
+	}
+	if r := ruleByTag(c, "masir-default-route"); r["balancerTag"] != FallbackBalancer {
 		t.Errorf("fallback rule = %v", r)
 	}
 	if r := ruleByTag(c, "pin"); r["outboundTag"] != "sub-s1-c1" {
@@ -169,10 +185,13 @@ func TestBuildWithoutSelection(t *testing.T) {
 
 	out, c := build(t, Input{State: st, Proxy: true, Resolve: func(store.Target) (subs.Config, bool) { return subs.Config{}, false }})
 
-	for _, tag := range []string{"masir-default-route", "masir-dns-loopback", "masir-dns-upstream", "p", "gone"} {
+	for _, tag := range []string{"masir-dns-loopback", "masir-dns-upstream", "p", "gone"} {
 		if r := ruleByTag(c, tag); r["outboundTag"] != "direct" {
 			t.Errorf("%s = %v; with no proxy it must go direct", tag, r["outboundTag"])
 		}
+	}
+	if got := fallbackSelector(c); !slices.Equal(got, []any{"direct"}) {
+		t.Errorf("fallback = %v; with no proxy it must go direct", got)
 	}
 	if slices.Contains(tags(c.Outbounds, "tag"), "proxy") {
 		t.Error("no selection, yet a proxy outbound")
@@ -194,8 +213,32 @@ func TestBuildPinnedFallsBackToProxy(t *testing.T) {
 	if r := ruleByTag(c, "gone"); r["outboundTag"] != "proxy" || !out.Rules[0].FellBack {
 		t.Fatalf("rule = %v, resolved = %+v", r, out.Rules)
 	}
-	if r := ruleByTag(c, "masir-default-route"); r["outboundTag"] != "direct" {
-		t.Fatalf("fallback direct should stay direct, got %v", r)
+	if sel := fallbackSelector(c); !slices.Equal(sel, []any{"direct"}) {
+		t.Fatalf("fallback direct should stay direct, got %v", c.Routing.Balancers)
+	}
+}
+
+// Switching the routing mode must not rewrite rules: the catch-all stays put and only
+// the balancer it points at is retargeted, so nothing Xray is carrying is interrupted.
+func TestFallbackOnlyRetargetsTheBalancer(t *testing.T) {
+	st := testState(t)
+	active := json.RawMessage(activeOut)
+	st.Settings.Fallback = store.FallbackDirect
+	_, direct := build(t, Input{State: st, Proxy: true, Active: active})
+	st.Settings.Fallback = store.FallbackProxy
+	_, proxy := build(t, Input{State: st, Proxy: true, Active: active})
+
+	if !reflect.DeepEqual(direct.Routing.Rules, proxy.Routing.Rules) {
+		t.Errorf("rules changed with the mode:\n%v\n%v", direct.Routing.Rules, proxy.Routing.Rules)
+	}
+	if !reflect.DeepEqual(direct.Inbounds, proxy.Inbounds) || !reflect.DeepEqual(direct.Outbounds, proxy.Outbounds) {
+		t.Error("only the fallback may change with the mode")
+	}
+	if got := fallbackSelector(direct); !slices.Equal(got, []any{"direct"}) {
+		t.Errorf("direct balancer = %v", got)
+	}
+	if got := fallbackSelector(proxy); !slices.Equal(got, []any{"proxy"}) {
+		t.Errorf("proxy balancer = %v", got)
 	}
 }
 

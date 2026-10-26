@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -320,6 +322,28 @@ func TestTunNeedsRoot(t *testing.T) {
 	}
 	if _, err := s.SetTunEnabled(context.Background(), &pb.SetTunEnabledRequest{Enabled: false}); err != nil {
 		t.Fatalf("turning tun off needs no root: %v", err)
+	}
+}
+
+// The interface number must survive an apply: Xray can't rename a TUN, so a new name
+// would tear the interface (and every connection through it) down and back up.
+func TestTunNameIsKeptWhileTheTunRuns(t *testing.T) {
+	s := newTestServer(t)
+	s.running = running{tun: true, tunName: "utun42"}
+	if got := s.tunName(); got != "utun42" {
+		t.Errorf("tunName while running = %q, want the one already in use", got)
+	}
+
+	s.running = running{}
+	got := s.tunName()
+	if runtime.GOOS != "darwin" {
+		if got != "" {
+			t.Errorf("tunName = %q, want an interface picked by Xray", got)
+		}
+		return
+	}
+	if !regexp.MustCompile(`^utun\d+$`).MatchString(got) {
+		t.Errorf("tunName = %q, want a free utunN", got)
 	}
 }
 
