@@ -291,12 +291,12 @@ func (a *app) advancedSection(c *ui.Context, p palette) {
 			})
 			cardDivider(c, p)
 			ui.Row(c.Key("port-row")).Padding(tw(2.5), tw(3)).Gap(tw(3)).AlignItems(ui.Center).Justify(ui.SpaceBetween).Opacity(map[bool]float32{true: 1, false: 0.5}[always]).Shrink(0).Children(func() {
-				ui.Column(c).Gap(tw(0.5)).Grow(1).Children(func() {
+				ui.Column(c).Gap(tw(0.5)).Grow(1).Basis(0).MinWidth(0).Children(func() {
 					label(c, "Port Number", sizeSubhead, 18, 500, p.text)
 					label(c, "Mixed SOCKS5 / HTTP", sizeCaption, 15, 400, p.muted)
 				})
-				box := ui.Row(c).Width(76).Padding(tw(1), tw(2)).Radius(tw(1.5)).Shrink(0)
-				in := ui.TextInputBase(c.Key("port"), &a.portText).Grow(1).FontSize(sizeSubhead).TextAlign(ui.End).
+				box := ui.Row(c).Width(76).Padding(tw(1), tw(2)).Radius(tw(1.5)).Shrink(0).Clip()
+				in := ui.TextInputBase(c.Key("port"), &a.portText).Grow(1).MinWidth(0).FontSize(sizeSubhead).TextAlign(ui.End).
 					Font("monospace").FontWeight(500).TextColor(p.text)
 				bg, border := p.subdued, p.borderDefault
 				if in.Focused() {

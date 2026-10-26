@@ -29,6 +29,7 @@ func (s *shell) show() {
 			DisableMaximize:   true,
 			DisableFullScreen: true,
 			Hidden:            true,
+			BackgroundColor:   "light-dark(#f5f5f7, #1e1e1e)",
 			Content:           ui.View(s.a.view),
 		})
 		s.win.OnClose(func(e *mygo.CloseEvent) {
