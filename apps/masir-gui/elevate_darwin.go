@@ -32,10 +32,30 @@ func elevateDaemon(bin string) error {
 // installService installs the daemon as the system service, so TUN needs no prompt
 // from then on.
 func installService(bin string) error {
-	script := fmt.Sprintf(`do shell script %s with administrator privileges`,
-		appleScriptString(fmt.Sprintf("%s daemon enable --user %s", shellQuote(bin), strconv.Itoa(os.Getuid()))))
+	return runAdmin(bin, "daemon", "enable", "--user", strconv.Itoa(os.Getuid()))
+}
+
+// uninstallService removes the daemon's service; the daemon then runs in the background
+// when masir needs it.
+func uninstallService(bin string) error {
+	return runAdmin(bin, "daemon", "disable")
+}
+
+// runAdmin runs bin with args through the system's permission prompt.
+func runAdmin(bin string, args ...string) error {
+	if bin == "" {
+		return fmt.Errorf("no masir executable to run as administrator")
+	}
+	argv := []string{shellQuote(bin)}
+	for _, a := range args {
+		argv = append(argv, shellQuote(a))
+	}
+	script := fmt.Sprintf(`do shell script %s with administrator privileges`, appleScriptString(strings.Join(argv, " ")))
 	if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err != nil {
-		return fmt.Errorf("couldn't install the service: %s", strings.TrimSpace(string(out)))
+		if strings.Contains(string(out), "-128") { // the person cancelled the prompt
+			return fmt.Errorf("permission wasn't granted")
+		}
+		return fmt.Errorf("permission wasn't granted: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
 }

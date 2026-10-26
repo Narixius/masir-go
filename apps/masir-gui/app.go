@@ -87,6 +87,12 @@ type app struct {
 	// Settings form.
 	portText string
 
+	// Install actions in Settings, and what the last check of the command-line tool said.
+	serviceBusy bool
+	cliBusy     bool
+	cli         cliStatus
+	cliChecked  bool
+
 	trafficCancel context.CancelFunc
 	since         time.Time // when masir last turned on, as far as this app saw
 
@@ -150,6 +156,9 @@ func rpc() (context.Context, context.CancelFunc) {
 // page's height, before it slides: never while it moves.
 func (a *app) openScreen(s screen) {
 	a.lastSub, a.screen = s, s
+	if s == screenSettings {
+		a.cliChecked = false // look for the command-line tool again
+	}
 	a.requestHeight()
 }
 
@@ -515,17 +524,20 @@ func (a *app) testServers(only ...server) {
 // a root daemon taking over).
 func (a *app) watch(ctx context.Context) {
 	var once sync.Once
+	warn := func(msg string) {
+		once.Do(func() { a.post(func() { a.notify(msg) }) })
+	}
 	for ctx.Err() == nil {
 		if !client.Alive() {
 			a.post(a.setUnreachable)
-			if a.binary != "" {
-				if err := client.Start(ctx, a.binary, true); err != nil {
-					once.Do(func() { a.post(func() { a.notify("Couldn't start the masir daemon: " + err.Error()) }) })
-					sleep(ctx, 3*time.Second)
-					continue
-				}
-			} else {
-				sleep(ctx, 2*time.Second)
+			if a.binary == "" {
+				warn("Couldn't start the masir daemon: the app ships no masir executable")
+				sleep(ctx, 5*time.Second)
+				continue
+			}
+			if err := client.Start(ctx, a.binary, true); err != nil {
+				warn("Couldn't start the masir daemon: " + err.Error())
+				sleep(ctx, 3*time.Second)
 				continue
 			}
 		}

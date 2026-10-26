@@ -560,7 +560,16 @@ func (a *app) ruleRow(c *ui.Context, p palette, r *pb.RoutingRule) {
 			}
 			return sw.scroll(ev.DX, ev.DY, ev.Time)
 		})
-		row.Children(func() { a.ruleContent(c, p, r) })
+		row.Children(func() {
+			a.ruleContent(c, p, r)
+			// A touchpad swipe is macOS's gesture; elsewhere the row's actions have a
+			// button of their own.
+			if runtime.GOOS != "darwin" && iconButton(c, "more-"+r.RuleTag, iconMore, "Rule actions", p, iconXS, variantGhost, 12) {
+				b := row.Bounds()
+				a.menu = ruleMenu{open: true, tag: r.RuleTag, x: b.X + b.W - menuWidth - tw(2), y: b.Y + b.H}
+				sw.close(now)
+			}
+		})
 		if row.Clicked() && sw.open {
 			sw.close(now) // a click on an open row closes it
 		}

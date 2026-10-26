@@ -42,10 +42,29 @@ func installService(bin string) error {
 	if bin == "" {
 		return errors.New("no masir executable to install the service from")
 	}
-	cmd := exec.Command(bin, "daemon", "enable")
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("couldn't install the service: %s", string(out))
+	return runDaemonCommand(bin, "enable")
+}
+
+// uninstallService removes the daemon's service; the daemon then runs in the background
+// when masir needs it.
+func uninstallService(bin string) error {
+	if bin == "" {
+		return errors.New("no masir executable to remove the service with")
+	}
+	return runDaemonCommand(bin, "disable")
+}
+
+// runDaemonCommand runs `masir daemon <cmd>`; masir asks Windows for permission itself and
+// waits for the elevated copy to report its outcome.
+func runDaemonCommand(bin, cmd string) error {
+	c := exec.Command(bin, "daemon", cmd)
+	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if out, err := c.CombinedOutput(); err != nil {
+		msg := string(out)
+		if msg == "" {
+			msg = err.Error()
+		}
+		return fmt.Errorf("couldn't %s the service: %s", map[string]string{"enable": "install", "disable": "remove"}[cmd], msg)
 	}
 	return nil
 }

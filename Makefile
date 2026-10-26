@@ -21,10 +21,11 @@ snapshot:
 	go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
 
 # The desktop app, as a macOS app bundle in apps/masir-gui/dist with masir inside it: the
-# daemon it starts, and the geo data beside it, in its bin folder. It is built for this machine's architecture.
+# daemon it starts, and the geo data beside it, in its bin folder. GUI_ARCH picks the
+# architecture; the default is this machine's.
 GUI_DIR := apps/masir-gui
 GUI_VERSION := $(shell sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' $(GUI_DIR)/mygo.json)
-GUI_ARCH := $(shell go env GOARCH)
+GUI_ARCH ?= $(shell go env GOARCH)
 GUI_RES := $(GUI_DIR)/resources/darwin-$(GUI_ARCH)/bin
 
 gui:
@@ -39,22 +40,22 @@ gui:
 gui-dev: build
 	cd $(GUI_DIR) && MASIR_BIN=$(CURDIR)/dist/masir go tool mygo dev
 
-# The desktop app for Windows (arm), built from any machine: apps/masir-gui/dist/windows-arm64
+# The desktop app for Windows, built from any machine: apps/masir-gui/dist/windows-<arch>
 # holds Masir.exe, with masir.exe and the geo data in its bin folder. The installer is made on Windows.
-GUI_WIN_RES := $(GUI_DIR)/resources/windows-arm64/bin
+GUI_WIN_ARCH ?= amd64
+GUI_WIN_RES := $(GUI_DIR)/resources/windows-$(GUI_WIN_ARCH)/bin
 
 gui-windows:
 	@test -f build/geo/geoip.dat || sh scripts/fetch-geo.sh
 	mkdir -p $(GUI_WIN_RES)
-	GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS) -X main.version=$(GUI_VERSION)" -o $(GUI_WIN_RES)/masir.exe ./apps/masir
+	GOOS=windows GOARCH=$(GUI_WIN_ARCH) CGO_ENABLED=0 go build -ldflags "$(LDFLAGS) -X main.version=$(GUI_VERSION)" -o $(GUI_WIN_RES)/masir.exe ./apps/masir
 	cp build/geo/geoip.dat build/geo/geosite.dat $(GUI_WIN_RES)/
-	cd $(GUI_DIR) && go tool mygo build -platform windows/arm64
-	@echo "Built $(GUI_DIR)/dist/windows-arm64"
+	cd $(GUI_DIR) && go tool mygo build -platform windows/$(GUI_WIN_ARCH)
+	@echo "Built $(GUI_DIR)/dist/windows-$(GUI_WIN_ARCH)"
 
-# The desktop app for Linux (x86-64 by default; GUI_LINUX_ARCH=arm64 for ARM), built from any
-# machine: apps/masir-gui/dist/linux-<arch> holds the executable, a Debian package and a
-# tarball, with masir and the geo data in its bin folder.
-GUI_LINUX_ARCH ?= arm64
+# The desktop app for Linux, built from any machine: apps/masir-gui/dist/linux-<arch> holds
+# the executable, a Debian package and a tarball, with masir and the geo data in its bin folder.
+GUI_LINUX_ARCH ?= amd64
 GUI_LINUX_RES := $(GUI_DIR)/resources/linux-$(GUI_LINUX_ARCH)/bin
 
 gui-linux:

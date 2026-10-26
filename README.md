@@ -118,6 +118,28 @@ It's the client I wanted for myself, for living with Xray configs and moving bet
 
 That's it. There's nothing separate to install for the daemon: masir starts it in the background when a command needs it.
 
+### Desktop app
+
+Masir also comes as a desktop app for people who would rather click than type. There are
+two ways to install it, and the app ships the `masir` command-line tool inside it, so it
+needs no separate download:
+
+| System | Download |
+|---|---|
+| macOS, Apple Silicon | `Masir-<version>-darwin-arm64.dmg` |
+| macOS, Intel | `Masir-<version>-darwin-amd64.dmg` |
+| Windows, x86-64 | `Masir-<version>-windows-amd64.zip` |
+| Windows, ARM64 | `Masir-<version>-windows-arm64.zip` |
+| Linux, x86-64 | `masir-desktop_<version>_amd64.deb`, or the tarball's `install.sh` |
+| Linux, ARM64 | `masir-desktop_<version>_arm64.deb`, or the tarball's `install.sh` |
+
+It lives in the tray: a native popover on macOS, an app window on Windows and Linux. It
+starts the daemon when none is running, and asks for root through the system's own prompt
+when tunnel mode needs it. Settings can install the daemon as a background service and
+install the `masir` command for the terminal. The release builds are not yet signed with a
+Developer ID or a code-signing certificate; macOS may need a right-click → Open, and
+Windows SmartScreen may ask first.
+
 ## Quick start
 
 ```sh

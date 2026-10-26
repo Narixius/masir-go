@@ -361,6 +361,7 @@ func (a *app) applyPort() {
 
 func (a *app) systemSection(c *ui.Context, p palette) {
 	st := a.status
+	cli := a.cliState()
 	titled(c, p, "SYSTEM", nil, func() {
 		cardBox(c, p, func() {
 			ui.Column(c).Padding(tw(2.5), tw(3)).Gap(tw(1.5)).Shrink(0).Children(func() {
@@ -375,14 +376,40 @@ func (a *app) systemSection(c *ui.Context, p palette) {
 						badge(c, "Not Installed", nil, p.muted, p.neutralSurface, 0, 0)
 					}
 				})
-				label(c, "Background system daemon for zero-prompt routing and instant connection without repeated password prompts.", sizeCaption, 14.85, 400, p.muted)
-				if !st.GetServiceInstalled() {
-					b := ui.ButtonBase(c.Key("install-service")).Padding(tw(0.5), tw(2)).Radius(5).Background(p.subdued).
-						Border(1, p.borderDefault).Center().Margin(4, 0, 0).Cursor(ui.CursorPointer)
-					b.Children(func() { label(c, "Install Service", sizeCaption, 16, 500, p.muted) })
-					if b.Clicked() {
-						a.installService()
+				label(c, "Starts the daemon at boot, so connecting in tunnel mode never asks for permission again.", sizeCaption, 14.85, 400, p.muted)
+				ui.Row(c).Gap(tw(2)).Margin(4, 0, 0).Children(func() {
+					if st.GetServiceInstalled() {
+						if button(c, "service-remove", "Remove Service", false, a.serviceBusy, a.serviceBusy, p) {
+							a.removeDaemonService()
+						}
+					} else if button(c, "service-install", "Install Service", true, a.serviceBusy, a.serviceBusy, p) {
+						a.installDaemonService()
 					}
+				})
+			})
+			cardDivider(c, p)
+			ui.Column(c).Padding(tw(2.5), tw(3)).Gap(tw(1.5)).Shrink(0).Children(func() {
+				ui.Row(c).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+					label(c, "Command Line Tool", sizeSubhead, 18, 500, p.text)
+					if cli.installed {
+						badge(c, "Installed", nil, p.healthy, p.healthySurface, 0, 0)
+					} else {
+						badge(c, "Not Installed", nil, p.muted, p.neutralSurface, 0, 0)
+					}
+				})
+				label(c, "Use masir in your terminal; the app already ships it, so there is nothing to download.", sizeCaption, 14.85, 400, p.muted)
+				ui.Row(c).Gap(tw(2)).Margin(4, 0, 0).Children(func() {
+					if cli.installed {
+						if button(c, "cli-remove", "Remove", false, a.cliBusy, a.cliBusy, p) {
+							a.removeCommandLine()
+						}
+					} else if button(c, "cli-install", "Install", true, a.cliBusy, a.cliBusy, p) {
+						a.installCommandLine()
+					}
+				})
+				if cli.installed && !cli.onPath {
+					label(c, "Add "+cli.dir+" to your PATH to run it by name.", sizeCaption, 14, 400, p.degraded)
+					mono(c, cli.path, sizeMicro, 13, 400, p.muted).MaxLines(2).Selectable()
 				}
 			})
 			cardDivider(c, p)
@@ -390,19 +417,6 @@ func (a *app) systemSection(c *ui.Context, p palette) {
 				label(c, "Daemon", sizeSubhead, 18, 500, p.text)
 				mono(c, versionLabel(st.GetVersion())+" · xray "+st.GetXrayVersion(), sizeCaption, 14, 400, p.muted)
 			})
-		})
-	})
-}
-
-func (a *app) installService() {
-	a.async(func() {
-		err := installService(a.binary)
-		a.post(func() {
-			if err != nil {
-				a.fail("", err)
-				return
-			}
-			a.notify("Service installed")
 		})
 	})
 }

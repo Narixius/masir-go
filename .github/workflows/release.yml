@@ -63,3 +63,89 @@ jobs:
           # Until this lands, `masir update` refuses the release ("isn't signed") and
           # tries again later; it never installs an unsigned one.
           gh release upload "$GITHUB_REF_NAME" checksums.txt.minisig
+  gui:
+    # After the release exists, so `gh release upload` has somewhere to put the apps.
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            name: darwin
+          - os: windows-latest
+            name: windows
+          - os: ubuntu-latest
+            name: linux
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MASIR_UPDATE_PUBKEY: ${{ vars.MASIR_UPDATE_PUBKEY }}
+      MASIR_POSTHOG_KEY: ${{ vars.MASIR_POSTHOG_KEY }}
+      MASIR_POSTHOG_HOST: ${{ vars.MASIR_POSTHOG_HOST }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: "**/go.sum"
+      - name: Set the app's version from the tag
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          perl -0pi -e 's/"version":\s*"[^"]*"/"version": "'"$version"'"/' apps/masir-gui/mygo.json
+          grep '"version"' apps/masir-gui/mygo.json
+      - name: Build the macOS app (arm64 and Intel)
+        if: matrix.name == 'darwin'
+        shell: bash
+        run: |
+          make gui GUI_ARCH=arm64
+          make gui GUI_ARCH=amd64
+      - name: Build the Windows app (amd64 and arm64)
+        if: matrix.name == 'windows'
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ldflags="-X github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.apiKey=$MASIR_POSTHOG_KEY \
+            -X github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.host=$MASIR_POSTHOG_HOST \
+            -X github.com/narixius/masir-go/libs/masir-daemon/internal/update.publicKeys=$MASIR_UPDATE_PUBKEY \
+            -X main.version=$version"
+          sh scripts/fetch-geo.sh
+          for arch in amd64 arm64; do
+            res="apps/masir-gui/resources/windows-$arch/bin"
+            mkdir -p "$res"
+            GOOS=windows GOARCH=$arch CGO_ENABLED=0 go build -ldflags "$ldflags" -o "$res/masir.exe" ./apps/masir
+            cp build/geo/geoip.dat build/geo/geosite.dat "$res/"
+            (cd apps/masir-gui && go tool mygo build -platform windows/$arch)
+          done
+      - name: Build the Linux app (amd64 and arm64)
+        if: matrix.name == 'linux'
+        shell: bash
+        run: |
+          make gui-linux GUI_LINUX_ARCH=amd64
+          make gui-linux GUI_LINUX_ARCH=arm64
+      - name: Upload the macOS app
+        if: matrix.name == 'darwin'
+        shell: bash
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            apps/masir-gui/dist/darwin-arm64/*.dmg \
+            apps/masir-gui/dist/darwin-amd64/*.dmg --clobber
+      - name: Upload the Windows app
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          foreach ($arch in @("amd64", "arm64")) {
+            $src = "apps/masir-gui/dist/windows-$arch"
+            $out = "Masir-$env:GITHUB_REF_NAME-windows-$arch.zip"
+            Compress-Archive -Path "$src/*" -DestinationPath $out
+            gh release upload $env:GITHUB_REF_NAME $out --clobber
+          }
+      - name: Upload the Linux app
+        if: matrix.name == 'linux'
+        shell: bash
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            apps/masir-gui/dist/linux-amd64/*.deb apps/masir-gui/dist/linux-amd64/*.tar.gz \
+            apps/masir-gui/dist/linux-arm64/*.deb apps/masir-gui/dist/linux-arm64/*.tar.gz --clobber

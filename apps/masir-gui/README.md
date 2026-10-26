@@ -1,40 +1,45 @@
-# Masir for macOS
+# Masir desktop app
 
-The menu bar app for the masir daemon. It is a native app (MyGo): a tray icon whose panel
-turns masir on and off, picks the server, and shows the rules. All the logic lives in the
-daemon; the app only talks to it.
+The tray app for the masir daemon. It is native UI (MyGo): one tray icon on every OS, whose
+panel turns masir on and off, picks the server with live latency, shows the rules, adds
+subscriptions, and has settings. All the logic lives in the daemon; the app only talks to
+it.
 
-## Build and install
+- **macOS**: the icon opens the system's popover, anchored to the menu bar.
+- **Windows and Linux**: the icon opens the app's own window, with a title bar and a
+  taskbar entry. Closing it puts it back in the tray. The user cannot resize it; the
+  window follows the height of its page and its collapsible lists.
+
+The app ships the `masir` executable and the geo data inside it (in a `bin` folder of its
+resources), so it can start the daemon when none is running. The daemon runs as the user,
+which is all proxy mode needs; tunnel mode asks for root through the OS prompt (the
+system password dialog on macOS and Linux, the UAC prompt on Windows). Settings can install
+the daemon as a background service, and install the `masir` command-line tool for the
+terminal (a link in `~/.local/bin`, or the app's `bin` folder on the user's `PATH` on
+Windows).
+
+## Build
 
 ```sh
-make gui
+make gui           # this machine's architecture, in apps/masir-gui/dist/darwin-<arch>
+make gui-windows   # windows-amd64 (GUI_WIN_ARCH=arm64 for ARM)
+make gui-linux     # linux-amd64 (GUI_LINUX_ARCH=arm64 for ARM)
 ```
 
-builds `dist/darwin-arm64/Masir.app` (and a `.dmg`) for this machine, with the `masir`
-executable and the geo data inside it (in `Contents/Resources/bin`). Drag it to Applications, or:
+`make gui` builds `dist/darwin-<arch>/Masir.app` (and a `.dmg`) with `masir` and the geo
+data in `Contents/Resources/bin`. Drag it to Applications, or:
 
 ```sh
 cp -R apps/masir-gui/dist/darwin-arm64/Masir.app /Applications/
 ```
 
 The app is signed ad hoc. If macOS refuses to open it the first time, right-click it and
-choose Open. To open it at login, turn on Open at Login in its settings.
+choose Open.
 
-The app uses the daemon that is already running (the service, or one it started before);
-if none answers it starts the `masir` inside the app.
-
-## Other platforms
-
-Cross-building needs no extra tools; run these from the repository root on any machine.
-
-| Command | Output (in `apps/masir-gui/dist/`) |
-|---|---|
-| `make gui-windows` | `windows-amd64/`: `Masir.exe` with `bin/masir.exe`. The installer is made on Windows. |
-| `make gui-linux` | `linux-amd64/`: the executable, a `.deb`, a tarball and `install.sh` (`GUI_LINUX_ARCH=arm64` for ARM). |
-
-The tunnel needs administrator rights. On Windows the app asks through the system prompt. On
-Linux it cannot ask yet: install the service once with `sudo masir daemon enable`, or start the
-daemon as root yourself.
+On Windows, `dist/windows-<arch>` holds `Masir.exe` and `bin/masir.exe`; the installer is
+made on Windows. On Linux, `dist/linux-<arch>` holds the executable, a Debian package, a
+tarball with `install.sh`, and the desktop entry; the app installs for one user, without
+root.
 
 ## Run from source
 
@@ -43,7 +48,8 @@ make gui-dev
 ```
 
 builds `masir` into `dist/` and runs the app against it, rebuilding as you edit. Set
-`MASIR_DEMO=servers|rules|settings|add` to open that part of the panel a moment after launch.
+`MASIR_DEMO=servers|rules|settings|add` to open that part of the panel a moment after
+launch.
 
 ## Tests
 

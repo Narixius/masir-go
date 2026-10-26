@@ -1,17 +1,14 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -70,75 +67,46 @@ func (in *appInfos) read(m *appMeta) (string, *ui.Bitmap) {
 	return m.name, m.icon
 }
 
-// readApp reads an application bundle's display name and icon. It only knows macOS bundles.
+// readApp reads an application's display name and icon. The system draws the icon on every
+// platform; only macOS bundles carry a display name of their own.
 func readApp(path string) (string, *ui.Bitmap) {
-	if runtime.GOOS != "darwin" || !strings.HasSuffix(strings.TrimSuffix(path, "/"), ".app") {
+	if !mygo.App.IsReady() { // go test: there is no app to ask
 		return "", nil
 	}
+	name := ""
+	if runtime.GOOS == "darwin" && strings.HasSuffix(strings.TrimSuffix(path, "/"), ".app") {
+		name = bundleName(path)
+	}
+	return name, fileIcon(path)
+}
+
+// bundleName is a macOS app bundle's display name, as Finder shows it.
+func bundleName(path string) string {
 	plist := filepath.Join(path, "Contents", "Info.plist")
 	out, err := exec.Command("plutil", "-convert", "json", "-o", "-", plist).Output()
 	if err != nil {
-		return "", nil
+		return ""
 	}
 	var info struct {
 		DisplayName string `json:"CFBundleDisplayName"`
 		Name        string `json:"CFBundleName"`
-		IconFile    string `json:"CFBundleIconFile"`
-		IconName    string `json:"CFBundleIconName"`
 	}
 	if json.Unmarshal(out, &info) != nil {
-		return "", nil
+		return ""
 	}
-	name := info.DisplayName
-	if name == "" {
-		name = info.Name
+	if info.DisplayName != "" {
+		return info.DisplayName
 	}
-	return name, appIcon(path, info.IconFile, info.IconName)
+	return info.Name
 }
 
-// appIcon converts an application's .icns icon to a small PNG (cached on disk, keyed by the
-// icon file) and loads it.
-func appIcon(app, file, name string) *ui.Bitmap {
-	resources := filepath.Join(app, "Contents", "Resources")
-	var icns string
-	for _, f := range []string{file, name, "AppIcon"} {
-		if f == "" {
-			continue
-		}
-		if !strings.HasSuffix(f, ".icns") {
-			f += ".icns"
-		}
-		if p := filepath.Join(resources, f); fileExists(p) {
-			icns = p
-			break
-		}
-	}
-	if icns == "" {
+// fileIcon draws the icon the system shows for path, as a small bitmap.
+func fileIcon(path string) *ui.Bitmap {
+	png, err := mygo.Shell.FileIcon(path, 96)
+	if err != nil || len(png) == 0 {
 		return nil
 	}
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return nil
-	}
-	dir := filepath.Join(cache, "masir", "appicons")
-	if os.MkdirAll(dir, 0o755) != nil {
-		return nil
-	}
-	sum := sha1.Sum([]byte(icns))
-	png := filepath.Join(dir, hex.EncodeToString(sum[:8])+".png")
-	data, err := os.ReadFile(png)
-	if err != nil {
-		var stderr bytes.Buffer
-		cmd := exec.Command("sips", "-s", "format", "png", "-Z", "96", icns, "--out", png)
-		cmd.Stderr = &stderr
-		if cmd.Run() != nil {
-			return nil
-		}
-		if data, err = os.ReadFile(png); err != nil {
-			return nil
-		}
-	}
-	bmp, err := ui.DecodeBitmap(data)
+	bmp, err := ui.DecodeBitmap(png)
 	if err != nil {
 		return nil
 	}

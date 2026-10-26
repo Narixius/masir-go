@@ -5,5 +5,10 @@
   "version": "0.1.0",
   "macos": {
     "infoPlist": { "LSUIElement": true }
+  },
+  "linux": {
+    "webview": false,
+    "comment": "A fast client for Xray: subscriptions, routing rules and a system-wide tunnel.",
+    "categories": ["Network", "Utility"]
   }
 }

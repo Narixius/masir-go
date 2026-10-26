@@ -23,7 +23,7 @@ jobs:
         run: |
           race=-race # needs cgo on Windows, which the runner doesn't set up
           if [ "$RUNNER_OS" = "Windows" ]; then race=; fi
-          for m in apps/masir libs/masir-daemon libs/masir-core libs/masir-proto; do
+          for m in apps/masir apps/masir-gui libs/masir-daemon libs/masir-core libs/masir-proto; do
             echo "::group::$m"
             (cd "$m" && go vet ./... && go test $race ./...)
             echo "::endgroup::"
