@@ -32,7 +32,7 @@ func (a *app) view(c *ui.Context) {
 	}
 	root.Children(func() {
 		// The pages slide: the main page leaves to the left as the other arrives from the right.
-		a.aimMotion()
+		a.aimMotion(c)
 		page := a.motion.page.x
 		if page < 1 {
 			a.mainLayer(c, p, -page*panelWidth)
@@ -41,11 +41,6 @@ func (a *app) view(c *ui.Context) {
 			a.subLayer(c, p, (1-page)*panelWidth)
 		}
 		a.contextMenu(c, p)
-		// At rest the window follows what the content measures; while things move, the
-		// shell's timer sets it from the springs, ahead of each frame.
-		if a.motion.settled() && a.onHeight != nil {
-			a.onHeight(a.windowHeight())
-		}
 	})
 }
 
@@ -65,7 +60,7 @@ func (a *app) mainLayer(c *ui.Context, p palette, x float32) {
 			a.footer(c, p)
 		})
 		if h := col.Bounds().H; h > 0 {
-			a.mainHeight = h
+			a.mainHeight, a.measuredOpen = h, a.open
 			if a.motion.servers.x == 0 && a.motion.rules.x == 0 {
 				a.baseHeight = h
 			}
@@ -307,6 +302,9 @@ func (a *app) toggle(s section) {
 	} else {
 		a.open = s
 	}
+	// The window takes the list's height before it unfolds, and gives it back after it
+	// has folded: it is never resized while the list moves.
+	a.requestHeight()
 }
 
 // panelBar is the search row at the top of the open panels: the field and a button.
@@ -720,15 +718,19 @@ func versionLabel(v string) string {
 // view is built once in memory, so the window can open at its real height instead of
 // opening at a guess and resizing a moment later, which shows as the content jumping.
 func (a *app) measure() float32 {
-	onHeight, onAnimate, notices := a.onHeight, a.onAnimate, a.notices
-	a.onHeight, a.onAnimate = nil, nil
+	onHeight, notices := a.onHeight, a.notices
+	a.onHeight, a.notices = nil, nil
+	wasScreen, wasOpen, wasSub, wasMotion, wasLast := a.screen, a.open, a.lastSub, a.motion, a.lastMotion
 	a.screen, a.open = screenMain, sectionNone
 	a.motion = motion{instant: a.motion.instant}
+	a.lastMotion = time.Time{}
 	tt := ui.NewTester(a.view, panelWidth, 900) // tall enough that nothing is cut off
 	tt.Frame()
 	tt.Frame() // an element knows its size from the frame before
-	a.onHeight, a.onAnimate, a.notices = onHeight, onAnimate, notices
-	return a.windowHeight()
+	h := a.restHeight()
+	a.screen, a.open, a.lastSub, a.motion, a.lastMotion = wasScreen, wasOpen, wasSub, wasMotion, wasLast
+	a.onHeight, a.notices = onHeight, notices
+	return h
 }
 
 // speedLabel shows a speed as the footer does: the number rolls, the unit and arrow stay.

@@ -97,14 +97,16 @@ type app struct {
 	trayOn bool // the tray shows the connected icon
 
 	// Transitions and the window's height. The springs say how far each part is open; the
-	// window follows them from the shell's timer, and the view draws from the same values.
-	motion     motion
-	onAnimate  func()             // asks the shell to run its timer
-	lastSub    screen             // the page that slides over the main one, kept while it slides out
-	mainHeight float32            // the main page's height as last measured
-	baseHeight float32            // the main page's height with both lists closed
-	natural    map[string]float32 // the height each list has when fully open
-	pend       pending            // changes shown ahead of the daemon
+	// view steps them from the frame's clock, and the window is resized once per change,
+	// never frame by frame.
+	motion       motion
+	lastMotion   time.Time          // the frame the springs last stepped on
+	lastSub      screen             // the page that slides over the main one, kept while it slides out
+	mainHeight   float32            // the main page's height as last measured
+	measuredOpen section            // the section that was open when mainHeight was measured
+	baseHeight   float32            // the main page's height with both lists closed
+	natural      map[string]float32 // the height each list has when fully open
+	pend         pending            // changes shown ahead of the daemon
 
 	// Rules: the swipe of each row, which row is open, the right-click menu, the app names
 	// and icons, and where the list was last scrolled to.
@@ -114,7 +116,7 @@ type app struct {
 	apps        *appInfos
 	rulesScroll ui.ScrollState
 	lastScrollY float32
-	onHeight    func(float32) // tells the window how tall the content is
+	onHeight    func(float32) // tells the window how tall the content is at rest
 	heightNow   float32       // used by tests to read it back
 
 	version string
@@ -144,9 +146,11 @@ func rpc() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), rpcTimeout)
 }
 
-// openScreen slides another page over the main one.
+// openScreen slides another page over the main one. The window is resized once, to the
+// page's height, before it slides: never while it moves.
 func (a *app) openScreen(s screen) {
 	a.lastSub, a.screen = s, s
+	a.requestHeight()
 }
 
 // notify queues a toast for the next frame.
@@ -444,6 +448,7 @@ func (a *app) addSubscription() {
 			a.subURL, a.subName = "", ""
 			a.screen = screenMain
 			a.open = sectionServers
+			a.requestHeight()
 			a.refreshLists()
 		})
 	})
@@ -557,12 +562,39 @@ func b2f(b bool) float32 {
 	return 0
 }
 
-// aimMotion points the springs at where the state says things should be, and has the
-// shell run its timer if any has somewhere to go.
-func (a *app) aimMotion() {
-	moving := a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
-	if moving && a.onAnimate != nil {
-		a.onAnimate()
+// aimMotion points the springs at where the state says things should be, steps them by
+// the frame's own time, and asks for the next frame while they move. The frame clock is
+// the display's, so the view and the window change together and only as often as they
+// can be seen. A frame may build the view more than once; only its first pass steps the
+// springs.
+func (a *app) aimMotion(c *ui.Context) {
+	a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
+	now := c.Now()
+	moving := !a.motion.settled()
+	switch {
+	case a.lastMotion.IsZero():
+		a.lastMotion = now
+	case now.After(a.lastMotion):
+		dt := float32(min(now.Sub(a.lastMotion).Seconds(), 0.05))
+		a.lastMotion = now
+		a.motion.step(dt)
+		if moving && a.motion.settled() {
+			// The content has come to rest: its exact height may differ from the estimate
+			// it grew to, so settle the window on it once, now that nothing moves.
+			a.requestHeight()
+		}
+	}
+	if !a.motion.settled() {
+		c.AnimationFrame()
+	}
+}
+
+// requestHeight tells the window how tall the content will be once at rest. Call it when
+// the state changes, never from a frame in flight: the shell coalesces it and applies it
+// after the frame.
+func (a *app) requestHeight() {
+	if a.onHeight != nil {
+		a.onHeight(a.restHeight())
 	}
 }
 
@@ -582,17 +614,24 @@ func (a *app) naturalHeight(key string) float32 {
 	}
 }
 
-// windowHeight is how tall the window is now, from the springs: the main page with its
-// lists as far open as they are, blended with the other pages as they slide over it.
-func (a *app) windowHeight() float32 {
-	m := &a.motion
+// restHeight is how tall the panel is with everything at rest: the page shown, with an
+// open list as tall as it measured (or is estimated to be just before it opens).
+func (a *app) restHeight() float32 {
+	if a.screen != screenMain {
+		return a.subHeight()
+	}
+	if a.mainHeight > 0 && a.open == a.measuredOpen {
+		return a.mainHeight // the content itself says how tall it is
+	}
 	base := a.baseHeight
 	if base == 0 {
 		base = 262
 	}
-	main := base + m.servers.x*a.naturalHeight("servers") + m.rules.x*a.naturalHeight("rules")
-	if m.settled() && a.mainHeight > 0 {
-		main = a.mainHeight // at rest the content itself says how tall it is
+	if a.open == sectionServers {
+		base += a.naturalHeight("servers")
 	}
-	return main + (a.subHeight()-main)*m.page.x
+	if a.open == sectionRules {
+		base += a.naturalHeight("rules")
+	}
+	return base
 }

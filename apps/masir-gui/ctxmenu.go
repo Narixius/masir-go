@@ -39,7 +39,7 @@ func (a *app) contextMenu(c *ui.Context, p palette) {
 		}
 
 		x := clamp32(a.menu.x, 4, panelWidth-menuWidth-4)
-		y := clamp32(a.menu.y, 4, a.windowHeight()-menuHeight-4)
+		y := clamp32(a.menu.y, 4, a.restHeight()-menuHeight-4)
 		m := ui.Column(c.Key("menu")).Absolute().Left(x).Top(y).Width(menuWidth).Padding(tw(1)).Gap(tw(0.5)).
 			Radius(10).Background(p.elevated).Border(1, p.borderDefault)
 		if p.dark {

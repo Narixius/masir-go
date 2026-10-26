@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/png"
 	"math"
+	"runtime"
 
 	"github.com/egoist/mygo"
 
@@ -23,7 +24,7 @@ func (a *app) updateTray(t *mygo.Tray) {
 		a.trayOn = on
 		if icon, err := trayIcon(on); err == nil {
 			// Off: black, which the menu bar tints. On: green, which it must leave as it is.
-			_ = t.SetIcon(icon, !on)
+			_ = t.SetIcon(icon, runtime.GOOS == "darwin" && !on)
 		}
 	}
 	t.SetToolTip(a.tooltip())
@@ -48,8 +49,13 @@ func (a *app) tooltip() string {
 // trayGreen is the plane while masir is on, the same green as the status dot.
 var trayGreen = color.NRGBA{R: 0, G: 214, B: 136, A: 255}
 
+// trayBlue is the plane while masir is off outside the macOS menu bar: the accent color,
+// which shows on the light and the dark taskbars alike.
+var trayBlue = color.NRGBA{R: 10, G: 132, B: 255, A: 255}
+
 // trayIcon draws the paper plane: an outline while masir is off, black on transparent for
-// macOS to tint, and filled and green while it is on.
+// macOS to tint, and filled and green while it is on. Elsewhere it is the accent blue when
+// off, so it reads on any taskbar, and green when on.
 func trayIcon(filled bool) ([]byte, error) {
 	const size, ss = 32, 4 // pixels, and samples per pixel side
 	// The plane's outline, in a 32x32 box.
@@ -89,8 +95,11 @@ func trayIcon(filled bool) ([]byte, error) {
 			}
 			if hits > 0 {
 				ink := color.NRGBA{A: 255}
-				if filled {
+				switch {
+				case filled:
 					ink = trayGreen
+				case runtime.GOOS != "darwin":
+					ink = trayBlue
 				}
 				ink.A = uint8(255 * hits / (ss * ss))
 				img.SetNRGBA(px, py, ink)

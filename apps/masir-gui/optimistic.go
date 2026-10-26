@@ -188,6 +188,7 @@ func (a *app) setFallback(f pb.Fallback) {
 
 func (a *app) selectServer(s server) {
 	a.open = sectionNone
+	a.requestHeight()
 	a.pend.active.set(s.key)
 	a.mutate("Couldn't select that server: ", a.pend.active.done, a.pend.active.revert, func(ctx context.Context) error {
 		_, err := a.d.SelectConfig(ctx, &pb.SelectConfigRequest{SubscriptionId: s.key.sub, ConfigId: s.key.cfg, Reason: "interactive"})
