@@ -65,7 +65,7 @@ func TestListResizeOnlyAtRest(t *testing.T) {
 	tt.Frame()
 	asked = nil
 
-	if err := tt.Click(ltr("🇬🇧 United Kingdom")); err != nil {
+	if err := tt.Click(ltr("United Kingdom")); err != nil {
 		t.Fatal(err)
 	}
 	if len(asked) != 1 || asked[0] <= a.baseHeight {

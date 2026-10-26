@@ -30,14 +30,19 @@ func TestSnapshots(t *testing.T) {
 		}},
 		{"main-light", false, func(a *app, tt *ui.Tester) {}},
 		{"main-dark", true, func(a *app, tt *ui.Tester) {}},
-		{"servers-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click(ltr("🇬🇧 United Kingdom")) }},
+		{"servers-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click(ltr("United Kingdom")) }},
 		{"rules-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click("RULES") }},
 		{"settings-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click("Settings") }},
+		{"system-dark", true, func(a *app, tt *ui.Tester) {
+			_ = tt.Click("Settings")
+			tt.Advance(time.Second)
+			tt.Scroll(panelWidth/2, 420, 0, 900)
+			tt.Advance(100 * time.Millisecond)
+		}},
 		{"add-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click("Add subscription") }},
 	}
 	for _, s := range shots {
 		a := newTestApp(ukServers())
-		a.onHeight = func(h float32) { a.heightNow = h }
 		a.down, a.up = 120<<10, 8<<10
 		tt := ui.NewTester(a.view, panelWidth, 600)
 		tt.SetDark(s.dark)
@@ -45,7 +50,7 @@ func TestSnapshots(t *testing.T) {
 		if s.name != "rolling-mid" {
 			tt.Advance(time.Second) // let the panels finish opening
 		}
-		tt.SetSize(panelWidth, int(a.heightNow))
+		tt.SetSize(panelWidth, int(a.restHeight()))
 		if s.name != "rolling-mid" {
 			tt.Advance(time.Second)
 		} else {

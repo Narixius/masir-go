@@ -69,14 +69,14 @@ func (s *shell) setHeight(h float32) {
 		return
 	}
 	s.sizeQueued = true
-	w, want := s.win, s.wantHeight
+	w := s.win
 	w.Update(func() {
 		s.sizeQueued = false
 		if s.win != w || !s.open || s.wantHeight == s.lastHeight {
 			return
 		}
 		s.lastHeight = s.wantHeight
-		w.SetContentSize(panelWidth, want)
+		w.SetContentSize(panelWidth, s.wantHeight)
 	})
 }
 
@@ -181,7 +181,12 @@ func round32(f float32) float32 {
 }
 
 func main() {
-	mygo.App.SetName("Masir")
+	name := "Masir"
+	if n := os.Getenv("MASIR_APP_NAME"); n != "" {
+		// A second copy for development: its own tray, single-instance lock and data.
+		name = n
+	}
+	mygo.App.SetName(name)
 	if runtime.GOOS == "darwin" {
 		// The panel is the app's only window: keep running as it closes.
 		mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
@@ -216,6 +221,7 @@ func main() {
 			a.version = v
 		}
 		s.ready()
+		a.refreshLoginState()
 		go a.watch(context.Background())
 		// The panel is the app's greeting, unless the session started it: a login item
 		// stays in the tray until the user asks for it. Without a tray icon, the window is

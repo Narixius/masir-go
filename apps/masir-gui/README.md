@@ -11,12 +11,13 @@ it.
   window follows the height of its page and its collapsible lists.
 
 The app ships the `masir` executable and the geo data inside it (in a `bin` folder of its
-resources), so it can start the daemon when none is running. The daemon runs as the user,
-which is all proxy mode needs; tunnel mode asks for root through the OS prompt (the
-system password dialog on macOS and Linux, the UAC prompt on Windows). Settings can install
-the daemon as a background service, and install the `masir` command-line tool for the
-terminal (a link in `~/.local/bin`, or the app's `bin` folder on the user's `PATH` on
-Windows).
+resources), so it can start the daemon when none is running. Country flags are drawn from
+bundled SVGs rather than emoji, so they look the same on every OS, including Windows, whose
+emoji font has no flags. The daemon runs as the user, which is all proxy mode needs; tunnel
+mode asks for root through the OS prompt (the system password dialog on macOS and Linux,
+the UAC prompt on Windows). Settings can install the daemon as a background service, and
+install the `masir` command-line tool for the terminal (a link in `~/.local/bin`, or the
+app's `bin` folder on the user's `PATH` on Windows).
 
 ## Build
 

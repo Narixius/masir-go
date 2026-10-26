@@ -87,6 +87,11 @@ type app struct {
 	// Settings form.
 	portText string
 
+	// What the system says about starting at login, read once rather than on every frame
+	// (the OS call is not free).
+	loginOn      bool
+	loginChecked bool
+
 	// Install actions in Settings, and what the last check of the command-line tool said.
 	serviceBusy bool
 	cliBusy     bool
@@ -123,7 +128,6 @@ type app struct {
 	rulesScroll ui.ScrollState
 	lastScrollY float32
 	onHeight    func(float32) // tells the window how tall the content is at rest
-	heightNow   float32       // used by tests to read it back
 
 	version string
 	palette palette // the colors of the frame being built, for helpers that format text
@@ -157,7 +161,8 @@ func rpc() (context.Context, context.CancelFunc) {
 func (a *app) openScreen(s screen) {
 	a.lastSub, a.screen = s, s
 	if s == screenSettings {
-		a.cliChecked = false // look for the command-line tool again
+		a.cliChecked = false  // look for the command-line tool again
+		a.refreshLoginState() // and for the login item, in the background
 	}
 	a.requestHeight()
 }

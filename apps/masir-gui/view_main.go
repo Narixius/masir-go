@@ -267,7 +267,10 @@ func (a *app) serverRow(c *ui.Context, p palette) {
 			flag, title, detail = "🌐", "Select Outbound", ""
 		}
 		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
-			ltrLabel(c, flag+" "+title, sizeTitle, 17, 600, p.text)
+			ui.Row(c).AlignItems(ui.Center).Gap(tw(1)).Children(func() {
+				flagElement(c, flag, 17, 12.75)
+				ltrLabel(c, title, sizeTitle, 17, 600, p.text)
+			})
 			if ok {
 				sub := s.subName
 				extra := detail
@@ -407,7 +410,7 @@ func (a *app) serverItem(c *ui.Context, p palette, s server) {
 		flag, title, detail := serverTitle(s.cfg.Name)
 		ui.Row(c).Gap(tw(2.5)).AlignItems(ui.Center).Grow(1).Basis(0).MinWidth(0).MarginEnd(tw(2)).Children(func() {
 			ui.Box(c).Size(tw(7), tw(7)).Radius(7).Background(p.cardHover).Border(1, p.borderDefault).Center().Shrink(0).Children(func() {
-				ui.Text(c, flag).FontSize(sizeTitle).FixedLineHeight(14)
+				flagElement(c, flag, 18, 13.5)
 			})
 			ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
 				ltrLabel(c, title, sizeBody, 16, 600, p.text)
@@ -596,7 +599,7 @@ func (a *app) ruleContent(c *ui.Context, p palette, r *pb.RoutingRule) {
 			case icon != nil:
 				ui.Image(c, icon).Size(24, 24).Radius(5)
 			case info.flag != "":
-				ui.Text(c, info.flag).FontSize(sizeTitle).FixedLineHeight(14)
+				flagElement(c, info.flag, 18, 13.5)
 			default:
 				ui.Icon(c, info.icon).FontSize(14).TextColor(p.muted)
 			}
@@ -674,7 +677,7 @@ func (a *app) destinationBadge(c *ui.Context, p palette, target string) {
 		}
 		ui.Row(c).Gap(tw(1)).Padding(tw(0.5), tw(1.5)).Radius(6).Background(p.pinnedSurface).Height(tw(7)).AlignItems(ui.Center).Shrink(0).Children(func() {
 			ui.Icon(c, iconPin).FontSize(10).TextColor(p.pinned)
-			ui.Text(c, flag).FontSize(sizeSubhead).FixedLineHeight(12)
+			flagElement(c, flag, 14, 10.5)
 			label(c, ltr(name), sizeSubhead, 14, 500, p.pinned).SingleLine().MaxWidth(120)
 		})
 	}

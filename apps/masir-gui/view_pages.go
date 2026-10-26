@@ -318,11 +318,9 @@ func (a *app) advancedSection(c *ui.Context, p palette) {
 				a.setAllowLAN(on)
 			})
 			cardDivider(c, p)
-			login := openAtLogin()
+			login := a.loginEnabled()
 			a.settingToggle(c, p, "login", "Open at Login", "Start Masir in the menu bar when you sign in.", login, func(on bool) {
-				if err := setOpenAtLogin(on); err != nil {
-					a.fail("Couldn't change it: ", err)
-				}
+				a.setLoginEnabled(on)
 			})
 		})
 	})
@@ -341,6 +339,38 @@ func (a *app) settingToggle(c *ui.Context, p palette, key, title, hint string, o
 			label(c, hint, sizeCaption, 14.85, 400, p.muted)
 		})
 	})
+}
+
+// loginEnabled is whether the app starts at login. The system is asked once, not once a
+// frame: the answer comes from the OS and is not instant.
+func (a *app) loginEnabled() bool {
+	if !a.loginChecked {
+		a.loginChecked = true
+		a.loginOn = openAtLogin()
+	}
+	return a.loginOn
+}
+
+// refreshLoginState asks the system for the login item in the background, so the settings
+// page draws at once and catches up if it changed elsewhere.
+func (a *app) refreshLoginState() {
+	a.async(func() {
+		on := openAtLogin()
+		a.post(func() {
+			if a.loginChecked && a.loginOn == on {
+				return
+			}
+			a.loginOn, a.loginChecked = on, true
+		})
+	})
+}
+
+func (a *app) setLoginEnabled(on bool) {
+	if err := setOpenAtLogin(on); err != nil {
+		a.fail("Couldn't change it: ", err)
+		return
+	}
+	a.loginOn, a.loginChecked = on, true
 }
 
 // applyPort saves the port field, or puts the saved port back when it isn't a port.
@@ -414,8 +444,10 @@ func (a *app) systemSection(c *ui.Context, p palette) {
 			})
 			cardDivider(c, p)
 			cardRow(c, "daemon", func() {
-				label(c, "Daemon", sizeSubhead, 18, 500, p.text)
-				mono(c, versionLabel(st.GetVersion())+" · xray "+st.GetXrayVersion(), sizeCaption, 14, 400, p.muted)
+				ui.Column(c).Gap(tw(0.5)).Grow(1).Children(func() {
+					label(c, "Daemon", sizeSubhead, 18, 500, p.text)
+					mono(c, versionLabel(st.GetVersion())+" · xray "+st.GetXrayVersion(), sizeMicro, 13, 400, p.muted).MaxLines(2)
+				})
 			})
 		})
 	})

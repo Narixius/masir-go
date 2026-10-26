@@ -127,7 +127,7 @@ func tester(a *app) *ui.Tester { return ui.NewTester(a.view, panelWidth, 520) }
 func TestMainPanelShowsTheServerAndRules(t *testing.T) {
 	a := newTestApp(ukServers())
 	tt := tester(a)
-	for _, want := range []string{"Disconnected", "Ready to connect", "Tunnel", "Direct", "non-ruled traffic is tunneled", ltr("🇬🇧 United Kingdom"), ltr("xrouter • England"), "2,048", "ms", "RULES", "rules", "Masir v0.1.0"} {
+	for _, want := range []string{"Disconnected", "Ready to connect", "Tunnel", "Direct", "non-ruled traffic is tunneled", ltr("United Kingdom"), ltr("xrouter • England"), "2,048", "ms", "RULES", "rules", "Masir v0.1.0"} {
 		if !tt.HasText(want) {
 			t.Errorf("no %q in %q", want, tt.Texts())
 		}
@@ -176,8 +176,8 @@ func TestPickingAServer(t *testing.T) {
 	f := ukServers()
 	a := newTestApp(f)
 	tt := tester(a)
-	_ = tt.Click(ltr("🇬🇧 United Kingdom")) // opens the list
-	tt.Advance(time.Second)                // it grows into view
+	_ = tt.Click(ltr("United Kingdom")) // opens the list
+	tt.Advance(time.Second)             // it grows into view
 	if a.open != sectionServers || !tt.HasText("Germany") {
 		t.Fatalf("open = %v, texts = %q", a.open, tt.Texts())
 	}
@@ -338,12 +338,12 @@ func openRules(t *testing.T) (*app, *fakeDaemon, *ui.Tester) {
 func TestSearchFieldsTakeTheKeyboardAsTheirListsOpen(t *testing.T) {
 	a := newTestApp(ukServers())
 	tt := tester(a)
-	_ = tt.Click(ltr("🇬🇧 United Kingdom"))
+	_ = tt.Click(ltr("United Kingdom"))
 	tt.Advance(time.Second)
 	if !tt.Focused("Search country, or remarks...") {
 		t.Fatal("the server search didn't get the keyboard")
 	}
-	_ = tt.Click(ltr("🇬🇧 United Kingdom")) // closes it
+	_ = tt.Click(ltr("United Kingdom")) // closes it
 	tt.Advance(time.Second)
 	_ = tt.Click("RULES")
 	tt.Advance(time.Second)
@@ -474,11 +474,11 @@ func TestSelectingAServerShowsItAtOnce(t *testing.T) {
 	a := newTestApp(f)
 	release := held(a)
 	tt := tester(a)
-	_ = tt.Click(ltr("🇬🇧 United Kingdom"))
+	_ = tt.Click(ltr("United Kingdom"))
 	tt.Advance(time.Second)
 	_ = tt.Click(ltr("Germany"))
 	tt.Advance(time.Second)
-	if !tt.HasText(ltr("🇩🇪 Germany")) {
+	if !tt.HasText(ltr("Germany")) {
 		t.Fatalf("the server row doesn't show the choice: %q", tt.Texts())
 	}
 	release()

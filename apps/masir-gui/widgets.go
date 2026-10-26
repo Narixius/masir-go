@@ -305,16 +305,41 @@ func flagOf(name string) (flag, rest string) {
 	return "", name
 }
 
+// isRegional reports whether r is one of the regional indicator symbols a flag emoji is
+// made of.
 func isRegional(r rune) bool { return r >= 0x1F1E6 && r <= 0x1F1FF }
 
-// countryOf is the English name of the country a flag emoji stands for, or "" when it
-// stands for none.
-func countryOf(flag string) string {
+// emojiCode is the two-letter country code a flag emoji stands for, or "" for anything
+// else.
+func emojiCode(flag string) string {
 	r := []rune(flag)
 	if len(r) != 2 || !isRegional(r[0]) || !isRegional(r[1]) {
 		return ""
 	}
-	code := string([]rune{r[0] - 0x1F1E6 + 'A', r[1] - 0x1F1E6 + 'A'})
+	return string([]rune{r[0] - 0x1F1E6 + 'A', r[1] - 0x1F1E6 + 'A'})
+}
+
+// flagCode is the code to draw a flag by: the one its emoji stands for, or itself when it
+// is already a two-letter code.
+func flagCode(flag string) string {
+	if code := emojiCode(flag); code != "" {
+		return code
+	}
+	r := []rune(flag)
+	if len(r) == 2 && ((r[0] >= 'A' && r[0] <= 'Z') || (r[0] >= 'a' && r[0] <= 'z')) &&
+		((r[1] >= 'A' && r[1] <= 'Z') || (r[1] >= 'a' && r[1] <= 'z')) {
+		return strings.ToUpper(flag)
+	}
+	return ""
+}
+
+// countryOf is the English name of the country a flag emoji stands for, or "" when it
+// stands for none.
+func countryOf(flag string) string {
+	code := emojiCode(flag)
+	if code == "" {
+		return ""
+	}
 	region, err := language.ParseRegion(code)
 	if err != nil {
 		return ""
