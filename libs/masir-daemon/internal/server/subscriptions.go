@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"time"
 
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
@@ -54,9 +53,7 @@ func (s *Server) AddSubscription(ctx context.Context, req *pb.AddSubscriptionReq
 		return nil, toStatus(err)
 	}
 	s.track("subscription_added", map[string]any{
-		"config_count":        len(sub.Configs),
-		"protocols":           configProtocols(sub.Configs),
-		"countries_available": len(configCountries(sub.Configs)),
+		"config_count": len(sub.Configs),
 	})
 	return &pb.AddSubscriptionResponse{Subscription: s.toPBSubscription(sub)}, nil
 }
@@ -93,18 +90,11 @@ func (s *Server) RemoveSubscription(ctx context.Context, req *pb.RemoveSubscript
 }
 
 func (s *Server) UpdateSubscription(ctx context.Context, req *pb.UpdateSubscriptionRequest) (*pb.UpdateSubscriptionResponse, error) {
-	start := time.Now()
 	sub, err := s.subs.Update(ctx, req.Id)
-	props := map[string]any{"trigger": "user", "duration_ms": time.Since(start).Milliseconds()}
 	if err != nil {
-		s.trackError("subscription_refreshed", err, props, false)
 		return nil, toStatus(err)
 	}
-	props["success"] = true
-	props["config_count"] = len(sub.Configs)
-	props["protocols"] = configProtocols(sub.Configs)
 	s.refreshSubscriptionCounts()
-	s.track("subscription_refreshed", props)
 	return &pb.UpdateSubscriptionResponse{Subscription: s.toPBSubscription(sub)}, nil
 }
 

@@ -52,17 +52,16 @@ func ValidSubInterval(minutes int) error {
 }
 
 // DefaultSettings are the out-of-the-box settings. The fallback is proxy once a config
-// is selected; with no selection the composer still has to use direct. The proxy stays
-// up when masir is off, so it's there for apps configured to use it.
+// is selected; with no selection the composer still has to use direct. The proxy only
+// listens on this machine, and only while masir is on: sharing it with the network or
+// keeping it up when masir is off are choices the user makes.
 func DefaultSettings() Settings {
 	return Settings{
-		AlwaysOnProxy: true,
-		Fallback:      FallbackProxy,
-		AllowLAN:      true,
-		ProxyPort:     7890,
-		DoHDNS:        "https://1.1.1.1/dns-query",
-		DNSServers:    []string{"1.1.1.1", "8.8.8.8"},
-		TunGateway:    "10.10.20.1/24",
+		Fallback:   FallbackProxy,
+		ProxyPort:  7890,
+		DoHDNS:     "https://1.1.1.1/dns-query",
+		DNSServers: []string{"1.1.1.1", "8.8.8.8"},
+		TunGateway: "10.10.20.1/24",
 
 		SubIntervalMinutes: 12 * 60,
 		XrayLogLevel:       "warning",

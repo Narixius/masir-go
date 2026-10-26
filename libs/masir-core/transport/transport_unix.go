@@ -7,7 +7,10 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
+
+	"github.com/narixius/masir-go/libs/masir-core/paths"
 )
 
 func DialContext(ctx context.Context, endpoint string) (net.Conn, error) {
@@ -25,10 +28,21 @@ func Alive(endpoint string) bool {
 	return true
 }
 
-// Listen serves endpoint to one user: the socket belongs to uid with mode 0600, and
-// only uid and root may connect, checked by the kernel's peer credentials.
+// Listen serves endpoint to one user, whom the kernel's peer credentials identify:
+// only uid and root may connect.
+//
+// A daemon running as that user keeps the socket in the user's directory, mode 0600. A
+// root daemon keeps it in a directory only root can write (paths.PrivilegedRunDir),
+// mode 0666 so the user can reach it: the peer check is what keeps other users out, and
+// root never chowns a path the user could have swapped for a symlink.
 func Listen(endpoint string, peer Peer) (net.Listener, error) {
-	uid, gid := peer.UID, peer.GID
+	uid := peer.UID
+	root := os.Geteuid() == 0
+	if root {
+		if err := paths.EnsureRootDir(filepath.Dir(endpoint), 0, 0o755); err != nil {
+			return nil, err
+		}
+	}
 	l, err := net.Listen("unix", endpoint)
 	if err != nil {
 		if Alive(endpoint) {
@@ -41,13 +55,11 @@ func Listen(endpoint string, peer Peer) (net.Listener, error) {
 			return nil, err
 		}
 	}
-	if os.Geteuid() == 0 {
-		if err := os.Chown(endpoint, uid, gid); err != nil {
-			l.Close()
-			return nil, err
-		}
+	mode := os.FileMode(0o600)
+	if root {
+		mode = 0o666
 	}
-	if err := os.Chmod(endpoint, 0o600); err != nil {
+	if err := os.Chmod(endpoint, mode); err != nil {
 		l.Close()
 		return nil, err
 	}

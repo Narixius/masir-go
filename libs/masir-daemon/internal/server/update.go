@@ -3,10 +3,13 @@ package server
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +18,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/narixius/masir-go/libs/masir-core/paths"
 	"github.com/narixius/masir-go/libs/masir-core/service"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/rulecheck"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/update"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
@@ -37,9 +43,39 @@ type updates struct {
 
 func (s *Server) initUpdates(dir string) {
 	s.upd = &updates{
-		masir: update.NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, filepath.Join(dir, "updates", "masir")),
-		geo:   update.NewRunner(pb.UpdateTarget_UPDATE_TARGET_GEO, filepath.Join(dir, "updates", "geo")),
+		masir: update.NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, s.updateDir(dir, "masir")),
+		geo:   update.NewRunner(pb.UpdateTarget_UPDATE_TARGET_GEO, s.updateDir(dir, "geo")),
 	}
+}
+
+// updateDir is where a download is staged and checked before it is installed. A root
+// daemon stages it where only root can write, readable by the user so the CLI can
+// install from it: in the user's own directory they could swap the file after it was
+// verified. It sits beside the service's own copy of masir, on disk and executable (a
+// run directory is often a RAM disk mounted noexec, and the new version is run from here
+// to check it before it is installed). If that directory can't be made safely, the empty
+// name makes updates fail.
+func (s *Server) updateDir(configDir, target string) string {
+	if !s.id.Privileged || runtime.GOOS == "windows" { // Windows keeps it with the daemon's other files
+		return filepath.Join(configDir, "updates", target)
+	}
+	dirs := privilegedUpdateDirs(s.id.UID, target)
+	for _, d := range dirs {
+		if err := paths.EnsureRootDir(d, 0, 0o755); err != nil {
+			log.Printf("updates are off: %v", err)
+			return ""
+		}
+	}
+	return dirs[len(dirs)-1]
+}
+
+// privilegedUpdateDirs lists, outermost first, the directories a root daemon serving uid
+// stages target's download in.
+func privilegedUpdateDirs(uid int, target string) []string {
+	install := service.InstallDir()
+	updates := filepath.Join(install, "updates")
+	user := filepath.Join(updates, strconv.Itoa(uid))
+	return []string{install, updates, user, filepath.Join(user, target)}
 }
 
 func (s *Server) clients() update.Clients {
@@ -82,13 +118,15 @@ func (s *Server) masirTask(force bool, clientBinary, trigger string) update.Task
 		ServiceBinary: s.serviceBinary(),
 		ClientBinary:  s.clientBinary(clientBinary),
 		Privileged:    s.id.Privileged,
-		WorkDir:       filepath.Join(s.dir, "updates", "masir"),
+		WorkDir:       s.updateDir(s.dir, "masir"),
+		Preflight:     s.checkWithNewVersion,
 		Restart:       s.restartForUpdate,
 	}.Run)
 }
 
 // clientBinary accepts the CLI's path only when this daemon has the rights to replace
-// it and it looks like a masir binary, so a client can't ask root to overwrite anything.
+// it, it looks like a masir binary, and only root can change it: a copy the user owns
+// could be swapped for a link while root writes it, so the CLI replaces that one itself.
 func (s *Server) clientBinary(path string) string {
 	if !s.id.Privileged || path == "" || s.id.UID < 0 {
 		return "" // Windows has no numeric owner to preserve; the CLI elevates itself
@@ -98,20 +136,70 @@ func (s *Server) clientBinary(path string) string {
 		return ""
 	}
 	fi, err := os.Stat(path)
-	if err != nil || !fi.Mode().IsRegular() {
+	if err != nil || !fi.Mode().IsRegular() || !rootControlled(path) {
 		return ""
 	}
 	return path
 }
 
-func (s *Server) geoTask(force bool, trigger string) update.Task {
+// geoTask installs fresh geo data, but only after checking that every enabled rule can be
+// built with it: an update that would break rules is blocked, and only a user who has
+// agreed (disableBroken) gets those rules turned off so it can go ahead.
+func (s *Server) geoTask(force bool, trigger string, disableBroken bool) update.Task {
 	return s.wrapUpdate("geo", force, trigger, update.Geo{
-		Clients:  s.clients(),
-		AssetDir: s.xray.AssetDir(),
-		WorkDir:  filepath.Join(s.dir, "updates", "geo"),
-		Force:    force,
-		Reload:   xray.ReloadGeodata,
+		Clients:       s.clients(),
+		AssetDir:      s.xray.AssetDir(),
+		WorkDir:       s.updateDir(s.dir, "geo"),
+		Force:         force,
+		Preflight:     s.geoPreflight,
+		DisableBroken: disableBroken,
+		Disable:       s.disableForGeo,
+		Reload: func() error {
+			err := xray.ReloadGeodata()
+			s.recheckRules()
+			return err
+		},
 	}.Run)
+}
+
+// geoPreflight returns the enabled rules the staged geo files can't build.
+func (s *Server) geoPreflight(geoip, geosite string) []*pb.RuleProblem {
+	s.mu.Lock()
+	rules := s.state.Rules
+	s.mu.Unlock()
+	return toPBProblems(rulecheck.Check(rules, rulecheck.Data{GeoIP: geoip, GeoSite: geosite}), nil)
+}
+
+// disableForGeo turns off the rules a geo update would break, saying why on each.
+func (s *Server) disableForGeo(ctx context.Context, problems []*pb.RuleProblem) error {
+	byReason := map[string][]string{}
+	for _, p := range problems {
+		reason := "the updated geo data lacks " + strings.Join(p.Missing, ", ")
+		byReason[reason] = append(byReason[reason], p.RuleTag)
+	}
+	var tagsAll []string
+	for _, tags := range byReason {
+		tagsAll = append(tagsAll, tags...)
+	}
+	// One change for all of them: with any still broken, none could be applied.
+	return s.change(ctx, "rules disabled for the geo update: "+strings.Join(tagsAll, ", "), func(st *store.State) error {
+		for reason, tags := range byReason {
+			for _, tag := range tags {
+				if err := st.SetRuleEnabled(tag, false, reason); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
+// recheckRules refreshes the problems status reports, after the geo data changed.
+func (s *Server) recheckRules() {
+	s.mu.Lock()
+	s.ruleProblems = rulecheck.Check(s.state.Rules, s.geoData())
+	s.mu.Unlock()
+	s.changes.notify()
 }
 
 // wrapUpdate records the start and outcome of every update, including background geo
@@ -208,7 +296,7 @@ func (s *Server) StartUpdate(_ context.Context, req *pb.StartUpdateRequest) (*pb
 	if trigger == "" {
 		trigger = "api"
 	}
-	task := s.geoTask(req.Force, trigger)
+	task := s.geoTask(req.Force, trigger, req.DisableBrokenRules && trigger != "background")
 	if req.Target == pb.UpdateTarget_UPDATE_TARGET_MASIR {
 		task = s.masirTask(req.Force, req.ClientBinary, trigger)
 	}
@@ -321,7 +409,7 @@ func (s *Server) maintainUpdates(ctx context.Context) {
 			cancel()
 		}
 		if age, ok := s.geoAge(); (!ok || age > geoMaxAge) && !s.upd.geo.Active() {
-			if _, err := s.upd.geo.Start(s.geoTask(false, "background")); err == nil {
+			if _, err := s.upd.geo.Start(s.geoTask(false, "background", false)); err == nil {
 				s.Log("info", "refreshing geo data")
 			}
 		}

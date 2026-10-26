@@ -426,13 +426,34 @@ func cmdRulesList(a args) error {
 		return err
 	}
 	all := nodesIfPinned(res.Rules)
+	problems := map[string]*pb.RuleProblem{}
+	for _, p := range st.RuleProblems {
+		problems[p.RuleTag] = p
+	}
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n%s\n", ui.Bold(fmt.Sprintf("Rules (%d)", len(res.Rules))))
 	for i, r := range res.Rules {
 		m, _ := parseMatch(r.RuleJson)
-		fmt.Fprintf(&b, "\n%s %s %s %s\n", ui.Dim(fmt.Sprintf("%d.", i+1)), ui.Bold(r.RuleTag), ui.Dim("→"),
-			targetText(r.Target, r.ResolvedOutboundTag, r.FellBack, all))
+		name, target := ui.Bold(r.RuleTag), targetText(r.Target, r.ResolvedOutboundTag, r.FellBack, all)
+		if r.Disabled {
+			name, target = ui.Dim(r.RuleTag+" (off)"), ui.Dim(stripANSI(target))
+		}
+		fmt.Fprintf(&b, "\n%s %s %s %s\n", ui.Dim(fmt.Sprintf("%d.", i+1)), name, ui.Dim("→"), target)
+		if r.Disabled {
+			reason := r.DisabledReason
+			if reason == "" {
+				reason = "turned off"
+			}
+			b.WriteString("   " + ui.Dim(reason+" — `masir rules enable "+r.RuleTag+"` turns it back on") + "\n")
+		}
+		if p, ok := problems[r.RuleTag]; ok && !r.Disabled {
+			note := "can't run: " + p.Message
+			if p.Suspended {
+				note += " (masir is running without it)"
+			}
+			b.WriteString("   " + ui.Red(note) + "\n")
+		}
 		if rows := m.describe(); len(rows) > 0 {
 			b.WriteString(indent(ui.Tree(rows), "   ") + "\n")
 		}

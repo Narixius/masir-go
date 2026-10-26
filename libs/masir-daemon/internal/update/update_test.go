@@ -361,3 +361,141 @@ func TestDownloadFallsBackToTheProxy(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// A geo update that would leave enabled rules unbuildable installs nothing until the user
+// agrees to turn those rules off; the verified download is kept for the second go.
+func TestGeoUpdateIsBlockedByRulesTheNewDataCantBuild(t *testing.T) {
+	gh := newFakeGitHub(t)
+	geosite, geoip := []byte("new site"), []byte("new ip")
+	gh.publish(GeoRepo, "20261024", map[string][]byte{
+		"geosite.dat": geosite, "geosite.dat.sha256sum": []byte(sum(geosite) + "  geosite.dat"),
+		"geoip.dat": geoip, "geoip.dat.sha256sum": []byte(sum(geoip)),
+	})
+	assets := t.TempDir()
+	os.WriteFile(filepath.Join(assets, "geosite.dat"), []byte("old site"), 0o644)
+	os.WriteFile(filepath.Join(assets, "geoip.dat"), []byte("old ip"), 0o644)
+	work := t.TempDir()
+
+	var seen []string // the files the pre-flight was shown
+	var disabled []*pb.RuleProblem
+	var order []string
+	task := func(disable bool) Geo {
+		return Geo{
+			Clients: clients(), AssetDir: assets, WorkDir: filepath.Join(work, "geo"), DisableBroken: disable,
+			Preflight: func(ip, site string) []*pb.RuleProblem {
+				a, _ := os.ReadFile(ip)
+				b, _ := os.ReadFile(site)
+				seen = append(seen, string(a)+"/"+string(b))
+				return []*pb.RuleProblem{{RuleTag: "iran-direct", Missing: []string{"geoip:in-ir"}}}
+			},
+			Disable: func(_ context.Context, p []*pb.RuleProblem) error {
+				disabled = p
+				order = append(order, "disable")
+				return nil
+			},
+			Reload: func() error { order = append(order, "reload"); return nil },
+		}
+	}
+
+	// Without the user's agreement: blocked, nothing installed, nothing disabled.
+	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_GEO, work)
+	r.Start(task(false).Run)
+	job := wait(t, r)
+	if job.State != pb.UpdateState_UPDATE_STATE_BLOCKED || len(job.BlockedRules) != 1 || job.BlockedRules[0].RuleTag != "iran-direct" || job.Error != "" {
+		t.Fatalf("job = %v %q %+v", job.State, job.Error, job.BlockedRules)
+	}
+	if len(seen) != 1 || seen[0] != "new ip/new site" {
+		t.Errorf("the pre-flight should see the verified new files, saw %v", seen)
+	}
+	for f, want := range map[string]string{"geosite.dat": "old site", "geoip.dat": "old ip"} {
+		if got, _ := os.ReadFile(filepath.Join(assets, f)); string(got) != want {
+			t.Errorf("%s = %q: a blocked update must leave the installed data alone", f, got)
+		}
+	}
+	if disabled != nil || len(order) != 0 {
+		t.Errorf("a blocked update disabled rules or reloaded: %v %v", disabled, order)
+	}
+	if !Finished(job.State) {
+		t.Error("blocked is a final state: the job is over and a new one can start")
+	}
+
+	// With it: the rules are turned off first, then the data is installed and reloaded.
+	r2 := NewRunner(pb.UpdateTarget_UPDATE_TARGET_GEO, work)
+	r2.Start(task(true).Run)
+	job = wait(t, r2)
+	if job.State != pb.UpdateState_UPDATE_STATE_DONE || job.Error != "" {
+		t.Fatalf("job = %v %q", job.State, job.Error)
+	}
+	if strings.Join(order, ",") != "disable,reload" || len(disabled) != 1 {
+		t.Errorf("order = %v, disabled = %v", order, disabled)
+	}
+	for f, want := range map[string]string{"geosite.dat": "new site", "geoip.dat": "new ip"} {
+		if got, _ := os.ReadFile(filepath.Join(assets, f)); string(got) != want {
+			t.Errorf("%s = %q, want the new data", f, got)
+		}
+	}
+}
+
+func TestGeoUpdateFailsIfTheRulesCantBeTurnedOff(t *testing.T) {
+	gh := newFakeGitHub(t)
+	geosite, geoip := []byte("new site"), []byte("new ip")
+	gh.publish(GeoRepo, "20261024", map[string][]byte{
+		"geosite.dat": geosite, "geosite.dat.sha256sum": []byte(sum(geosite)),
+		"geoip.dat": geoip, "geoip.dat.sha256sum": []byte(sum(geoip)),
+	})
+	assets := t.TempDir()
+	os.WriteFile(filepath.Join(assets, "geoip.dat"), []byte("old ip"), 0o644)
+	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_GEO, t.TempDir())
+	r.Start(Geo{Clients: clients(), AssetDir: assets, WorkDir: r.workDir, DisableBroken: true,
+		Preflight: func(string, string) []*pb.RuleProblem { return []*pb.RuleProblem{{RuleTag: "x"}} },
+		Disable:   func(context.Context, []*pb.RuleProblem) error { return errors.New("disk full") },
+	}.Run)
+	job := wait(t, r)
+	if job.State != pb.UpdateState_UPDATE_STATE_FAILED || !strings.Contains(job.Error, "disk full") {
+		t.Fatalf("job = %v %q", job.State, job.Error)
+	}
+	if got, _ := os.ReadFile(filepath.Join(assets, "geoip.dat")); string(got) != "old ip" {
+		t.Errorf("geoip.dat = %q: nothing is installed if the rules couldn't be turned off", got)
+	}
+}
+
+// The new binary is asked before anything is replaced; a refusal leaves every copy alone.
+func TestMasirUpdateStopsBeforeInstallingWhenThePreflightRefuses(t *testing.T) {
+	gh := newFakeGitHub(t)
+	name := ArchiveName("v0.2.0", runtime.GOOS, runtime.GOARCH)
+	arc := archive(t, name, map[string]string{exe("masir"): "new masir"})
+	gh.publish(ReleaseRepo, "v0.2.0", map[string][]byte{
+		name: arc, "checksums.txt": []byte(fmt.Sprintf("%s  %s\n", sum(arc), name)),
+	})
+	bin := filepath.Join(t.TempDir(), exe("masir"))
+	os.WriteFile(bin, []byte("old masir"), 0o755)
+	svc := filepath.Join(t.TempDir(), exe("masir"))
+	os.WriteFile(svc, []byte("old service masir"), 0o755)
+
+	var asked string
+	var restarted bool
+	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, t.TempDir())
+	r.Start(Masir{Clients: clients(), Current: "0.1.0", Binary: bin, ServiceBinary: svc, WorkDir: r.workDir,
+		Preflight: func(_ context.Context, staged string) error {
+			b, _ := os.ReadFile(staged)
+			asked = string(b)
+			return errors.New("not installed: the new version can't build 1 of your rules")
+		},
+		Restart: func() { restarted = true },
+	}.Run)
+	job := wait(t, r)
+	if job.State != pb.UpdateState_UPDATE_STATE_FAILED || !strings.Contains(job.Error, "can't build 1 of your rules") {
+		t.Fatalf("job = %v %q", job.State, job.Error)
+	}
+	if asked != "new masir" {
+		t.Errorf("the pre-flight should be given the new, unpacked binary, got %q", asked)
+	}
+	if restarted {
+		t.Error("restarted into a version that was refused")
+	}
+	for path, want := range map[string]string{bin: "old masir", svc: "old service masir"} {
+		if got, _ := os.ReadFile(path); string(got) != want {
+			t.Errorf("%s = %q: a refused update replaced a binary", path, got)
+		}
+	}
+}

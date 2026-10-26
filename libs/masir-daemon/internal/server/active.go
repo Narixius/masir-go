@@ -25,9 +25,9 @@ func (s *Server) SelectConfig(ctx context.Context, req *pb.SelectConfigRequest) 
 	if err := s.subs.SetActive(next); err != nil {
 		return nil, toStatus(err)
 	}
-	if err := s.applyLocked(ctx, s.state); err != nil {
+	if err := s.applyLocked(ctx, s.state, true); err != nil {
 		if rerr := s.subs.SetActive(prev); rerr == nil {
-			_ = s.applyLocked(context.WithoutCancel(ctx), s.state)
+			_ = s.applyLocked(context.WithoutCancel(ctx), s.state, false)
 		}
 		return nil, err
 	}
@@ -36,9 +36,7 @@ func (s *Server) SelectConfig(ctx context.Context, req *pb.SelectConfigRequest) 
 	if reason == "" {
 		reason = "api"
 	}
-	props := map[string]any{"selection": reason}
-	addActiveProps(props, activeInfoFromConfig(c))
-	s.trackLocked(s.state, "proxy_selected", props)
+	s.trackLocked(s.state, "proxy_selected", map[string]any{"selection": reason})
 	return &pb.SelectConfigResponse{}, nil
 }
 

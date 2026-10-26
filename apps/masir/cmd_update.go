@@ -63,7 +63,7 @@ func cmdUpdate(a args) error {
 				privilegeOwner, self), ui.Yellow("▲ Your copy needs permission"))
 		}
 	}
-	if err := startUpdate(pb.UpdateTarget_UPDATE_TARGET_MASIR, force); err != nil {
+	if err := startUpdate(pb.UpdateTarget_UPDATE_TARGET_MASIR, force, false); err != nil {
 		return err
 	}
 	return watchUpdate(pb.UpdateTarget_UPDATE_TARGET_MASIR)
@@ -82,18 +82,43 @@ func writableDir(dir string) bool {
 }
 
 func cmdUpdateGeo(a args) error {
-	if err := startUpdate(pb.UpdateTarget_UPDATE_TARGET_GEO, a.boolean("force", false)); err != nil {
+	if err := startUpdate(pb.UpdateTarget_UPDATE_TARGET_GEO, a.boolean("force", false), a.boolean("disable-broken-rules", false)); err != nil {
 		return err
 	}
 	return watchUpdate(pb.UpdateTarget_UPDATE_TARGET_GEO)
 }
 
-func startUpdate(target pb.UpdateTarget, force bool) error {
+func startUpdate(target pb.UpdateTarget, force, disableBroken bool) error {
 	client, _ := self()
 	_, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.StartUpdateResponse, error) {
-		return c.StartUpdate(ctx, &pb.StartUpdateRequest{Target: target, Force: force, ClientBinary: client, Trigger: "user"})
+		return c.StartUpdate(ctx, &pb.StartUpdateRequest{Target: target, Force: force, ClientBinary: client, Trigger: "user", DisableBrokenRules: disableBroken})
 	})
 	return err
+}
+
+// blockedGeoUpdate is what the user sees when the daemon found that the new geo data can't
+// build some enabled rules, and so installed nothing. Whether to turn those rules off is
+// the user's call; with no terminal to ask, the flag says it ahead of time.
+func blockedGeoUpdate(job *pb.UpdateJob) error {
+	if !ui.Interactive() {
+		ui.Warn(fmt.Sprintf("The new geo data wasn't installed: it can't build %s:", counted(len(job.BlockedRules), "of your rules")))
+		fmt.Println(ui.Visual(indent(problemText(job.BlockedRules), "  ")))
+		fmt.Println(ui.Dim("The current geo data is unchanged. Fix or remove those rules (`masir rules edit`), or turn them off and install with `masir update geo --disable-broken-rules`."))
+		return errReported
+	}
+	ui.Note(problemText(job.BlockedRules), ui.Yellow("▲ Rules the new geo data can't build"))
+	ok, err := ui.Confirm("Turn these rules off and install the new geo data? (They stay saved; the current data stays if you say no.)", false)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		ui.Info("Kept the current geo data. Fix or remove those rules (`masir rules edit`), then run `masir update geo` again.")
+		return nil
+	}
+	if err := startUpdate(pb.UpdateTarget_UPDATE_TARGET_GEO, false, true); err != nil {
+		return err
+	}
+	return watchUpdate(pb.UpdateTarget_UPDATE_TARGET_GEO)
 }
 
 func cmdUpdatePause(a args) error {
@@ -294,6 +319,9 @@ func watchUpdate(target pb.UpdateTarget) error {
 	case pb.UpdateState_UPDATE_STATE_FAILED:
 		pr.Fail("Update failed: " + friendlyUpdateError(job.Error))
 		return errReported
+	case pb.UpdateState_UPDATE_STATE_BLOCKED:
+		pr.Stop("The new geo data isn't installed yet: it can't build some of your rules.")
+		return blockedGeoUpdate(job)
 	case pb.UpdateState_UPDATE_STATE_RESTARTING:
 		pr.SetLabel("Starting masir " + job.Version)
 		failed := false
@@ -655,6 +683,8 @@ func jobSummary(j *pb.UpdateJob) string {
 		return "already the latest (" + j.Version + ")" + when
 	case pb.UpdateState_UPDATE_STATE_FAILED:
 		return ui.Red("failed: "+j.Error) + when
+	case pb.UpdateState_UPDATE_STATE_BLOCKED:
+		return ui.Yellow(fmt.Sprintf("not installed: the new data can't build %s", counted(len(j.BlockedRules), "of your rules"))) + when
 	case pb.UpdateState_UPDATE_STATE_STOPPED:
 		return "stopped" + when
 	}

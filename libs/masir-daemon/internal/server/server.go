@@ -11,6 +11,7 @@ import (
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/analytics"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/compose"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/identity"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/rulecheck"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
@@ -34,6 +35,10 @@ type Server struct {
 	running  running                // what the last successful apply brought up
 	lastErr  string                 // why what runs doesn't match the state, from a background apply
 	config   []byte                 // the composed Xray config, as written to xray.json
+	// ruleProblems are the enabled rules the geo data can't build, as of the last check
+	// (see gate); suspended is the subset the running config leaves out.
+	ruleProblems []rulecheck.Problem
+	suspended    map[string]bool
 
 	testMu sync.Mutex
 	tests  map[string]context.CancelFunc // test ID -> its cancel function
@@ -96,7 +101,6 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 	}
 	m.Log = s.Log
 	m.OnChange = s.subscriptionsChanged
-	m.OnRefresh = s.trackSubscriptionRefresh
 	m.SetInterval(time.Duration(st.Settings.SubIntervalMinutes) * time.Minute)
 	s.subs = m
 	s.refreshSubscriptionCounts()
@@ -120,7 +124,7 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 		log.Printf("start xray: %v", err)
 	}
 	s.mu.Unlock()
-	s.trackWithActive("daemon_started", map[string]any{
+	s.track("daemon_started", map[string]any{
 		"idle":       s.idle.Load(),
 		"privileged": s.id.Privileged,
 	})

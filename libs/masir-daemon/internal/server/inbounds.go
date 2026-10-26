@@ -20,7 +20,6 @@ func (s *Server) AddInbound(ctx context.Context, req *pb.AddInboundRequest) (*pb
 	if err != nil {
 		return nil, err
 	}
-	s.track("inbound_added", map[string]any{})
 	return &pb.AddInboundResponse{}, nil
 }
 
@@ -31,7 +30,6 @@ func (s *Server) RemoveInbound(ctx context.Context, req *pb.RemoveInboundRequest
 	if err != nil {
 		return nil, err
 	}
-	s.track("inbound_removed", map[string]any{})
 	return &pb.RemoveInboundResponse{}, nil
 }
 
@@ -42,7 +40,6 @@ func (s *Server) AlterInbound(ctx context.Context, req *pb.AlterInboundRequest) 
 	if err != nil {
 		return nil, err
 	}
-	s.track("inbound_altered", map[string]any{})
 	return &pb.AlterInboundResponse{}, nil
 }
 

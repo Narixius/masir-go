@@ -18,5 +18,5 @@ func preserveOwner(tmp, dst string) {
 	if !ok {
 		return
 	}
-	_ = os.Chown(tmp, int(st.Uid), int(st.Gid))
+	_ = os.Lchown(tmp, int(st.Uid), int(st.Gid)) // never through a link swapped in for tmp
 }

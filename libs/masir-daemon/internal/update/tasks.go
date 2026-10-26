@@ -33,6 +33,10 @@ type Masir struct {
 	// may write a client binary owned by that account.
 	Privileged bool
 	WorkDir    string
+	// Preflight is given the new, verified binary before anything is replaced. An error
+	// stops the update with the running version, and what it runs, untouched: the daemon
+	// uses it to ask the new version whether it can start with the user's rules.
+	Preflight func(ctx context.Context, stagedBinary string) error
 	// Restart is called once the new binary is in place; the daemon then exits and
 	// starts the new version.
 	Restart func()
@@ -77,6 +81,9 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	if err != nil {
 		return err
 	}
+	if err := checkSignature(ctx, m.Clients, rel, list); err != nil {
+		return err
+	}
 	want, err := checksum(list, name)
 	if err != nil {
 		return err
@@ -97,6 +104,11 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 		return err
 	}
 	r.StagedDir(staged)
+	if m.Preflight != nil {
+		if err := m.Preflight(ctx, filepath.Join(staged, exe("masir"))); err != nil {
+			return err
+		}
+	}
 	// A CLI installed elsewhere (the service runs its own copy) updates itself from
 	// the staged binary.
 	if err := replaceFile(filepath.Join(staged, exe("masir")), m.Binary); err != nil {
@@ -143,6 +155,14 @@ type Geo struct {
 	Force    bool // download even when the installed files match
 	// Reload makes Xray read the new files; on error the old files come back.
 	Reload func() error
+	// Preflight is shown the verified new files before anything is installed, and
+	// returns the enabled rules they can't build. A job that finds any is blocked: the
+	// installed data stays, the download is kept, and nothing changes for a running Xray.
+	Preflight func(geoip, geosite string) []*pb.RuleProblem
+	// DisableBroken says the user agreed to turn those rules off: Disable does that, and
+	// the install goes ahead.
+	DisableBroken bool
+	Disable       func(ctx context.Context, problems []*pb.RuleProblem) error
 }
 
 // geoFiles maps what GeoRepo publishes to the names Xray reads.
@@ -219,6 +239,26 @@ func (g Geo) Run(ctx context.Context, r *Reporter) error {
 		}
 	}
 
+	if g.Preflight != nil {
+		var ip, site string
+		for _, f := range files {
+			if f.local == "geoip.dat" {
+				ip = filepath.Join(dir, f.asset.Name)
+			} else {
+				site = filepath.Join(dir, f.asset.Name)
+			}
+		}
+		if problems := g.Preflight(ip, site); len(problems) > 0 {
+			if !g.DisableBroken || g.Disable == nil {
+				r.Blocked(problems) // the verified download stays, for the retry that disables them
+				return nil
+			}
+			if err := g.Disable(ctx, problems); err != nil {
+				return fmt.Errorf("turn off the rules the new data can't build: %w", err)
+			}
+		}
+	}
+
 	r.State(pb.UpdateState_UPDATE_STATE_INSTALLING)
 	var swapped []string // local names now holding new data; their old copies end in .old
 	rollback := func() {
@@ -271,12 +311,19 @@ func prepare(workDir, tag string) error {
 			}
 		}
 	}
-	return os.MkdirAll(filepath.Join(workDir, tag), 0o755)
+	dir := filepath.Join(workDir, tag)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return os.Chmod(dir, 0o755) // whatever the umask: the CLI installs from here
 }
 
 // unpack extracts the masir binary from a release archive into dir.
 func unpack(archive, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
 		return err
 	}
 	want := map[string]bool{exe("masir"): true}
@@ -370,13 +417,17 @@ func replaceFile(src, dst string) error {
 	return nil
 }
 
+// copyFile writes src to a new file at dst. dst may sit in a directory its user controls,
+// so it is created exclusively (never following a link planted there) and given its mode
+// through the open file, not the path.
 func copyFile(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	os.Remove(dst) // a stale copy, or a link: removing it doesn't touch what it points to
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 	if err != nil {
 		return err
 	}
@@ -385,9 +436,14 @@ func copyFile(src, dst string, mode os.FileMode) error {
 		os.Remove(dst)
 		return err
 	}
+	if err := out.Chmod(mode); err != nil {
+		out.Close()
+		os.Remove(dst)
+		return err
+	}
 	if err := out.Close(); err != nil {
 		os.Remove(dst)
 		return err
 	}
-	return os.Chmod(dst, mode)
+	return nil
 }

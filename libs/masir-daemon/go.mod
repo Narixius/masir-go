@@ -3,6 +3,7 @@ module github.com/narixius/masir-go/libs/masir-daemon
 go 1.27.2
 
 require (
+	aead.dev/minisign v0.3.0
 	github.com/narixius/masir-go/libs/masir-core v0.0.0
 	github.com/narixius/masir-go/libs/masir-proto v0.0.0
 	github.com/posthog/posthog-go v1.37.0

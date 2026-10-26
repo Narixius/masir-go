@@ -145,6 +145,19 @@ func printStatus(st *pb.Status) {
 	if st.FellBackRules > 0 {
 		rows = append(rows, [2]string{"Rules", ui.Yellow(fmt.Sprintf("%d rule(s) lost their proxy and use the active one; see `masir rules list`", st.FellBackRules))})
 	}
+	if len(st.RuleProblems) > 0 {
+		var tags []string
+		suspended := false
+		for _, p := range st.RuleProblems {
+			tags = append(tags, p.RuleTag)
+			suspended = suspended || p.Suspended
+		}
+		text := fmt.Sprintf("%s can't run with the installed geo data (%s); `masir rules check` shows why", counted(len(tags), "rule"), strings.Join(tags, ", "))
+		if suspended {
+			text += "; masir is running without the suspended ones"
+		}
+		rows = append(rows, [2]string{"Rules", ui.Red(text)})
+	}
 	if st.LastError != "" {
 		rows = append(rows, [2]string{"Error", ui.Red(st.LastError)})
 	}

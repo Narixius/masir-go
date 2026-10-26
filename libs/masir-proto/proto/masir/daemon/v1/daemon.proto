@@ -31,6 +31,11 @@ service DaemonService {
   rpc AlterRouting(AlterRoutingRequest) returns (AlterRoutingResponse);
   rpc MoveRouting(MoveRoutingRequest) returns (MoveRoutingResponse);
   rpc TestRouting(TestRoutingRequest) returns (TestRoutingResponse);
+  // CheckRules verifies every enabled rule against the installed geo data, the same
+  // check the daemon makes before it starts or restarts Xray. It changes nothing.
+  rpc CheckRules(CheckRulesRequest) returns (CheckRulesResponse);
+  // SetRuleEnabled turns a rule off, or back on once it can be built.
+  rpc SetRuleEnabled(SetRuleEnabledRequest) returns (SetRuleEnabledResponse);
   // inbounds
   rpc ListInbounds(ListInboundsRequest) returns (ListInboundsResponse);
   rpc AddInbound(AddInboundRequest) returns (AddInboundResponse);
@@ -100,6 +105,10 @@ message Status {
   ReleaseInfo latest_release = 21; // from the daemon's daily check; unset until it has run
   string geo_updated_at = 22;      // RFC 3339 time geosite.dat was last written; empty if missing
   string geo_dir = 23;             // where the daemon reads geosite.dat and geoip.dat
+  // Enabled rules that can't be built with the installed geo data (see CheckRules).
+  // While any are listed, the daemon either runs without them (each marked suspended)
+  // or isn't applying the config at all; last_error says which.
+  repeated RuleProblem rule_problems = 24;
 }
 
 message GetStatusRequest {}
@@ -229,7 +238,29 @@ message RoutingRule {
   string target = 3;
   string resolved_outbound_tag = 4;  // what the running config uses
   bool fell_back = 5;                // the target couldn't be used; resolved_outbound_tag is the fallback
+  bool disabled = 6;                 // saved, but not part of the running config
+  string disabled_reason = 7;        // why it was turned off, if it was said
 }
+
+// RuleProblem is an enabled rule that can't be built, with the geo data installed.
+message RuleProblem {
+  string rule_tag = 1;
+  repeated string missing = 2; // the references that can't be resolved, e.g. "geoip:in-ir"
+  string message = 3;          // what is wrong, and what to use instead where known
+  bool suspended = 4;          // the daemon runs without this rule until it can be built again
+}
+
+message CheckRulesRequest {}
+message CheckRulesResponse { repeated RuleProblem problems = 1; } // empty: every enabled rule can be built
+
+// SetRuleEnabled changes every listed rule in one step, so turning off all the rules
+// CheckRules named takes effect together (one still-broken rule would block the rest).
+message SetRuleEnabledRequest {
+  repeated string rule_tags = 1;
+  bool enabled = 2;
+  string reason = 3; // kept with each rule that is turned off
+}
+message SetRuleEnabledResponse {}
 
 message ListRoutingRulesRequest {}
 message ListRoutingRulesResponse { repeated RoutingRule rules = 1; }
@@ -421,6 +452,10 @@ enum UpdateState {
   UPDATE_STATE_UP_TO_DATE = 8;  // nothing newer to install
   UPDATE_STATE_FAILED = 9;
   UPDATE_STATE_STOPPED = 10;    // stopped by StopUpdate; the partial download is deleted
+  // Installing would leave enabled rules the new data can't build (UpdateJob.blocked_rules),
+  // so nothing was installed. StartUpdate with disable_broken_rules turns them off and
+  // installs; the verified download is kept, so that needs no new download.
+  UPDATE_STATE_BLOCKED = 11;
 }
 
 message ReleaseInfo {
@@ -445,6 +480,7 @@ message UpdateJob {
   // For a masir update: where the new binaries were unpacked, so a CLI installed
   // somewhere masird can't write can copy its own new binary from there.
   string staged_dir = 10;
+  repeated RuleProblem blocked_rules = 11; // with UPDATE_STATE_BLOCKED
 }
 
 message CheckUpdateRequest {}
@@ -457,6 +493,9 @@ message StartUpdateRequest {
   // the caller doesn't know it.
   string client_binary = 3;
   string trigger = 4; // user, background, or api
+  // Geo update: turn off the enabled rules the new data can't build, and install. Without
+  // it such an update is blocked. Never set by background updates.
+  bool disable_broken_rules = 5;
 }
 message StartUpdateResponse { UpdateJob job = 1; }
 

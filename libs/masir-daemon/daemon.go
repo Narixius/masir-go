@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"syscall"
 	"time"
 
@@ -24,9 +25,9 @@ import (
 
 	"github.com/narixius/masir-go/libs/masir-core/paths"
 	"github.com/narixius/masir-go/libs/masir-core/transport"
-	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/identity"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/server"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/userfs"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/wintun"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
@@ -103,7 +104,13 @@ func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle
 	if err != nil {
 		return false, false, err
 	}
-	sock := paths.SocketPathIn(dir)
+	// A root daemon keeps its socket where only root can write; a daemon running as the
+	// user keeps it in the user's directory. A running daemon of either kind is in the way.
+	userSock := paths.SocketPathIn(dir)
+	sock := userSock
+	if id.Privileged {
+		sock = paths.PrivilegedSocketPath(id.UID)
+	}
 
 	// A daemon outlives the terminal that started it (sudo -b leaves it in that session),
 	// so closing the terminal must not end it.
@@ -111,9 +118,11 @@ func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if transport.Alive(sock) {
-		if err := takeOver(ctx, sock, id); err != nil {
-			return false, false, err
+	for _, running := range uniqueStrings(userSock, paths.PrivilegedSocketPath(id.UID)) {
+		if transport.Alive(running) {
+			if err := takeOver(ctx, running, id); err != nil {
+				return false, false, err
+			}
 		}
 	}
 	lis, err := transport.Listen(sock, transport.Peer{UID: id.UID, GID: id.GID, SID: id.SID})
@@ -177,11 +186,10 @@ func configDir(id identity.Identity) (string, error) {
 	if !id.Privileged {
 		return paths.ConfigDir()
 	}
-	if id.UID >= 0 { // Windows has no numeric ids; the folder's permissions carry over instead
-		atomicfile.SetOwner(id.UID, id.GID)
-	}
+	// Root works inside a directory its user controls: pin it, so nothing the user
+	// swaps in (a symlink, say) can steer the daemon's file operations elsewhere.
 	dir := paths.ConfigDirOf(id.Home)
-	return dir, atomicfile.MkdirAll(dir)
+	return dir, userfs.Pin(dir, id.UID, id.GID)
 }
 
 // assetDir holds geoip.dat/geosite.dat next to the binary; a service's working
@@ -224,4 +232,15 @@ func takeOver(ctx context.Context, sock string, id identity.Identity) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return nil
+}
+
+// uniqueStrings drops repeats (Windows has one pipe for every kind of daemon).
+func uniqueStrings(in ...string) []string {
+	var out []string
+	for _, s := range in {
+		if !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out
 }

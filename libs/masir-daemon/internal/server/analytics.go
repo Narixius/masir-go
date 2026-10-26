@@ -12,10 +12,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	coreanalytics "github.com/narixius/masir-go/libs/masir-core/analytics"
 	"github.com/narixius/masir-go/libs/masir-core/service"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/analytics"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
-	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
@@ -29,12 +29,6 @@ var ignoredRPCs = map[string]bool{
 	"GetStatus": true, "WatchStatus": true, "StreamLogs": true, "CaptureEvent": true,
 	"TestLatency": true, "CancelLatencyTest": true, "TestSubscriptionLatency": true,
 	"WatchUpdate": true,
-}
-
-var clientEvents = map[string]bool{
-	"cli_command":          true,
-	"self_update_finished": true,
-	"cli_panic":            true,
 }
 
 // trackLocked records an event while s.mu is held. It only reads st and immutable
@@ -81,17 +75,6 @@ func (s *Server) trackAt(event string, props map[string]any, ts time.Time) {
 	s.analytics.TrackAt(event, props, ts)
 }
 
-// trackWithActive adds the selected proxy's country/protocol to an event. Call it
-// without s.mu held; it reads the selection and then takes the lock.
-func (s *Server) trackWithActive(event string, props map[string]any) {
-	a := s.currentActive()
-	if props == nil {
-		props = map[string]any{}
-	}
-	addActiveProps(props, a)
-	s.track(event, props)
-}
-
 func (s *Server) trackError(event string, err error, props map[string]any, unexpected bool) {
 	if err == nil || s.analytics == nil {
 		return
@@ -126,124 +109,35 @@ func (s *Server) TrackPanic(value any, stack []byte) {
 	err := fmt.Errorf("panic: %v", value)
 	s.analytics.TrackError("daemon_panic", err, map[string]any{
 		"app_version":       Version,
-		"stack_fingerprint": analytics.Fingerprint(string(stack)),
+		"stack_fingerprint": coreanalytics.Fingerprint(string(stack)),
 	}, true)
 }
 
 func (s *Server) commonPropsLocked(st store.State) map[string]any {
 	set := st.Settings
-	dohProvider := analytics.DoHProvider(set.DoHDNS)
-	bootstrap := analytics.DNSProviders(set.DNSServers)
 	role := "user"
 	if s.id.Privileged {
 		role = "privileged"
 	}
 	props := map[string]any{
-		"app_version":              Version,
-		"xray_version":             s.xray.GetVersion(),
-		"xray_running":             s.xray.Running(),
-		"arch":                     runtime.GOARCH,
-		"daemon_role":              role,
-		"privileged":               s.id.Privileged,
-		"service_installed":        service.Installed(),
-		"fallback":                 string(set.Fallback),
-		"tun_enabled":              set.Tun,
-		"allow_lan":                set.AllowLAN,
-		"always_on_proxy":          set.AlwaysOnProxy,
-		"xray_log_level":           set.XrayLogLevel,
-		"proxy_port":               set.ProxyPort,
-		"proxy_port_is_default":    set.ProxyPort == 7890,
-		"doh_provider":             dohProvider,
-		"doh_is_default":           dohProvider == "cloudflare" && strings.Contains(set.DoHDNS, "1.1.1.1"),
-		"doh_custom":               dohProvider == "custom" || dohProvider == "unknown",
-		"bootstrap_dns_providers":  bootstrap,
-		"bootstrap_dns_count":      len(set.DNSServers),
-		"bootstrap_dns_custom":     containsString(bootstrap, "custom"),
-		"bootstrap_dns_is_default": analytics.IsDefaultDNS(set.DNSServers),
-		"tun_dns_count":            len(set.TunDNS),
-		"tun_dns_custom":           len(set.TunDNS) > 0 && !sameStrings(set.TunDNS, set.DNSServers),
-		"gateway_is_default":       set.TunGateway == "10.10.20.1/24",
-		"sub_interval_minutes":     set.SubIntervalMinutes,
-		"rule_count":               len(st.Rules),
-		"inbound_count":            len(st.Inbounds),
-		"outbound_count":           len(st.Outbounds),
-		"subscription_count":       s.subCount.Load(),
-		"total_config_count":       s.totalConfigs.Load(),
+		"app_version":        Version,
+		"xray_version":       s.xray.GetVersion(),
+		"xray_running":       s.xray.Running(),
+		"arch":               runtime.GOARCH,
+		"daemon_role":        role,
+		"privileged":         s.id.Privileged,
+		"service_installed":  service.Installed(),
+		"tun_enabled":        set.Tun,
+		"rule_count":         len(st.Rules),
+		"inbound_count":      len(st.Inbounds),
+		"outbound_count":     len(st.Outbounds),
+		"subscription_count": s.subCount.Load(),
+		"total_config_count": s.totalConfigs.Load(),
 	}
 	for k, v := range analytics.TimezoneProps() {
 		props[k] = v
 	}
 	return props
-}
-
-type activeInfo struct {
-	Country  string
-	Protocol string
-	Network  string
-	Security string
-	Stale    bool
-}
-
-func activeInfoFromConfig(c subs.Config) activeInfo {
-	return activeInfo{
-		Country:  analytics.CountryFromName(c.Name),
-		Protocol: c.Protocol,
-		Network:  c.Network,
-		Security: c.Security,
-	}
-}
-
-func activeInfoFrom(a subs.Active) activeInfo {
-	info := activeInfo{Country: analytics.CountryFromName(a.Name)}
-	var o struct {
-		Protocol       string `json:"protocol"`
-		StreamSettings struct {
-			Network  string `json:"network"`
-			Security string `json:"security"`
-		} `json:"streamSettings"`
-	}
-	if json.Unmarshal(a.Outbound, &o) == nil {
-		info.Protocol, info.Network, info.Security = o.Protocol, o.StreamSettings.Network, o.StreamSettings.Security
-	}
-	return info
-}
-
-func (s *Server) currentActive() activeInfo {
-	if s.subs == nil {
-		return activeInfo{}
-	}
-	a, err := s.subs.Active()
-	if err != nil || a.ConfigID == "" {
-		return activeInfo{}
-	}
-	info := activeInfo{Country: analytics.CountryFromName(a.Name)}
-	if c, err := s.subs.Config(a.SubscriptionID, a.ConfigID); err == nil {
-		info.Protocol, info.Network, info.Security = c.Protocol, c.Network, c.Security
-		if info.Country == "" {
-			info.Country = analytics.CountryFromName(c.Name)
-		}
-	} else {
-		info.Stale = true
-	}
-	return info
-}
-
-func addActiveProps(props map[string]any, a activeInfo) {
-	if a.Country != "" {
-		props["active_country"] = a.Country
-	}
-	if a.Protocol != "" {
-		props["active_protocol"] = a.Protocol
-	}
-	if a.Network != "" {
-		props["active_network"] = a.Network
-	}
-	if a.Security != "" {
-		props["active_security"] = a.Security
-	}
-	if a.Stale {
-		props["active_stale"] = true
-	}
 }
 
 func (s *Server) analyticsLoop(ctx context.Context) {
@@ -292,7 +186,7 @@ func (s *Server) CaptureEvent(_ context.Context, req *pb.CaptureEventRequest) (*
 	if s.analytics == nil || !s.analytics.Enabled() {
 		return &pb.CaptureEventResponse{}, nil
 	}
-	if !clientEvents[req.Event] {
+	if !analytics.ClientEventAllowed(req.Event) {
 		return nil, status.Error(codes.InvalidArgument, "event not allowed")
 	}
 	if len(req.PropertiesJson) > 16<<10 {
@@ -304,12 +198,7 @@ func (s *Server) CaptureEvent(_ context.Context, req *pb.CaptureEventRequest) (*
 			return nil, status.Error(codes.InvalidArgument, "properties must be a JSON object")
 		}
 	}
-	// Clients may send product properties, never PostHog reserved ones.
-	for k := range props {
-		if strings.HasPrefix(k, "$") {
-			delete(props, k)
-		}
-	}
+	analytics.CleanClientProps(props)
 	props["source"] = "cli"
 	ts := time.Now()
 	if req.TimestampMs > 0 {
@@ -380,60 +269,4 @@ func (s *Server) refreshSubscriptionCounts() {
 	}
 	s.subCount.Store(int64(len(all)))
 	s.totalConfigs.Store(int64(configs))
-}
-
-func configProtocols(configs []subs.Config) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, c := range configs {
-		if c.Protocol != "" && !seen[c.Protocol] {
-			seen[c.Protocol] = true
-			out = append(out, c.Protocol)
-		}
-	}
-	return out
-}
-
-func configCountries(configs []subs.Config) []string {
-	names := make([]string, len(configs))
-	for i, c := range configs {
-		names[i] = c.Name
-	}
-	return analytics.CountriesFromNames(names)
-}
-
-// trackSubscriptionRefresh is the background refresher's event hook.
-func (s *Server) trackSubscriptionRefresh(sub *subs.Subscription, err error, took time.Duration) {
-	if err == nil {
-		return // routine background success isn't worth an event
-	}
-	props := map[string]any{
-		"trigger":     "background",
-		"duration_ms": took.Milliseconds(),
-	}
-	if sub != nil {
-		props["config_count"] = len(sub.Configs)
-	}
-	s.trackError("subscription_refreshed", err, props, false)
-}
-
-func containsString(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
-	}
-	return false
-}
-
-func sameStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

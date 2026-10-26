@@ -23,6 +23,9 @@ builds:
       # analytics disabled instead of failing the template.
       - -X github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.apiKey={{ index .Env "MASIR_POSTHOG_KEY" }}
       - -X github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.host={{ index .Env "MASIR_POSTHOG_HOST" }}
+      # The minisign public key(s) `masir update` checks releases against; empty in CI
+      # snapshots, which then don't check. The release workflow requires it.
+      - -X github.com/narixius/masir-go/libs/masir-daemon/internal/update.publicKeys={{ index .Env "MASIR_UPDATE_PUBKEY" }}
 
 archives:
   - id: masir

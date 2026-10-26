@@ -1,9 +1,9 @@
 package analytics
 
 import (
-	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +11,7 @@ import (
 	"github.com/posthog/posthog-go"
 
 	coreanalytics "github.com/narixius/masir-go/libs/masir-core/analytics"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/userfs"
 )
 
 // Build-time key. It is a public PostHog project token, not a secret API key.
@@ -39,7 +40,8 @@ type Client struct {
 	version   string
 	installID string
 	proxy     Proxy
-	enabled   bool
+	desired   bool // the user's setting: on, once the notice has been shown
+	enabled   bool // the PostHog client is open
 	api       enqueuer
 }
 
@@ -51,24 +53,24 @@ var newPostHog = func(key string, cfg posthog.Config) (enqueuer, error) {
 // New loads the install ID and opens the PostHog client when analytics is enabled.
 // A missing key, DO_NOT_TRACK, MASIR_ANALYTICS=off, or a development build disables it.
 func New(opts Options) *Client {
-	c := &Client{dir: opts.Dir, version: opts.Version, proxy: opts.Proxy}
+	c := &Client{dir: opts.Dir, version: opts.Version, proxy: opts.Proxy, desired: opts.Enabled}
 	if id, err := installID(opts.Dir); err == nil {
 		c.installID = id
 	}
-	if !c.shouldEnable(opts.Enabled) {
-		return c
-	}
-	if err := c.open(); err != nil {
-		return c // stay a no-op; analytics must never break the daemon
-	}
+	c.sync() // stays a no-op on failure; analytics must never break the daemon
 	return c
 }
 
-func (c *Client) shouldEnable(setting bool) bool {
-	if !setting { // the user's explicit opt-out always wins
-		return false
+// sync opens the PostHog client once analytics is wanted and allowed. The daemon can
+// start long before the user's first interactive command, so this runs again whenever
+// an event arrives: nothing is sent until a client has shown the notice.
+func (c *Client) sync() {
+	c.mu.Lock()
+	pending := c.desired && !c.enabled
+	c.mu.Unlock()
+	if pending && c.canEnable() {
+		_ = c.open()
 	}
-	return c.canEnable()
 }
 
 func (c *Client) canEnable() bool {
@@ -88,7 +90,10 @@ func (c *Client) canEnable() bool {
 	if key := projectKey(); key == "" {
 		return false
 	}
-	return c.installID != ""
+	if c.installID == "" {
+		return false
+	}
+	return coreanalytics.NoticeShown(c.dir)
 }
 
 func (c *Client) open() error {
@@ -110,6 +115,11 @@ func (c *Client) open() error {
 		return err
 	}
 	c.mu.Lock()
+	if c.enabled { // another caller opened it first
+		c.mu.Unlock()
+		_ = client.Close()
+		return nil
+	}
 	c.api, c.enabled = client, true
 	c.mu.Unlock()
 	return nil
@@ -117,6 +127,7 @@ func (c *Client) open() error {
 
 // Enabled reports whether events are currently sent.
 func (c *Client) Enabled() bool {
+	c.sync()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.enabled
@@ -125,19 +136,24 @@ func (c *Client) Enabled() bool {
 // SetEnabled turns analytics on or off. Turning it off flushes and closes the client.
 func (c *Client) SetEnabled(on bool) {
 	c.mu.Lock()
-	already := c.enabled
-	c.mu.Unlock()
-	if on == already {
-		return
-	}
+	c.desired = on
 	if on {
-		if c.canEnable() {
-			_ = c.open()
+		// A fresh ID if the last opt-out deleted it.
+		if id, err := installID(c.dir); err == nil {
+			c.installID = id
 		}
+		// Turning it on is as good as having read the notice.
+		_ = userfs.MkdirAll(filepath.Dir(coreanalytics.NoticePath(c.dir)))
+		_ = userfs.Write(coreanalytics.NoticePath(c.dir), []byte("shown\n"))
+	}
+	c.mu.Unlock()
+	if on {
+		c.sync()
 		return
 	}
 	c.FlushAndClose()
-	coreanalytics.ClearSpool(c.dir)
+	c.clearSpool()
+	_ = userfs.Remove(filepath.Join(c.dir, identityFile)) // opting out forgets the install ID
 }
 
 // Track records one anonymous event. Person profiles are explicitly disabled.
@@ -154,6 +170,7 @@ func (c *Client) trackAt(event string, props map[string]any, ts time.Time) {
 	if event == "" {
 		return
 	}
+	c.sync()
 	c.mu.Lock()
 	client, enabled := c.api, c.enabled
 	c.mu.Unlock()
@@ -183,7 +200,7 @@ func (c *Client) TrackError(event string, err error, props map[string]any, unexp
 		props = map[string]any{}
 	}
 	props["error_kind"] = ErrorKind(err)
-	props["error_fingerprint"] = Fingerprint(err.Error())
+	props["error_fingerprint"] = coreanalytics.Fingerprint(err.Error())
 	if code := GRPCCode(err); code != "" {
 		props["grpc_code"] = code
 	}
@@ -191,7 +208,7 @@ func (c *Client) TrackError(event string, err error, props map[string]any, unexp
 		props["error_reason"] = reason
 	}
 	if unexpected {
-		props["error_message"] = SanitizeMessage(err.Error())
+		props["error_message"] = coreanalytics.SanitizeMessage(err.Error())
 	}
 	c.Track(event, props)
 }
@@ -200,31 +217,11 @@ func (c *Client) TrackError(event string, err error, props map[string]any, unexp
 func (c *Client) FlushAndClose() {
 	c.mu.Lock()
 	client := c.api
-	c.api, c.enabled = nil, false
+	c.api, c.enabled, c.desired = nil, false, false
 	c.mu.Unlock()
 	if client != nil {
 		_ = client.Close()
 	}
-}
-
-// DrainSpool sends events the CLI left while the daemon was unreachable. If analytics
-// is off, the spool is deleted instead.
-func (c *Client) DrainSpool(ctx context.Context) {
-	if !c.Enabled() {
-		coreanalytics.ClearSpool(c.dir)
-		return
-	}
-	_ = coreanalytics.DrainSpool(c.dir, func(e coreanalytics.Event) {
-		if ctx.Err() != nil {
-			return
-		}
-		props := e.Properties
-		if props == nil {
-			props = map[string]any{}
-		}
-		props["source"] = "cli_spool"
-		c.TrackAt(e.Event, props, e.CreatedAt)
-	})
 }
 
 func projectKey() string {

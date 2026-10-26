@@ -262,3 +262,54 @@ func TestXrayLogSettings(t *testing.T) {
 		t.Fatalf("error log should be unset without LogDir: %v", c.Log)
 	}
 }
+
+// A root daemon refuses configs that point Xray at local files (xray.CheckNoLocalFiles).
+// What masir composes itself must never trip that, on any OS, or no privileged user could
+// connect.
+func TestComposedConfigNeverAsksForLocalFiles(t *testing.T) {
+	st := testState(t)
+	st.Settings.AllowLAN = true
+	st.Settings.Fallback = store.FallbackProxy
+	if err := st.AddRule("a", []byte(`{"process":["Telegram","/Applications/Spotify.app/"],"domain":["full:google.com"]}`), store.Target{Kind: store.TargetProxy}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddRule("pin", []byte(`{"domain":["full:pinned.test"]}`),
+		store.Target{Kind: store.TargetConfig, SubscriptionID: "s1", ConfigID: "c1", Name: "Pinned"}, false); err != nil {
+		t.Fatal(err)
+	}
+	resolve := func(tg store.Target) (subs.Config, bool) {
+		return subs.Config{ID: "c1", Name: "Pinned", Outbound: json.RawMessage(pinnedOut)}, tg.ConfigID == "c1"
+	}
+	for _, os := range []string{"darwin", "linux", "windows"} {
+		goos = os
+		out, err := Build(Input{State: st, Proxy: true, Tun: true, TunName: "utun9", LogDir: "/var/run/masir/501",
+			Active: json.RawMessage(activeOut), Resolve: resolve})
+		goos = runtime.GOOS
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := xray.CheckNoLocalFiles(out.Config); err != nil {
+			t.Errorf("%s: masir's own config was refused: %v", os, err)
+		}
+	}
+}
+
+func TestDisabledAndSuspendedRulesAreLeftOut(t *testing.T) {
+	st := testState(t)
+	for _, tag := range []string{"keep", "off", "suspended"} {
+		if err := st.AddRule(tag, []byte(`{"domain":["full:`+tag+`.test"]}`), store.Target{Kind: store.TargetDirect}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SetRuleEnabled("off", false, "no longer valid"); err != nil {
+		t.Fatal(err)
+	}
+	out, c := build(t, Input{State: st, Proxy: true, Skip: map[string]bool{"suspended": true}})
+	got := tags(c.Routing.Rules, "ruleTag")
+	if !slices.Contains(got, "keep") || slices.Contains(got, "off") || slices.Contains(got, "suspended") {
+		t.Errorf("rules = %v", got)
+	}
+	if len(out.Rules) != 1 || out.Rules[0].Rule.Tag != "keep" {
+		t.Errorf("resolved = %+v", out.Rules)
+	}
+}

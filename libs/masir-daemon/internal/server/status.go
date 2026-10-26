@@ -69,6 +69,7 @@ func (s *Server) status() *pb.Status {
 			st.FellBackRules++
 		}
 	}
+	st.RuleProblems = toPBProblems(s.ruleProblems, s.suspended)
 	if s.subs != nil {
 		if a, err := s.subs.Active(); err == nil && a.ConfigID != "" {
 			st.ActiveSubscriptionId, st.ActiveConfigId, st.ActiveConfigName = a.SubscriptionID, a.ConfigID, a.Name

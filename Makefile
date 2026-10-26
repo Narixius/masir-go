@@ -2,8 +2,9 @@
 
 ANALYTICS_PKG := github.com/narixius/masir-go/libs/masir-daemon/internal/analytics
 -include .env
-export MASIR_POSTHOG_KEY MASIR_POSTHOG_HOST
-LDFLAGS := -X $(ANALYTICS_PKG).apiKey=$(MASIR_POSTHOG_KEY) -X $(ANALYTICS_PKG).host=$(MASIR_POSTHOG_HOST)
+export MASIR_POSTHOG_KEY MASIR_POSTHOG_HOST MASIR_UPDATE_PUBKEY
+UPDATE_PKG := github.com/narixius/masir-go/libs/masir-daemon/internal/update
+LDFLAGS := -X $(ANALYTICS_PKG).apiKey=$(MASIR_POSTHOG_KEY) -X $(ANALYTICS_PKG).host=$(MASIR_POSTHOG_HOST) -X $(UPDATE_PKG).publicKeys=$(MASIR_UPDATE_PUBKEY)
 
 proto:
 	cd libs/masir-proto && buf generate

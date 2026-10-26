@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/userfs"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 )
 
@@ -40,6 +39,10 @@ type Rule struct {
 	Tag    string          `json:"tag"`
 	Match  json.RawMessage `json:"match"` // an xray field rule minus ruleTag/outboundTag/balancerTag
 	Target Target          `json:"target"`
+	// Disabled keeps the rule saved but out of the running config, e.g. because the geo
+	// data no longer has a category it uses. Only the user turns it back on.
+	Disabled       bool   `json:"disabled,omitempty"`
+	DisabledReason string `json:"disabledReason,omitempty"`
 }
 
 type State struct {
@@ -94,7 +97,33 @@ func (s *State) AlterRule(tag string, match []byte, target *Target) error {
 	if err != nil {
 		return err
 	}
+	r.Disabled, r.DisabledReason = cur.Disabled, cur.DisabledReason
 	s.Rules[i] = r
+	return nil
+}
+
+// SetRuleEnabled turns a rule off or on. Turning it on checks that Xray can build it
+// with the installed data, so a rule that can't run is never switched back on; reason
+// says why it was turned off.
+func (s *State) SetRuleEnabled(tag string, enabled bool, reason string) error {
+	i := s.ruleIndex(tag)
+	if i < 0 {
+		return fmt.Errorf("rule %q: %w", tag, ErrNotFound)
+	}
+	if enabled {
+		check := map[string]json.RawMessage{}
+		if err := json.Unmarshal(s.Rules[i].Match, &check); err != nil {
+			return fmt.Errorf("rule %q: %w", tag, ErrInvalid)
+		}
+		check["outboundTag"] = json.RawMessage(`"direct"`)
+		full, _ := json.Marshal(check)
+		if err := xray.ValidateRule(full); err != nil {
+			return fmt.Errorf("rule %q can't be enabled: %v: %w", tag, err, ErrInvalid)
+		}
+		s.Rules[i].Disabled, s.Rules[i].DisabledReason = false, ""
+		return nil
+	}
+	s.Rules[i].Disabled, s.Rules[i].DisabledReason = true, reason
 	return nil
 }
 
@@ -310,7 +339,7 @@ func Load(dir string) (State, error) {
 		{inboundsFile, &st.Inbounds},
 		{outboundsFile, &st.Outbounds},
 	} {
-		raw, err := os.ReadFile(filepath.Join(dir, f.name))
+		raw, err := userfs.ReadFile(filepath.Join(dir, f.name))
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
@@ -347,7 +376,7 @@ func Save(dir string, st State) error {
 		if err != nil {
 			return err
 		}
-		if err := atomicfile.Write(filepath.Join(dir, f.name), raw); err != nil {
+		if err := userfs.Write(filepath.Join(dir, f.name), raw); err != nil {
 			return err
 		}
 	}

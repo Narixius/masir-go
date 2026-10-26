@@ -3,23 +3,31 @@ package server
 import (
 	"context"
 
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/compose"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
+// ListRoutingRules lists the saved rules in order. A rule only has a resolved outbound
+// once the config it belongs to has been applied, so when that fails (a geo category the
+// installed data lacks, say) the rules are still listed, unresolved, and can be fixed or
+// removed.
 func (s *Server) ListRoutingRules(ctx context.Context, _ *pb.ListRoutingRulesRequest) (*pb.ListRoutingRulesResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]*pb.RoutingRule, len(s.resolved))
-	for i, rr := range s.resolved {
-		out[i] = &pb.RoutingRule{
-			RuleTag:             rr.Rule.Tag,
-			RuleJson:            string(rr.Rule.Match),
-			Target:              rr.Rule.Target.String(),
-			ResolvedOutboundTag: rr.OutboundTag,
-			FellBack:            rr.FellBack,
+	applied := make(map[string]compose.ResolvedRule, len(s.resolved))
+	for _, rr := range s.resolved {
+		applied[rr.Rule.Tag] = rr
+	}
+	out := make([]*pb.RoutingRule, len(s.state.Rules))
+	for i, r := range s.state.Rules {
+		rule := &pb.RoutingRule{RuleTag: r.Tag, RuleJson: string(r.Match), Target: r.Target.String(),
+			Disabled: r.Disabled, DisabledReason: r.DisabledReason}
+		if rr, ok := applied[r.Tag]; ok {
+			rule.ResolvedOutboundTag, rule.FellBack = rr.OutboundTag, rr.FellBack
 		}
+		out[i] = rule
 	}
 	return &pb.ListRoutingRulesResponse{Rules: out}, nil
 }

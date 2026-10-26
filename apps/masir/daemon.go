@@ -26,7 +26,7 @@ func daemonStart(args) error {
 	if err != nil {
 		return err
 	}
-	if transport.Alive(sock) {
+	if daemonAlive() {
 		ui.Info("The masir daemon is already running.")
 		return nil
 	}
@@ -71,8 +71,7 @@ func daemonRestart(a args) error {
 		if err != nil {
 			return err
 		}
-		sock, _ := paths.SocketPath()
-		if err := waitFor(func() bool { return !transport.Alive(sock) }, 10*time.Second, "the daemon didn't stop"); err != nil {
+		if err := waitFor(func() bool { return !daemonAlive() }, 10*time.Second, "the daemon didn't stop"); err != nil {
 			return err
 		}
 	}
@@ -101,6 +100,11 @@ func daemonDisable(args) error {
 	return nil
 }
 
+// daemonCheck answers a running daemon that is about to install this version: stdin
+// holds the user's rules and where the geo data is, stdout gets the rules this version
+// can't build. It changes nothing.
+func daemonCheck(args) error { return masird.CheckRules(os.Stdin, os.Stdout) }
+
 // daemonRun runs the daemon in this process, in the foreground: it's how the background
 // daemon and the root service run (both start this same executable).
 func daemonRun(a args) error {
@@ -113,7 +117,7 @@ func daemonRun(a args) error {
 // for subscriptions, rules or updates don't start proxying. `masir daemon start`
 // starts it normally, following the saved settings.
 func ensureDaemon(sock string, idle bool) error {
-	if transport.Alive(sock) {
+	if daemonAlive() { // a root daemon's socket counts too
 		return nil
 	}
 	bin, err := self()

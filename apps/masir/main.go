@@ -10,12 +10,12 @@ import (
 	"runtime/debug"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/charmbracelet/fang"
 	"github.com/spf13/cobra"
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
+	"github.com/narixius/masir-go/libs/masir-core/analytics"
 )
 
 var version = "dev" // overridden via -ldflags "-X main.version=0.1.0"
@@ -45,8 +45,8 @@ func main() {
 		if r := recover(); r != nil {
 			if !internalRun() { // the daemon reports its own panics
 				captureEvent("cli_panic", map[string]any{
-					"message":           scrub(fmt.Sprint(r)),
-					"stack_fingerprint": fingerprint(string(debug.Stack())),
+					"message":           analytics.SanitizeMessage(fmt.Sprint(r)),
+					"stack_fingerprint": analytics.Fingerprint(string(debug.Stack())),
 				})
 			}
 			panic(r)
@@ -76,7 +76,7 @@ func internalRun() bool {
 		return false
 	}
 	switch os.Args[2] {
-	case "run", "sync-service", "sync-self":
+	case "run", "sync-service", "sync-self", "check":
 		return true
 	}
 	return false
@@ -246,7 +246,7 @@ func rootCmd() *cobra.Command {
 		"masir rules test netflix.com\n" +
 		"# Check a UDP destination\n" +
 		"masir rules test 8.8.8.8 --port 53 --network udp"
-	rules := group("rules", "List and manage routing rules", rulesAdd, rulesList, rulesEdit, rulesTest, rulesRemove)
+	rules := group("rules", "List and manage routing rules", append([]*cobra.Command{rulesAdd, rulesList, rulesEdit, rulesTest, rulesRemove}, rulesCheckCommands()...)...)
 	listByDefault(rules, cmdRulesList, flagSpec{names: []string{"json"}, bool: true, help: "machine-readable output"})
 
 	settingsList := leaf("list", "Show every setting", cmdSettingsList, cobra.NoArgs)
@@ -289,10 +289,12 @@ func rootCmd() *cobra.Command {
 		flagSpec{names: []string{"from"}, help: "The new masir binary"},
 		flagSpec{names: []string{"to"}, help: "The binary to replace; default: this masir"})
 	syncSelf.Hidden = true // masir update runs it with root rights
+	checkRules := leaf("check", "Answer whether the rules on stdin can run (a daemon asks a new version this)", daemonCheck, cobra.NoArgs)
+	checkRules.Hidden = true // the daemon runs it on a downloaded version before installing it
 	daemonGroup := group("daemon", "Manage the masir daemon",
 		leaf("start", "Start the daemon in the background", daemonStart, cobra.NoArgs),
 		leaf("stop", "Stop the daemon", daemonStop, cobra.NoArgs),
-		restart, enable, disable, runDaemon, syncSvc, syncSelf)
+		restart, enable, disable, runDaemon, syncSvc, syncSelf, checkRules)
 
 	targetArg := cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs)
 	targets := []string{"masir\tthe app itself", "geo\tgeosite.dat and geoip.dat"}
@@ -302,7 +304,8 @@ func rootCmd() *cobra.Command {
 		return c
 	}
 	updateGeo := leaf("geo", "Download the latest geosite.dat and geoip.dat from Loyalsoldier/v2ray-rules-dat", cmdUpdateGeo, cobra.NoArgs,
-		flagSpec{names: []string{"force"}, bool: true, help: "download even if the installed files are current"})
+		flagSpec{names: []string{"force"}, bool: true, help: "download even if the installed files are current"},
+		flagSpec{names: []string{"disable-broken-rules"}, bool: true, help: "turn off the rules the new data can't build, and install it anyway"})
 	updateStatus := control("status", "Show update jobs, following one that's running", cmdUpdateStatus)
 	updateCmd := group("update", "Update masir to the latest release, or refresh geo data",
 		updateGeo,
@@ -373,13 +376,9 @@ func runE(fn func(args) error) func(*cobra.Command, []string) error {
 		if !cmd.Hidden && cmd.Name() != "version" && cmd.Name() != "completion" {
 			maybeAnalyticsNotice()
 		}
-		a := argsFrom(cmd, pos)
-		start := time.Now()
-		err := fn(a)
-		if err != nil {
+		if err := fn(argsFrom(cmd, pos)); err != nil {
 			exitStatus = report(err)
 		}
-		captureCLI(cmd, a, err, time.Since(start))
 		return nil
 	}
 }

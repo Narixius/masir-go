@@ -39,6 +39,8 @@ const (
 	DaemonService_AlterRouting_FullMethodName            = "/masir.daemon.v1.DaemonService/AlterRouting"
 	DaemonService_MoveRouting_FullMethodName             = "/masir.daemon.v1.DaemonService/MoveRouting"
 	DaemonService_TestRouting_FullMethodName             = "/masir.daemon.v1.DaemonService/TestRouting"
+	DaemonService_CheckRules_FullMethodName              = "/masir.daemon.v1.DaemonService/CheckRules"
+	DaemonService_SetRuleEnabled_FullMethodName          = "/masir.daemon.v1.DaemonService/SetRuleEnabled"
 	DaemonService_ListInbounds_FullMethodName            = "/masir.daemon.v1.DaemonService/ListInbounds"
 	DaemonService_AddInbound_FullMethodName              = "/masir.daemon.v1.DaemonService/AddInbound"
 	DaemonService_RemoveInbound_FullMethodName           = "/masir.daemon.v1.DaemonService/RemoveInbound"
@@ -97,6 +99,11 @@ type DaemonServiceClient interface {
 	AlterRouting(ctx context.Context, in *AlterRoutingRequest, opts ...grpc.CallOption) (*AlterRoutingResponse, error)
 	MoveRouting(ctx context.Context, in *MoveRoutingRequest, opts ...grpc.CallOption) (*MoveRoutingResponse, error)
 	TestRouting(ctx context.Context, in *TestRoutingRequest, opts ...grpc.CallOption) (*TestRoutingResponse, error)
+	// CheckRules verifies every enabled rule against the installed geo data, the same
+	// check the daemon makes before it starts or restarts Xray. It changes nothing.
+	CheckRules(ctx context.Context, in *CheckRulesRequest, opts ...grpc.CallOption) (*CheckRulesResponse, error)
+	// SetRuleEnabled turns a rule off, or back on once it can be built.
+	SetRuleEnabled(ctx context.Context, in *SetRuleEnabledRequest, opts ...grpc.CallOption) (*SetRuleEnabledResponse, error)
 	// inbounds
 	ListInbounds(ctx context.Context, in *ListInboundsRequest, opts ...grpc.CallOption) (*ListInboundsResponse, error)
 	AddInbound(ctx context.Context, in *AddInboundRequest, opts ...grpc.CallOption) (*AddInboundResponse, error)
@@ -352,6 +359,26 @@ func (c *daemonServiceClient) TestRouting(ctx context.Context, in *TestRoutingRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TestRoutingResponse)
 	err := c.cc.Invoke(ctx, DaemonService_TestRouting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) CheckRules(ctx context.Context, in *CheckRulesRequest, opts ...grpc.CallOption) (*CheckRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckRulesResponse)
+	err := c.cc.Invoke(ctx, DaemonService_CheckRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) SetRuleEnabled(ctx context.Context, in *SetRuleEnabledRequest, opts ...grpc.CallOption) (*SetRuleEnabledResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetRuleEnabledResponse)
+	err := c.cc.Invoke(ctx, DaemonService_SetRuleEnabled_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -648,6 +675,11 @@ type DaemonServiceServer interface {
 	AlterRouting(context.Context, *AlterRoutingRequest) (*AlterRoutingResponse, error)
 	MoveRouting(context.Context, *MoveRoutingRequest) (*MoveRoutingResponse, error)
 	TestRouting(context.Context, *TestRoutingRequest) (*TestRoutingResponse, error)
+	// CheckRules verifies every enabled rule against the installed geo data, the same
+	// check the daemon makes before it starts or restarts Xray. It changes nothing.
+	CheckRules(context.Context, *CheckRulesRequest) (*CheckRulesResponse, error)
+	// SetRuleEnabled turns a rule off, or back on once it can be built.
+	SetRuleEnabled(context.Context, *SetRuleEnabledRequest) (*SetRuleEnabledResponse, error)
 	// inbounds
 	ListInbounds(context.Context, *ListInboundsRequest) (*ListInboundsResponse, error)
 	AddInbound(context.Context, *AddInboundRequest) (*AddInboundResponse, error)
@@ -750,6 +782,12 @@ func (UnimplementedDaemonServiceServer) MoveRouting(context.Context, *MoveRoutin
 }
 func (UnimplementedDaemonServiceServer) TestRouting(context.Context, *TestRoutingRequest) (*TestRoutingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TestRouting not implemented")
+}
+func (UnimplementedDaemonServiceServer) CheckRules(context.Context, *CheckRulesRequest) (*CheckRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckRules not implemented")
+}
+func (UnimplementedDaemonServiceServer) SetRuleEnabled(context.Context, *SetRuleEnabledRequest) (*SetRuleEnabledResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetRuleEnabled not implemented")
 }
 func (UnimplementedDaemonServiceServer) ListInbounds(context.Context, *ListInboundsRequest) (*ListInboundsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListInbounds not implemented")
@@ -1186,6 +1224,42 @@ func _DaemonService_TestRouting_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DaemonServiceServer).TestRouting(ctx, req.(*TestRoutingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_CheckRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).CheckRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_CheckRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).CheckRules(ctx, req.(*CheckRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_SetRuleEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetRuleEnabledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).SetRuleEnabled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_SetRuleEnabled_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).SetRuleEnabled(ctx, req.(*SetRuleEnabledRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1686,6 +1760,14 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TestRouting",
 			Handler:    _DaemonService_TestRouting_Handler,
+		},
+		{
+			MethodName: "CheckRules",
+			Handler:    _DaemonService_CheckRules_Handler,
+		},
+		{
+			MethodName: "SetRuleEnabled",
+			Handler:    _DaemonService_SetRuleEnabled_Handler,
 		},
 		{
 			MethodName: "ListInbounds",

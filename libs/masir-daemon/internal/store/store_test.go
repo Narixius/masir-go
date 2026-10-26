@@ -5,7 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/userfs"
 )
 
 func TestParseTarget(t *testing.T) {
@@ -109,7 +112,7 @@ func TestLoadSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !st.Settings.AllowLAN || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackProxy || st.Settings.XrayLogLevel != "warning" || !st.Settings.Analytics || !st.Settings.AlwaysOnProxy {
+	if st.Settings.AllowLAN || st.Settings.AlwaysOnProxy || st.Settings.ProxyPort != 7890 || st.Settings.Fallback != FallbackProxy || st.Settings.XrayLogLevel != "warning" || !st.Settings.Analytics {
 		t.Fatalf("defaults = %+v", st.Settings)
 	}
 
@@ -134,12 +137,13 @@ func TestLoadSave(t *testing.T) {
 		t.Fatalf("round trip = %+v", back)
 	}
 
-	// A settings file from an older version keeps defaults for what it doesn't mention.
-	if err := os.WriteFile(filepath.Join(dir, settingsFile), []byte(`{"power":true}`), 0o600); err != nil {
+	// A settings file from an older version keeps defaults for what it doesn't mention,
+	// and keeps what it does: an install that saved allowLan on stays shared.
+	if err := os.WriteFile(filepath.Join(dir, settingsFile), []byte(`{"power":true,"allowLan":true}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	old, err := Load(dir)
-	if err != nil || !old.Settings.AllowLAN || old.Settings.ProxyPort != 7890 {
+	if err != nil || !old.Settings.AllowLAN || old.Settings.AlwaysOnProxy || old.Settings.ProxyPort != 7890 {
 		t.Fatalf("partial settings = %+v, %v", old.Settings, err)
 	}
 }
@@ -218,5 +222,75 @@ func TestSubIntervalBounds(t *testing.T) {
 	}
 	if DefaultSettings().SubIntervalMinutes != 720 {
 		t.Error("the default is 12 hours")
+	}
+}
+
+// A privileged daemon reaches the user's directory only through a pinned handle; first
+// runs (no files yet), saves and loads must work the same through it.
+func TestLoadSaveThroughAPinnedDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("windows doesn't pin the directory")
+	}
+	dir := filepath.Join(t.TempDir(), "masir")
+	if err := userfs.Pin(dir, os.Getuid(), os.Getgid()); err != nil {
+		t.Fatal(err)
+	}
+	defer userfs.Unpin()
+
+	st, err := Load(dir)
+	if err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	st.Settings.XrayLogLevel = "info"
+	if err := Save(dir, st); err != nil {
+		t.Fatal(err)
+	}
+	back, err := Load(dir)
+	if err != nil || back.Settings.XrayLogLevel != "info" {
+		t.Fatalf("round trip = %+v, %v", back.Settings, err)
+	}
+}
+
+func TestDisabledRulesStayDisabledUntilTheUserEnablesThem(t *testing.T) {
+	dir := t.TempDir()
+	st := State{Settings: DefaultSettings()}
+	if err := st.AddRule("ssh", []byte(`{"port":"22"}`), Target{Kind: TargetDirect}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetRuleEnabled("ssh", false, "geoip:in-ir is gone"); err != nil {
+		t.Fatal(err)
+	}
+	// Editing a disabled rule doesn't switch it back on.
+	if err := st.AlterRule("ssh", []byte(`{"port":"2222"}`), nil); err != nil {
+		t.Fatal(err)
+	}
+	if r := st.Rules[0]; !r.Disabled || r.DisabledReason != "geoip:in-ir is gone" {
+		t.Fatalf("after an edit: %+v", r)
+	}
+	// It survives a save and a load.
+	if err := Save(dir, st); err != nil {
+		t.Fatal(err)
+	}
+	back, err := Load(dir)
+	if err != nil || !back.Rules[0].Disabled || back.Rules[0].DisabledReason == "" {
+		t.Fatalf("after a reload: %+v, %v", back.Rules, err)
+	}
+	if err := back.SetRuleEnabled("ssh", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if r := back.Rules[0]; r.Disabled || r.DisabledReason != "" {
+		t.Fatalf("after enabling: %+v", r)
+	}
+	if err := back.SetRuleEnabled("nope", false, ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing rule: %v", err)
+	}
+	// An enabled rule has no "disabled" keys in the file.
+	raw, _ := os.ReadFile(filepath.Join(dir, routingFile))
+	if err := Save(dir, back); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = os.ReadFile(filepath.Join(dir, routingFile))
+	if strings.Contains(string(raw), "disabled") {
+		t.Fatalf("routing.json mentions disabled for an enabled rule: %s", raw)
 	}
 }

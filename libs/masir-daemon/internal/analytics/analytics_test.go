@@ -3,7 +3,6 @@ package analytics
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -26,38 +25,6 @@ func (f *fakeSink) Enqueue(m posthog.Message) error {
 
 func (f *fakeSink) Close() error { f.closed = true; return nil }
 
-func TestCountryFromName(t *testing.T) {
-	for name, want := range map[string]string{
-		"🇬🇧 England":        "GB",
-		"Fast 🇩🇪 Germany":   "DE",
-		"🇺🇰 London":         "GB",
-		"no flag here":      "",
-		"🇷🇺 Russia 1":       "RU",
-		"🇹🇲 Turkmenistan 2": "TM",
-	} {
-		if got := CountryFromName(name); got != want {
-			t.Errorf("CountryFromName(%q) = %q, want %q", name, got, want)
-		}
-	}
-}
-
-func TestSanitizeMessage(t *testing.T) {
-	in := `failed https://example.com/path?token=abc at 1.2.3.4 /Users/me/config.json ` +
-		`for user@example.com id 123e4567-e89b-12d3-a456-426614174000 token ` + strings.Repeat("a", 40)
-	got := SanitizeMessage(in)
-	for _, leak := range []string{"example.com", "1.2.3.4", "/Users/me", "user@example.com", "123e4567", strings.Repeat("a", 40)} {
-		if strings.Contains(got, leak) {
-			t.Errorf("SanitizeMessage leaked %q: %q", leak, got)
-		}
-	}
-	if !strings.Contains(got, "<url>") || !strings.Contains(got, "<ip>") {
-		t.Errorf("SanitizeMessage = %q", got)
-	}
-	if len(got) > 201 {
-		t.Errorf("message too long: %d", len(got))
-	}
-}
-
 func TestErrorKind(t *testing.T) {
 	for err, want := range map[string]string{
 		"open /x: permission denied":               "permission_denied",
@@ -75,23 +42,6 @@ func TestErrorKind(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
-
-func TestProviderClassification(t *testing.T) {
-	for raw, want := range map[string]string{
-		"https://1.1.1.1/dns-query":              "cloudflare",
-		"https://dns.google/dns-query":           "google",
-		"https://dns.quad9.net/dns-query":        "quad9",
-		"https://dns.nextdns.io/abc123":          "nextdns",
-		"https://resolver.example.com/dns-query": "custom",
-	} {
-		if got := DoHProvider(raw); got != want {
-			t.Errorf("DoHProvider(%q) = %q, want %q", raw, got, want)
-		}
-	}
-	if got := DNSProviders([]string{"1.1.1.1", "8.8.8.8", "192.0.2.1"}); strings.Join(got, ",") != "cloudflare,custom,google" {
-		t.Errorf("DNSProviders = %v", got)
-	}
-}
 
 func TestInstallIDPersists(t *testing.T) {
 	dir := t.TempDir()
@@ -111,12 +61,12 @@ func TestInstallIDPersists(t *testing.T) {
 func TestTrackSetsPersonless(t *testing.T) {
 	fake := &fakeSink{}
 	c := &Client{installID: "install", enabled: true, api: fake}
-	c.Track("cli_command", map[string]any{"command": "status"})
+	c.Track("cli_panic", map[string]any{"command": "status"})
 	if len(fake.events) != 1 {
 		t.Fatalf("events = %d", len(fake.events))
 	}
 	e := fake.events[0]
-	if e.Event != "cli_command" || e.DistinctId != "install" {
+	if e.Event != "cli_panic" || e.DistinctId != "install" {
 		t.Fatalf("event = %+v", e)
 	}
 	if e.Properties["$process_person_profile"] != false {
@@ -127,7 +77,7 @@ func TestTrackSetsPersonless(t *testing.T) {
 func TestDrainSpool(t *testing.T) {
 	dir := t.TempDir()
 	if err := coreanalytics.WriteSpool(dir, coreanalytics.Event{
-		Event:      "cli_command",
+		Event:      "cli_panic",
 		Properties: map[string]any{"command": "status"},
 		CreatedAt:  time.Now().Add(-time.Minute),
 	}); err != nil {
@@ -136,11 +86,136 @@ func TestDrainSpool(t *testing.T) {
 	fake := &fakeSink{}
 	c := &Client{dir: dir, installID: "install", enabled: true, api: fake}
 	c.DrainSpool(t.Context())
-	if len(fake.events) != 1 || fake.events[0].Event != "cli_command" {
+	if len(fake.events) != 1 || fake.events[0].Event != "cli_panic" {
 		t.Fatalf("events = %+v", fake.events)
 	}
 	entries, _ := os.ReadDir(coreanalytics.SpoolDir(dir))
 	if len(entries) != 0 {
 		t.Fatalf("spool not drained: %d files", len(entries))
+	}
+}
+
+// withFakeSink makes New use fake instead of PostHog, and gives it a project key.
+func withFakeSink(t *testing.T, fake *fakeSink) {
+	t.Helper()
+	old := newPostHog
+	newPostHog = func(string, posthog.Config) (enqueuer, error) { return fake, nil }
+	t.Cleanup(func() { newPostHog = old })
+	t.Setenv("MASIR_POSTHOG_KEY", "phc_test")
+	t.Setenv("MASIR_ANALYTICS", "on")
+	t.Setenv("DO_NOT_TRACK", "")
+}
+
+func TestNothingIsSentBeforeTheNoticeIsShown(t *testing.T) {
+	dir := t.TempDir()
+	fake := &fakeSink{}
+	withFakeSink(t, fake)
+	c := New(Options{Dir: dir, Version: "1.0.0", Enabled: true})
+
+	c.Track("daemon_started", nil)
+	if c.Enabled() || len(fake.events) != 0 {
+		t.Fatalf("sent before the notice: enabled=%v events=%d", c.Enabled(), len(fake.events))
+	}
+
+	if err := coreanalytics.MarkNoticeShown(dir); err != nil {
+		t.Fatal(err)
+	}
+	c.Track("daemon_started", nil)
+	if !c.Enabled() || len(fake.events) != 1 {
+		t.Fatalf("not sent after the notice: enabled=%v events=%d", c.Enabled(), len(fake.events))
+	}
+}
+
+func TestOptOutWinsAndForgetsTheInstallID(t *testing.T) {
+	dir := t.TempDir()
+	fake := &fakeSink{}
+	withFakeSink(t, fake)
+	if err := coreanalytics.MarkNoticeShown(dir); err != nil {
+		t.Fatal(err)
+	}
+	c := New(Options{Dir: dir, Version: "1.0.0", Enabled: true})
+	first := c.installID
+	c.SetEnabled(false)
+	c.Track("cli_panic", nil)
+	if len(fake.events) != 0 {
+		t.Fatalf("tracked after opt-out: %d events", len(fake.events))
+	}
+	if _, err := os.Stat(filepath.Join(dir, identityFile)); !os.IsNotExist(err) {
+		t.Fatalf("install ID kept after opt-out: %v", err)
+	}
+	c.SetEnabled(true)
+	if c.installID == "" || c.installID == first {
+		t.Fatalf("install ID after opting back in = %q, was %q", c.installID, first)
+	}
+}
+
+func spoolEvent(t *testing.T, dir string, e coreanalytics.Event) {
+	t.Helper()
+	if err := coreanalytics.WriteSpool(dir, e); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDrainSpoolDropsWhatTheRPCWouldRefuse(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	spoolEvent(t, dir, coreanalytics.Event{Event: "cli_panic", Properties: map[string]any{"command": "status", "$set": "x", "$ip": "1.2.3.4"}, CreatedAt: now})
+	spoolEvent(t, dir, coreanalytics.Event{Event: "daemon_stopped", Properties: map[string]any{"forged": true}, CreatedAt: now})
+	spoolEvent(t, dir, coreanalytics.Event{Event: "cli_panic", CreatedAt: now.Add(-8 * 24 * time.Hour)})
+
+	fake := &fakeSink{}
+	c := &Client{dir: dir, installID: "install", enabled: true, api: fake}
+	c.DrainSpool(t.Context())
+
+	if len(fake.events) != 1 {
+		t.Fatalf("sent %d events, want only the valid one: %+v", len(fake.events), fake.events)
+	}
+	props := fake.events[0].Properties
+	if props["command"] != "status" || props["source"] != "cli_spool" {
+		t.Errorf("props = %+v", props)
+	}
+	for k := range props {
+		if len(k) > 0 && k[0] == '$' && k != "$process_person_profile" {
+			t.Errorf("reserved property %q got through", k)
+		}
+	}
+	if entries, _ := os.ReadDir(coreanalytics.SpoolDir(dir)); len(entries) != 0 {
+		t.Errorf("%d spool files left", len(entries))
+	}
+}
+
+func TestDrainSpoolSkipsSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	spoolDir := coreanalytics.SpoolDir(dir)
+	if err := os.MkdirAll(spoolDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "other.json")
+	if err := os.WriteFile(target, []byte(`{"event":"cli_panic","properties":{"leak":"yes"},"created_at":"`+time.Now().Format(time.RFC3339)+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(spoolDir, "a.json")); err != nil {
+		t.Skip(err)
+	}
+	fake := &fakeSink{}
+	c := &Client{dir: dir, installID: "install", enabled: true, api: fake}
+	c.DrainSpool(t.Context())
+	if len(fake.events) != 0 {
+		t.Fatalf("followed a symlink out of the spool: %+v", fake.events)
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("the symlink's target was removed: %v", err)
+	}
+}
+
+func TestTurningAnalyticsOnCountsAsConsent(t *testing.T) {
+	dir := t.TempDir()
+	fake := &fakeSink{}
+	withFakeSink(t, fake)
+	c := New(Options{Dir: dir, Version: "1.0.0", Enabled: false})
+	c.SetEnabled(true) // `masir settings set analytics on`, with no notice ever shown
+	c.Track("analytics_enabled", nil)
+	if !c.Enabled() || len(fake.events) != 1 {
+		t.Fatalf("enabled=%v events=%d", c.Enabled(), len(fake.events))
 	}
 }

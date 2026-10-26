@@ -38,6 +38,9 @@ type Input struct {
 	TunName string          // interface name; empty lets Xray pick
 	LogDir  string          // where Xray writes its error log; empty keeps it on stdout
 	Active  json.RawMessage // the selected config's outbound; nil when nothing is selected
+	// Skip names rules left out of this config without being disabled: the daemon
+	// suspends one it can't verify (see server.gate), and brings it back once it can.
+	Skip map[string]bool
 	// Resolve finds a pinned config, following it by name when its ID changed upstream.
 	Resolve func(store.Target) (subs.Config, bool)
 }
@@ -80,6 +83,9 @@ func Build(in Input) (Output, error) {
 	var resolved []ResolvedRule
 	pinned := map[string]bool{}
 	for _, r := range st.Rules {
+		if r.Disabled || in.Skip[r.Tag] {
+			continue
+		}
 		rr := ResolvedRule{Rule: r}
 		switch r.Target.Kind {
 		case store.TargetDirect, store.TargetBlock:

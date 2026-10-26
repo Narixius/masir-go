@@ -18,6 +18,7 @@ require (
 )
 
 require (
+	aead.dev/minisign v0.3.0 // indirect
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251106193318-19329a3e8410 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/andybalholm/brotli v1.2.6 // indirect

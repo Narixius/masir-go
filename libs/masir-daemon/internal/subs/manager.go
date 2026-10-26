@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -22,7 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/userfs"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 )
 
@@ -115,12 +114,10 @@ type Manager struct {
 	mu sync.Mutex // serializes read-modify-write of the files; never held across a fetch
 
 	// Log reports background activity. OnChange runs after a subscription's configs
-	// change or it's removed, so whoever pins configs can rebuild. OnRefresh reports a
-	// background refresh's outcome for analytics. All are optional and set before Run;
-	// OnChange and OnRefresh are called without the manager's lock held.
-	Log       func(level, msg string)
-	OnChange  func(ctx context.Context)
-	OnRefresh func(sub *Subscription, err error, took time.Duration)
+	// change or it's removed, so whoever pins configs can rebuild. Both are optional and
+	// set before Run; OnChange is called without the manager's lock held.
+	Log      func(level, msg string)
+	OnChange func(ctx context.Context)
 
 	now func() time.Time
 }
@@ -128,7 +125,7 @@ type Manager struct {
 // NewManager stores subscriptions in dir and the selection in activePath. A fetch that
 // fails directly is retried through proxyDial, if given.
 func NewManager(dir, activePath string, proxyDial func(ctx context.Context, network, addr string) (net.Conn, error)) (*Manager, error) {
-	if err := atomicfile.MkdirAll(dir); err != nil {
+	if err := userfs.MkdirAll(dir); err != nil {
 		return nil, err
 	}
 	m := &Manager{
@@ -146,7 +143,7 @@ func NewManager(dir, activePath string, proxyDial func(ctx context.Context, netw
 func (m *Manager) List() ([]Subscription, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	entries, err := os.ReadDir(m.dir)
+	entries, err := userfs.ReadDir(m.dir)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +280,7 @@ func (m *Manager) Remove(ctx context.Context, id string) error {
 		return fmt.Errorf("subscription %q: %w", id, ErrNotFound)
 	}
 	m.mu.Lock()
-	err := os.Remove(m.path(id))
+	err := userfs.Remove(m.path(id))
 	m.mu.Unlock()
 	if errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("subscription %q: %w", id, ErrNotFound)
@@ -458,18 +455,11 @@ func (m *Manager) refreshDue(ctx context.Context) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
 			defer cancel()
-			start := time.Now()
 			u, err := m.Update(ctx, s.ID)
 			if err != nil {
 				m.log("warn", fmt.Sprintf("subscription %s: %v", s.Name, err))
-				if m.OnRefresh != nil {
-					m.OnRefresh(&s, err, time.Since(start))
-				}
 			} else {
 				m.log("info", fmt.Sprintf("subscription %s refreshed (%d configs)", u.Name, len(u.Configs)))
-				if m.OnRefresh != nil {
-					m.OnRefresh(u, nil, time.Since(start))
-				}
 			}
 		}(s)
 	}
@@ -580,7 +570,7 @@ func (m *Manager) load(id string) (*Subscription, error) {
 	if !validID(id) {
 		return nil, fmt.Errorf("subscription %q: %w", id, ErrNotFound)
 	}
-	raw, err := os.ReadFile(m.path(id))
+	raw, err := userfs.ReadFile(m.path(id))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("subscription %q: %w", id, ErrNotFound)
 	}
@@ -600,11 +590,11 @@ func (m *Manager) save(s *Subscription) error {
 	if err != nil {
 		return err
 	}
-	return atomicfile.Write(m.path(s.ID), raw)
+	return userfs.Write(m.path(s.ID), raw)
 }
 
 func (m *Manager) readActive() (Active, error) {
-	raw, err := os.ReadFile(m.activePath)
+	raw, err := userfs.ReadFile(m.activePath)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Active{}, nil
 	}
@@ -621,7 +611,7 @@ func (m *Manager) writeActive(a Active) error {
 	if err != nil {
 		return err
 	}
-	return atomicfile.Write(m.activePath, raw)
+	return userfs.Write(m.activePath, raw)
 }
 
 func (m *Manager) path(id string) string { return filepath.Join(m.dir, id+".json") }

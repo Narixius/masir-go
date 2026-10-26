@@ -48,41 +48,6 @@ func WriteSpool(configDir string, e Event) error {
 	return writeAtomic(filepath.Join(dir, name), raw)
 }
 
-// DrainSpool hands every queued event to fn and deletes its file. Files that can't be
-// parsed are removed: they would never become valid.
-func DrainSpool(configDir string, fn func(Event)) error {
-	dir := SpoolDir(configDir)
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	for _, ent := range entries {
-		if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".json") {
-			continue
-		}
-		path := filepath.Join(dir, ent.Name())
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var e Event
-		if json.Unmarshal(raw, &e) == nil && e.Event != "" {
-			fn(e)
-		}
-		_ = os.Remove(path)
-	}
-	return nil
-}
-
-// ClearSpool deletes every queued event, e.g. when analytics is turned off.
-func ClearSpool(configDir string) {
-	_ = os.RemoveAll(SpoolDir(configDir))
-}
-
 func pruneSpool(dir string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

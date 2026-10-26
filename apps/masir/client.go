@@ -24,34 +24,65 @@ import (
 
 var cachedClient pb.DaemonServiceClient
 
+// liveSocket is where a daemon answers right now: a root daemon's socket if there is
+// one, otherwise the socket of a daemon running as this user. Either way the CLI needs
+// no privileges to reach it.
+func liveSocket() (string, bool) {
+	socks, err := paths.Sockets()
+	if err != nil {
+		return "", false
+	}
+	for _, s := range socks {
+		if transport.Alive(s) {
+			return s, true
+		}
+	}
+	return "", false
+}
+
+// daemonAlive reports whether any daemon answers.
+func daemonAlive() bool {
+	_, ok := liveSocket()
+	return ok
+}
+
 // daemon returns a client, starting a background daemon first if none answers.
 func daemon() (pb.DaemonServiceClient, error) {
 	if cachedClient != nil {
 		return cachedClient, nil
 	}
-	sock, err := paths.SocketPath()
+	sock, err := paths.SocketPath() // where a daemon starts, if none answers
 	if err != nil {
 		return nil, err
 	}
 	if err := ensureDaemon(sock, true); err != nil { // idle: only `masir connect` starts Xray
 		return nil, err
 	}
-	return dial(sock)
+	return dial()
 }
 
 // runningDaemon returns a client only if a daemon already answers; it never starts one.
 func runningDaemon() (pb.DaemonServiceClient, bool) {
-	sock, err := paths.SocketPath()
-	if err != nil || !transport.Alive(sock) {
+	if !daemonAlive() {
 		return nil, false
 	}
-	c, err := dial(sock)
+	c, err := dial()
 	return c, err == nil
 }
 
-func dial(sock string) (pb.DaemonServiceClient, error) {
+// dial connects to whichever daemon answers. The socket is looked up again on every
+// (re)connect: a root daemon taking over from this user's daemon listens somewhere else.
+func dial() (pb.DaemonServiceClient, error) {
+	userSock, err := paths.SocketPath()
+	if err != nil {
+		return nil, err
+	}
 	conn, err := grpc.NewClient("passthrough:///masir-daemon",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			sock, ok := liveSocket()
+			if !ok {
+				sock = userSock
+			}
 			return transport.DialContext(ctx, sock)
 		}),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -91,7 +122,22 @@ func call[T any](fn func(ctx context.Context, c pb.DaemonServiceClient) (T, erro
 	}
 	ctx, cancel := rpc()
 	defer cancel()
-	return fn(ctx, c)
+	res, err := fn(ctx, c)
+	if err == nil || inRulesPrompt || errorReason(err) != "RULES_BROKEN" {
+		return res, err
+	}
+	// The daemon won't start or change Xray while rules can't be built. It has said what
+	// is wrong; the user decides, and the call that was refused is tried once more.
+	retry, perr := brokenRulesFlow()
+	if perr != nil {
+		return zero, perr
+	}
+	if !retry {
+		return zero, fail("%s. %s", strings.TrimSuffix(message(err), "."), brokenRulesHint)
+	}
+	ctx2, cancel2 := rpc()
+	defer cancel2()
+	return fn(ctx2, c)
 }
 
 // errorReason is the masir ErrorInfo reason on a status error, e.g. "ROOT_REQUIRED".

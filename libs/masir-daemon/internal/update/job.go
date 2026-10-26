@@ -150,7 +150,7 @@ func Finished(s pb.UpdateState) bool {
 	switch s {
 	case pb.UpdateState_UPDATE_STATE_DONE, pb.UpdateState_UPDATE_STATE_UP_TO_DATE,
 		pb.UpdateState_UPDATE_STATE_FAILED, pb.UpdateState_UPDATE_STATE_STOPPED,
-		pb.UpdateState_UPDATE_STATE_RESTARTING:
+		pb.UpdateState_UPDATE_STATE_RESTARTING, pb.UpdateState_UPDATE_STATE_BLOCKED:
 		return true
 	}
 	return false
@@ -224,6 +224,14 @@ func (p *Reporter) State(s pb.UpdateState) { p.update(func(j *pb.UpdateJob) { j.
 func (p *Reporter) Version(v string)       { p.update(func(j *pb.UpdateJob) { j.Version = v }) }
 func (p *Reporter) File(name string)       { p.update(func(j *pb.UpdateJob) { j.File = name }) }
 func (p *Reporter) StagedDir(d string)     { p.update(func(j *pb.UpdateJob) { j.StagedDir = d }) }
+
+// Blocked ends the job without installing: the new data can't build these enabled rules.
+func (p *Reporter) Blocked(problems []*pb.RuleProblem) {
+	p.update(func(j *pb.UpdateJob) {
+		j.BlockedRules = problems
+		j.State = pb.UpdateState_UPDATE_STATE_BLOCKED
+	})
+}
 
 // Bytes sets the progress: done so far (including partial files from before a pause)
 // and the total.

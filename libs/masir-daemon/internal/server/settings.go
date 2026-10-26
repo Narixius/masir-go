@@ -20,35 +20,6 @@ func (s *Server) GetSettings(ctx context.Context, _ *pb.GetSettingsRequest) (*pb
 
 func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsRequest) (*pb.UpdateSettingsResponse, error) {
 	var out store.Settings
-	var changed []string
-	add := func(name string) { changed = append(changed, name) }
-	if req.AlwaysOnProxy != nil {
-		add("alwaysOnProxy")
-	}
-	if req.AllowLan != nil {
-		add("allowLan")
-	}
-	if req.ProxyPort != nil {
-		add("proxyPort")
-	}
-	if req.DohDns != nil {
-		add("dohDns")
-	}
-	if req.DnsServers != nil {
-		add("dnsServers")
-	}
-	if req.TunDns != nil {
-		add("tunDns")
-	}
-	if req.TunGateway != nil {
-		add("tunGateway")
-	}
-	if req.SubIntervalMinutes != nil {
-		add("subIntervalMinutes")
-	}
-	if req.XrayLogLevel != nil {
-		add("xrayLogLevel")
-	}
 	// Switching always-on proxy on means "proxy now", idle or not.
 	wasIdle := req.AlwaysOnProxy != nil && *req.AlwaysOnProxy && s.idle.Swap(false)
 	err := s.change(ctx, "settings updated", func(st *store.State) error {
@@ -92,9 +63,6 @@ func (s *Server) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsReque
 		}
 		return nil, err
 	}
-	if len(changed) > 0 {
-		s.track("settings_changed", map[string]any{"keys": changed})
-	}
 	if req.Analytics != nil && s.analytics != nil {
 		if *req.Analytics {
 			s.analytics.SetEnabled(true)
@@ -128,7 +96,7 @@ func (s *Server) SetPower(ctx context.Context, req *pb.SetPowerRequest) (*pb.Set
 	s.mu.Lock()
 	tun := s.state.Settings.Tun
 	s.mu.Unlock()
-	s.trackWithActive("power_changed", map[string]any{
+	s.track("power_changed", map[string]any{
 		"on":  req.On,
 		"tun": tun,
 	})
@@ -157,10 +125,9 @@ func (s *Server) SetFallback(ctx context.Context, req *pb.SetFallbackRequest) (*
 		return nil
 	})
 	if err != nil {
-		s.trackError("routing_mode_changed_failed", err, map[string]any{"mode": string(f)}, false)
+		s.trackError("routing_mode_changed_failed", err, nil, false)
 		return nil, err
 	}
-	s.track("routing_mode_changed", map[string]any{"mode": string(f)})
 	return &pb.SetFallbackResponse{}, nil
 }
 
@@ -184,7 +151,7 @@ func (s *Server) SetTunEnabled(ctx context.Context, req *pb.SetTunEnabledRequest
 		return nil, err
 	}
 	if prevTun != req.Enabled {
-		s.trackWithActive("tun_changed", map[string]any{"enabled": req.Enabled})
+		s.track("tun_changed", map[string]any{"enabled": req.Enabled})
 	}
 	return &pb.SetTunEnabledResponse{}, nil
 }

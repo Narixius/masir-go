@@ -16,8 +16,8 @@ Masir Daemon 0.1.10 ● Active (privileged, service)
 Xray Core v26.10.21 ● Active
 ├─ Mode:             TUN (system-wide routing)
 ├─ Routing Fallback: Proxy (unmatched traffic goes through the active proxy)
-├─ Always-on Proxy:  ON (the proxy stays up while masir is off)
-├─ Proxy Port:       0.0.0.0:7890 (LAN allowed)
+├─ Always-on Proxy:  OFF
+├─ Proxy Port:       127.0.0.1:7890
 ├─ DoH DNS:          https://1.1.1.1/dns-query
 ├─ DNS Servers:      1.1.1.1, 8.8.8.8
 ├─ Xray Log:         info
@@ -43,7 +43,7 @@ Connectivity
 
 - **Live latency.** The server picker tests what's on screen as you scroll. `l` retests one, `a` retests all, or let `masir use --fastest` pick.
 
-- **TUN or proxy, your choice.** TUN routes the whole system without touching your DNS settings (app-based routings work in TUN mode only); proxy mode gives you Mixed protocol (SOCKS5 + HTTP) on a port, shareable over your LAN.
+- **TUN or proxy, your choice.** TUN routes the whole system without touching your DNS settings (app-based routings work in TUN mode only); proxy mode gives you Mixed protocol (SOCKS5 + HTTP) on a port, which you can share over your LAN if you choose to.
 
 - **Keeps itself current.** Receive the verified latest updates of the Masir and GEO files using `masir update` and `masir update geo`.
 
@@ -186,7 +186,7 @@ Matchers combine within a rule (all must match), and each accepts a comma-separa
 | `--source` | the sending device, when sharing over LAN | `192.168.1.20` |
 | `--source-port` | the sending port | `5000-6000` |
 
-Manage them with `masir rules` (list), `masir rules edit <name>` (an interactive editor, or flags such as `--rename`, `--append`, `--unset`), `masir rules rm`, and `masir rules test <domain|ip>` to see exactly where a destination would go right now.
+Manage rules with `masir rules` (list), `masir rules edit <name>` (an interactive editor, or flags such as `--rename`, `--append`, `--unset`), `masir rules rm`, and `masir rules test <domain|ip>` to see exactly where a destination would go right now. `masir rules disable <name>` and `masir rules enable <name>` turn a rule off and on without removing it.
 
 Geo data comes from [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), refreshed daily upstream: `geosite:` is the v2fly domain list with hundreds of thousands of extra domains (a far larger ad and tracker list, for one), and `geoip:` covers every country by its two-letter code (`ir`, `de`, `us`, ...) plus lists such as `private`, `google`, `telegram`, `netflix`, `twitter` and `cloudflare`.
 
@@ -204,15 +204,17 @@ masir settings reset mixedPort
 |---|---|---|
 | `routingMode` | `proxy` | Where traffic no rule matches goes: `proxy` or `direct` |
 | `mixedPort` | `7890` | The local proxy port, SOCKS5 and HTTP on one port |
-| `allowLan` | `on` | Let other devices on your network use the proxy |
-| `alwaysOnProxy` | `on` | Keep the proxy port up even while masir is off |
+| `allowLan` | `off` | Let other devices on your network use the proxy |
+| `alwaysOnProxy` | `off` | Keep the proxy port up even while masir is off |
 | `dohDns` | `https://1.1.1.1/dns-query` | DNS over HTTPS, reached through the proxy |
 | `dnsServers` | `1.1.1.1, 8.8.8.8` | Plain DNS, sent direct, used to resolve proxy server names |
 | `tunDns` | empty | DNS servers the TUN interface advertises; empty uses `dnsServers` |
 | `gateway` | `10.10.20.1/24` | IPv4 range for the TUN interface |
 | `subInterval` | `720` | Minutes between background subscription refreshes (5 to 43200) |
 | `logLevel` | `warning` | Xray's own log level: `debug`, `info`, `warning`, `error`, or `none`; `masir logs` shows these |
-| `analytics` | `on` | Send anonymous usage and error events to PostHog |
+| `analytics` | `on` | Send anonymous usage and error events to PostHog, once the first-run notice has been shown |
+
+**The proxy has no authentication.** The mixed inbound (SOCKS5 + HTTP) on `mixedPort` is `noauth`: anyone who can reach the port can use your proxy. By default it listens on `127.0.0.1` only. With `allowLan on` it listens on every interface, so every device on your network can use it; keep it off on networks you don't trust.
 
 
 ## Commands
@@ -225,10 +227,10 @@ masir settings reset mixedPort
 | `masir use [id] [--fastest]` | Switch the active server |
 | `masir mode [proxy\|direct]` | Where traffic no rule matches goes |
 | `masir sub` | List subscriptions with traffic and expiry; `add`, `update`, `rm`, `list --nodes` |
-| `masir rules` | List rules; `add`, `edit`, `rm`, `test` |
+| `masir rules` | List rules; `add`, `edit`, `rm`, `test`, `check`, `enable`, `disable` |
 | `masir settings` | An interactive settings menu; `list`, `get`, `set`, `reset` |
 | `masir update [--check]` | Install the latest masir release |
-| `masir update geo` | Refresh geosite.dat and geoip.dat |
+| `masir update geo [--disable-broken-rules]` | Refresh geosite.dat and geoip.dat, unless that would break a rule |
 | `masir update pause\|resume\|stop\|status` | Control an update in progress |
 | `masir logs [--no-follow] [--level debug\|info\|warn\|error]` | Show recent daemon and Xray activity, then follow it |
 | `masir get-config` | Print the exact Xray config masir runs |
@@ -261,39 +263,9 @@ Use `on` if your Windows terminal shows reversed or disconnected Persian text. U
 `off` if your terminal already renders RTL correctly and Masir’s extra shaping is
 reversing it.
 
-## Privacy and analytics
+## Privacy
 
-Masir sends anonymous usage and error events to PostHog (EU region) to make the defaults and failure handling better. It is on by default, and a one-time notice appears on first interactive use. Turn it off with:
-
-```sh
-masir settings set analytics off
-```
-
-`DO_NOT_TRACK=1` and `MASIR_ANALYTICS=off` also disable it. Development builds don't send unless `MASIR_ANALYTICS=on` and a key is configured.
-
-**What is sent**
-
-- Anonymous install ID (random, not a machine or account ID)
-- Command names, success/failure, duration, and flag names — never values like domains, URLs or rule contents
-- Error kinds, fingerprints, and scrubbed messages for panics/unexpected daemon errors
-- App, Xray, OS, architecture, and Go versions (OS/version/library context is added by PostHog's Go SDK)
-- Local timezone and UTC offset (for regional grouping; no IP geolocation)
-- Active config country parsed from its flag emoji, plus protocol/transport/security as plain.
-- Safe settings: routing fallback, TUN/LAN/always-on, proxy port and whether it's default, Xray log level, subscription interval, DNS/DoH provider categories and counts
-- Counts of rules, inbounds, outbounds, subscriptions, and configs
-- Update, subscription refresh (user actions and background failures), Xray start/stop/apply-failure, and daemon start/stop events
-
-**What is never sent**
-
-- Subscription URLs or names
-- Config names, server addresses, ports, UUIDs, passwords
-- Rule domains, IPs, process names or app paths
-- Raw DNS/DoH addresses or URLs
-- Local file paths, usernames, hostnames, or raw logs
-- Xray warning/log text (warnings stay in `masir logs` and `xray-error.log`)
-- IP-based geolocation (PostHog GeoIP is disabled)
-
-Analytics tries a direct connection first and falls back to the running proxy when the direct route is blocked. Events captured while the daemon is unavailable wait in a local spool and are sent on the next daemon start. Person profiles are deliberately disabled (`$process_person_profile: false`), so events are anonymous and don't create PostHog person profiles.
+Masir collects anonymous usage statistics and error reports to help improve it. Nothing is collected before a one-time notice on your first run. To turn it off, run `masir settings set analytics off` (or set `DO_NOT_TRACK=1`). The details are in [docs/telemetry.md](docs/telemetry.md).
 
 ## Scripting and the API
 
@@ -305,15 +277,25 @@ masir rules --json
 masir use --fastest && masir connect --proxy
 ```
 
-The daemon's gRPC API (`masir.daemon.v1.DaemonService`, defined in [`libs/masir-proto`](libs/masir-proto/proto/masir/daemon/v1/daemon.proto)) listens on `daemon.sock` in the config folder, with server reflection enabled, so tools like [grpcurl](https://github.com/fullstorydev/grpcurl) work out of the box:
+The daemon's gRPC API (`masir.daemon.v1.DaemonService`, defined in [`libs/masir-proto`](libs/masir-proto/proto/masir/daemon/v1/daemon.proto)) listens on a Unix socket (a named pipe on Windows), with server reflection enabled, so tools like [grpcurl](https://github.com/fullstorydev/grpcurl) work out of the box. Where the socket is depends on how the daemon runs, and neither needs root to connect:
+
+- A daemon running as you (proxy mode, or before you've asked for TUN) listens on `daemon.sock` in the config folder.
+- The root daemon (the system service, or a TUN session) listens on `/var/run/masir/<your uid>.sock`.
+
+Only you and root may connect; the kernel checks who is on the other end.
 
 ```sh
-SOCK="unix://$HOME/Library/Application Support/masir/daemon.sock"
+SOCK="unix:///var/run/masir/$(id -u).sock"                              # root daemon
+SOCK="unix://$HOME/Library/Application Support/masir/daemon.sock"      # daemon running as you (macOS)
 grpcurl -plaintext "$SOCK" list
 grpcurl -plaintext "$SOCK" masir.daemon.v1.DaemonService/GetStatus
 ```
 
 The API covers everything the CLI does and more: custom inbounds and outbounds, live status streaming, log streaming, per-server latency tests, and update jobs with progress, pause, resume and stop.
+
+## Security
+
+Masir's daemon can run as root (for TUN), so it is built not to be a way for other software on your machine to become root. [SECURITY.md](SECURITY.md) explains what it protects, what it doesn't, and how to report a problem.
 
 ## Platform support
 

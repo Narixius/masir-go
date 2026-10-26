@@ -3,14 +3,16 @@ package server
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"path/filepath"
 	"strconv"
 
-	"github.com/narixius/masir-go/libs/masir-daemon/internal/atomicfile"
+	"github.com/narixius/masir-go/libs/masir-core/paths"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/compose"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/subs"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/userfs"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/xray"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -25,11 +27,11 @@ func (s *Server) change(ctx context.Context, msg string, fn func(*store.State) e
 	if err := fn(&next); err != nil {
 		return toStatus(err)
 	}
-	if err := s.applyLocked(ctx, next); err != nil {
+	if err := s.applyLocked(ctx, next, true); err != nil {
 		return err
 	}
 	if err := store.Save(s.dir, next); err != nil {
-		_ = s.applyLocked(context.WithoutCancel(ctx), s.state) // keep what runs and what's saved in agreement
+		_ = s.applyLocked(context.WithoutCancel(ctx), s.state, false) // keep what runs and what's saved in agreement
 		return status.Error(codes.Internal, "save state: "+err.Error())
 	}
 	s.state = next
@@ -42,18 +44,26 @@ func (s *Server) change(ctx context.Context, msg string, fn func(*store.State) e
 // applyLocked composes st with the current selection and brings Xray to it:
 // running when power or always-on proxy is on (and the daemon isn't idle), stopped
 // otherwise. Expects s.mu held.
-func (s *Server) applyLocked(ctx context.Context, st store.State) error {
+//
+// attended says a caller is waiting on the result and can be asked what to do about rules
+// that can't be built (see gate); background applies pass false.
+func (s *Server) applyLocked(ctx context.Context, st store.State, attended bool) error {
 	active, err := s.subs.Active()
 	if err != nil {
 		return status.Error(codes.Internal, "read selection: "+err.Error())
 	}
 	runs := st.Settings.XrayRuns() && !s.idle.Load()
 	tun := runs && st.Settings.Power && st.Settings.Tun && s.id.Privileged
+	skip, err := s.gate(st, len(active.Outbound) > 0, runs, attended)
+	if err != nil {
+		return err
+	}
 	in := compose.Input{
+		Skip:    skip,
 		State:   st,
 		Proxy:   runs,
 		Tun:     tun,
-		LogDir:  s.dir,
+		LogDir:  s.logDir(),
 		Active:  active.Outbound,
 		Resolve: s.resolveTarget,
 	}
@@ -63,6 +73,13 @@ func (s *Server) applyLocked(ctx context.Context, st store.State) error {
 	out, err := compose.Build(in)
 	if err != nil {
 		return status.Error(codes.Internal, "compose: "+err.Error())
+	}
+	if s.id.Privileged {
+		// Root runs configs it didn't write (a subscription's servers, custom inbounds):
+		// none may point Xray at a file.
+		if err := xray.CheckNoLocalFiles(out.Config); err != nil {
+			return status.Error(codes.FailedPrecondition, err.Error())
+		}
 	}
 	p, err := xray.ParseProfile(out.Config)
 	if err != nil {
@@ -90,9 +107,7 @@ func (s *Server) applyLocked(ctx context.Context, st store.State) error {
 		if tun {
 			mode = "tun"
 		}
-		props := map[string]any{"mode": mode}
-		addActiveProps(props, activeInfoFrom(active))
-		s.trackLocked(st, "xray_started", props)
+		s.trackLocked(st, "xray_started", map[string]any{"mode": mode})
 	} else if wasRunning && !runs {
 		s.trackLocked(st, "xray_stopped", map[string]any{"reason": "state"})
 	}
@@ -108,7 +123,7 @@ func (s *Server) applyLocked(ctx context.Context, st store.State) error {
 	// xray.json is output: what runs (or would), for people to read. Never read back.
 	if raw, err := p.Marshal(); err == nil {
 		s.config = raw
-		if err := atomicfile.Write(filepath.Join(s.dir, "xray.json"), raw); err != nil {
+		if err := userfs.Write(filepath.Join(s.dir, "xray.json"), raw); err != nil {
 			s.Log("warn", "write xray.json: "+err.Error())
 		}
 	}
@@ -119,7 +134,7 @@ func (s *Server) applyLocked(ctx context.Context, st store.State) error {
 // subscription refreshes, retries). A failure is kept in lastErr for the status and the
 // retry loop, since nothing else would report it. Expects s.mu held.
 func (s *Server) reconcileLocked(ctx context.Context) error {
-	err := s.applyLocked(ctx, s.state)
+	err := s.applyLocked(ctx, s.state, false)
 	prev := s.lastErr
 	s.lastErr = ""
 	if err != nil {
@@ -169,4 +184,23 @@ func toStatus(err error) error {
 	default:
 		return status.Error(codes.Internal, err.Error())
 	}
+}
+
+// logDir is where Xray writes its error log. A root daemon keeps it where only root can
+// write: Xray opens the file by path, and in the user's directory a link could point it
+// at any file. Without a safe place the log stays on stdout.
+func (s *Server) logDir() string {
+	if !s.id.Privileged {
+		return s.dir
+	}
+	dir := paths.PrivilegedLogDir(s.id.UID)
+	if dir == "" { // Windows keeps it with the daemon's other files
+		return s.dir
+	}
+	// The run directory is shared with the socket, which the user must reach: 0755.
+	if paths.EnsureRootDir(paths.PrivilegedRunDir, 0, 0o755) != nil || paths.EnsureRootDir(dir, 0, 0o700) != nil {
+		log.Printf("xray's error log is off: %s isn't a directory only root controls", dir)
+		return ""
+	}
+	return dir
 }

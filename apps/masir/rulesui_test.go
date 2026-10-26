@@ -1,0 +1,132 @@
+package main
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
+)
+
+// rulesDaemon answers the few calls the rules prompt makes; any other call panics on the
+// nil embedded client, which is how a test notices an unexpected one.
+type rulesDaemon struct {
+	pb.DaemonServiceClient
+	powerErrs  []error // returned by successive SetPower calls; then success
+	powerCalls int
+	problems   []*pb.RuleProblem
+	disabled   []*pb.SetRuleEnabledRequest
+	checks     int
+}
+
+func (f *rulesDaemon) SetPower(context.Context, *pb.SetPowerRequest, ...grpc.CallOption) (*pb.SetPowerResponse, error) {
+	f.powerCalls++
+	if len(f.powerErrs) > 0 {
+		err := f.powerErrs[0]
+		f.powerErrs = f.powerErrs[1:]
+		return nil, err
+	}
+	return &pb.SetPowerResponse{}, nil
+}
+
+func (f *rulesDaemon) CheckRules(context.Context, *pb.CheckRulesRequest, ...grpc.CallOption) (*pb.CheckRulesResponse, error) {
+	f.checks++
+	return &pb.CheckRulesResponse{Problems: f.problems}, nil
+}
+
+func (f *rulesDaemon) SetRuleEnabled(_ context.Context, in *pb.SetRuleEnabledRequest, _ ...grpc.CallOption) (*pb.SetRuleEnabledResponse, error) {
+	f.disabled = append(f.disabled, in)
+	return &pb.SetRuleEnabledResponse{}, nil
+}
+
+func useFake(t *testing.T, f *rulesDaemon) {
+	t.Helper()
+	old := cachedClient
+	cachedClient = f
+	t.Cleanup(func() { cachedClient = old; inRulesPrompt = false })
+}
+
+func brokenErr(t *testing.T) error {
+	t.Helper()
+	st, err := status.New(codes.FailedPrecondition, "1 rule(s) can't be built with the installed geo data: iran-direct").
+		WithDetails(&errdetails.ErrorInfo{Domain: "masir", Reason: "RULES_BROKEN"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st.Err()
+}
+
+var iranProblem = &pb.RuleProblem{RuleTag: "iran-direct", Missing: []string{"geoip:in-ir"}, Message: "geoip:in-ir isn't in geoip.dat (similar: ir)"}
+
+func setPower(ctx context.Context, c pb.DaemonServiceClient) (*pb.SetPowerResponse, error) {
+	return c.SetPower(ctx, &pb.SetPowerRequest{On: true})
+}
+
+func TestRefusalWithoutATerminalSaysWhatToDoAndChangesNothing(t *testing.T) {
+	f := &rulesDaemon{powerErrs: []error{brokenErr(t)}, problems: []*pb.RuleProblem{iranProblem}}
+	useFake(t, f)
+	_, err := call(setPower)
+	if err == nil || !strings.Contains(err.Error(), "iran-direct") || !strings.Contains(err.Error(), "masir rules disable") {
+		t.Fatalf("err = %v", err)
+	}
+	if f.powerCalls != 1 || len(f.disabled) != 0 {
+		t.Errorf("power calls = %d, rules turned off = %v: with no terminal nothing is decided for the user", f.powerCalls, f.disabled)
+	}
+}
+
+func TestRefusalIsRetriedOnceTheRulesCanRunAgain(t *testing.T) {
+	f := &rulesDaemon{powerErrs: []error{brokenErr(t)}} // the daemon's own check now finds nothing
+	useFake(t, f)
+	if _, err := call(setPower); err != nil {
+		t.Fatal(err)
+	}
+	if f.powerCalls != 2 || f.checks != 1 {
+		t.Errorf("power calls = %d, checks = %d", f.powerCalls, f.checks)
+	}
+}
+
+func TestOtherErrorsAreNotTouched(t *testing.T) {
+	other := status.Error(codes.Internal, "boom")
+	f := &rulesDaemon{powerErrs: []error{other}, problems: []*pb.RuleProblem{iranProblem}}
+	useFake(t, f)
+	if _, err := call(setPower); err != other {
+		t.Fatalf("err = %v", err)
+	}
+	if f.checks != 0 || f.powerCalls != 1 {
+		t.Errorf("checks = %d, power calls = %d", f.checks, f.powerCalls)
+	}
+}
+
+func TestTurnOffNamesEveryRuleAndSaysWhy(t *testing.T) {
+	f := &rulesDaemon{}
+	useFake(t, f)
+	err := turnOff([]*pb.RuleProblem{iranProblem, {RuleTag: "ai", Missing: []string{"geosite:category-ai-cn"}}})
+	if err != nil || len(f.disabled) != 1 {
+		t.Fatalf("err = %v, calls = %v", err, f.disabled)
+	}
+	req := f.disabled[0]
+	if req.Enabled || strings.Join(req.RuleTags, ",") != "iran-direct,ai" ||
+		!strings.Contains(req.Reason, "geoip:in-ir") || !strings.Contains(req.Reason, "geosite:category-ai-cn") {
+		t.Fatalf("request = %+v", req)
+	}
+}
+
+func TestProblemText(t *testing.T) {
+	got := problemText([]*pb.RuleProblem{iranProblem, {RuleTag: "ssh", Message: "x", Suspended: true}})
+	want := "iran-direct: geoip:in-ir isn't in geoip.dat (similar: ir)\nssh: x (masir is running without it for now)"
+	if got != want {
+		t.Fatalf("problemText =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestBlockedGeoUpdateWithoutATerminalFailsAndNamesTheFlag(t *testing.T) {
+	job := &pb.UpdateJob{State: pb.UpdateState_UPDATE_STATE_BLOCKED, BlockedRules: []*pb.RuleProblem{iranProblem}}
+	if err := blockedGeoUpdate(job); err != errReported {
+		t.Fatalf("err = %v, want errReported (a non-zero exit)", err)
+	}
+}

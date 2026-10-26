@@ -19,14 +19,47 @@ jobs:
         with:
           go-version-file: go.work
           cache-dependency-path: "**/go.sum"
+      - name: Require the update signing setup
+        env:
+          PUBKEY: ${{ vars.MASIR_UPDATE_PUBKEY }}
+          SECRET: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          if [ -z "$PUBKEY" ] || [ -z "$SECRET" ]; then
+            echo "::error::set the MASIR_UPDATE_PUBKEY variable (minisign public key) and the MINISIGN_SECRET_KEY secret (its secret key) first"
+            exit 1
+          fi
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The minisign public key(s) the built masir checks releases against.
+          MASIR_UPDATE_PUBKEY: ${{ vars.MASIR_UPDATE_PUBKEY }}
           # Public PostHog project token and host, stored as repository variables.
           # GoReleaser reads them from .Env.MASIR_POSTHOG_KEY / .Env.MASIR_POSTHOG_HOST
           # in .goreleaser.yaml.
           MASIR_POSTHOG_KEY: ${{ vars.MASIR_POSTHOG_KEY }}
           MASIR_POSTHOG_HOST: ${{ vars.MASIR_POSTHOG_HOST }}
+      - name: Sign the checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MASIR_UPDATE_PUBKEY: ${{ vars.MASIR_UPDATE_PUBKEY }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/minisign.key"
+          cd build/release
+          minisign -S -s "$RUNNER_TEMP/minisign.key" -m checksums.txt -x checksums.txt.minisig
+          rm -f "$RUNNER_TEMP/minisign.key"
+          # A signature the configured public key doesn't accept must not be published.
+          # (Any one of several comma-separated keys will do.)
+          ok=
+          for key in $(printf '%s' "$MASIR_UPDATE_PUBKEY" | tr ',' ' '); do
+            if minisign -V -P "$key" -m checksums.txt -x checksums.txt.minisig; then ok=1; fi
+          done
+          [ -n "$ok" ] || { echo "::error::the signature doesn't verify with MASIR_UPDATE_PUBKEY"; exit 1; }
+          # Until this lands, `masir update` refuses the release ("isn't signed") and
+          # tries again later; it never installs an unsigned one.
+          gh release upload "$GITHUB_REF_NAME" checksums.txt.minisig

@@ -8,6 +8,9 @@ import (
 )
 
 var (
+	// quotedRe catches what Go's %q wraps around user-chosen names (rules, configs,
+	// subscriptions) and file names, which no other pattern can recognise.
+	quotedRe = regexp.MustCompile("\"[^\"]*\"|`[^`]*`")
 	urlRe    = regexp.MustCompile(`(?i)\bhttps?://[^\s"'<>]+`)
 	ipv4Re   = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	ipv6Re   = regexp.MustCompile(`(?i)\b(?:[0-9a-f]{1,4}:){2,}[0-9a-f:.]*\b`)
@@ -23,6 +26,7 @@ var (
 // SanitizeMessage removes things that could identify a person or a private setup from
 // an error message before it is sent. It keeps enough text to debug the category.
 func SanitizeMessage(s string) string {
+	s = quotedRe.ReplaceAllString(s, "<str>")
 	s = urlRe.ReplaceAllString(s, "<url>")
 	s = uuidRe.ReplaceAllString(s, "<id>")
 	s = emailRe.ReplaceAllString(s, "<email>")
