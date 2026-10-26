@@ -3,13 +3,14 @@ package rulecheck
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestDryReportsWhatThisBuildCantBuild(t *testing.T) {
 	d := data(t, []string{"ir", "de"}, []string{"google"})
-	dir := d.GeoIP[:strings.LastIndex(d.GeoIP, "/")]
+	dir := filepath.Dir(d.GeoIP)
 	req, _ := json.Marshal(Request{AssetDir: dir, Rules: []Rule{
 		{Tag: "ok", Match: json.RawMessage(`{"ip":["geoip:de"],"port":"443"}`)},
 		{Tag: "gone", Match: json.RawMessage(`{"ip":["geoip:in-ir"]}`)},
@@ -41,7 +42,7 @@ func TestDryReportsWhatThisBuildCantBuild(t *testing.T) {
 
 func TestDryWithNoProblemsWritesAnEmptyArray(t *testing.T) {
 	d := data(t, []string{"ir"}, []string{"google"})
-	dir := d.GeoIP[:strings.LastIndex(d.GeoIP, "/")]
+	dir := filepath.Dir(d.GeoIP)
 	req, _ := json.Marshal(Request{AssetDir: dir, Rules: []Rule{{Tag: "ok", Match: json.RawMessage(`{"port":"22"}`)}}})
 	var out bytes.Buffer
 	if err := Dry(bytes.NewReader(req), &out); err != nil {
