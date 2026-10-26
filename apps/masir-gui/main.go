@@ -108,7 +108,10 @@ func (s *shell) ready() {
 			{Role: mygo.RoleQuit},
 		})
 		if runtime.GOOS == "linux" {
-			s.tray.SetMenu(menu) // AppIndicator tells nothing of clicks
+			// AppIndicator shows the menu on a click; panels that report activation
+			// (KDE's, GNOME's with an extension) call OnClick, which opens the window.
+			s.tray.SetMenu(menu)
+			s.tray.OnClick(s.toggle)
 		} else {
 			s.tray.OnClick(s.toggle)
 			s.tray.OnRightClick(func() {

@@ -156,8 +156,9 @@ func rpc() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), rpcTimeout)
 }
 
-// openScreen slides another page over the main one. The window is resized once, to the
-// page's height, before it slides: never while it moves.
+// openScreen slides another page over the main one. A page opening from the main one gets
+// the window's height before it slides; coming back, the window keeps its size until the
+// page has gone, and aimMotion shrinks it then, so nothing is resized while it moves.
 func (a *app) openScreen(s screen) {
 	from := a.screen
 	a.lastSub, a.screen = s, s
@@ -612,8 +613,8 @@ func (a *app) aimMotion(c *ui.Context) {
 }
 
 // requestHeight tells the window how tall the content will be once at rest. Call it when
-// the state changes, never from a frame in flight: the shell coalesces it and applies it
-// after the frame.
+// the state changes: the shell coalesces it and applies it after the frame, never inside
+// one.
 func (a *app) requestHeight() {
 	if a.onHeight != nil {
 		a.onHeight(a.restHeight())
