@@ -302,3 +302,43 @@ func TestGeoUpdatePreflightAndDisable(t *testing.T) {
 		t.Fatalf("the choice must be saved: %+v, %v", saved.Rules, err)
 	}
 }
+
+// Editing routing.json while the daemon runs changes nothing it runs, but it is what the next
+// start loads. rules check must say so, instead of reporting only the daemon's own copy.
+func TestCheckRulesSaysWhenTheSavedFileWasEditedUnderTheDaemon(t *testing.T) {
+	ctx := context.Background()
+	s, _ := geoServer(t, []string{"ir", "private"}, []string{"google"})
+	addRule(t, s, "ssh", `{"port":"22"}`, "direct")
+
+	res, err := s.CheckRules(ctx, &pb.CheckRulesRequest{})
+	if err != nil || res.SavedDiffers || len(res.Problems) != 0 {
+		t.Fatalf("untouched: %+v, %v", res, err)
+	}
+
+	saved, err := store.Load(s.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// What nano would leave: a rule the geo data can't build, alongside the daemon's own.
+	saved.Rules = append(saved.Rules, store.Rule{Tag: "hand-edited", Match: []byte(`{"ip":["geoip:privat"]}`), Target: store.Target{Kind: store.TargetDirect}})
+	if err := store.Save(s.dir, saved); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err = s.CheckRules(ctx, &pb.CheckRulesRequest{})
+	if err != nil || !res.SavedDiffers || len(res.Problems) != 1 || res.Problems[0].RuleTag != "hand-edited" ||
+		!strings.Contains(res.Problems[0].Message, "did you mean geoip:private?") {
+		t.Fatalf("after a hand edit: %+v, %v", res, err)
+	}
+	if got, _ := s.ListRoutingRules(ctx, &pb.ListRoutingRulesRequest{}); len(got.Rules) != 1 {
+		t.Fatalf("the daemon must not adopt the edit by itself: %d rules", len(got.Rules))
+	}
+
+	// Once the daemon writes its own state again, the file is the daemon's and they agree.
+	if _, err := s.SetRuleEnabled(ctx, &pb.SetRuleEnabledRequest{RuleTags: []string{"ssh"}, Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ = s.CheckRules(ctx, &pb.CheckRulesRequest{}); res.SavedDiffers {
+		t.Fatalf("after the daemon saved: %+v", res)
+	}
+}

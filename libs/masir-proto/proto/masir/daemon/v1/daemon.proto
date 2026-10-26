@@ -251,7 +251,13 @@ message RuleProblem {
 }
 
 message CheckRulesRequest {}
-message CheckRulesResponse { repeated RuleProblem problems = 1; } // empty: every enabled rule can be built
+message CheckRulesResponse {
+  repeated RuleProblem problems = 1; // empty: every enabled rule can be built
+  // The saved rules file differs from the rules the daemon is running (it was edited while
+  // the daemon ran, and the daemon doesn't re-read it). The problems are then those of the
+  // saved file, which is what the next start, and an update's new version, will load.
+  bool saved_differs = 2;
+}
 
 // SetRuleEnabled changes every listed rule in one step, so turning off all the rules
 // CheckRules named takes effect together (one still-broken rule would block the rest).

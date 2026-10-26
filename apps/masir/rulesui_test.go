@@ -17,12 +17,13 @@ import (
 // nil embedded client, which is how a test notices an unexpected one.
 type rulesDaemon struct {
 	pb.DaemonServiceClient
-	powerErrs  []error // returned by successive SetPower calls; then success
-	powerCalls int
-	problems   []*pb.RuleProblem
-	disabled   []*pb.SetRuleEnabledRequest
-	checks     int
-	statuses   int
+	powerErrs    []error // returned by successive SetPower calls; then success
+	powerCalls   int
+	problems     []*pb.RuleProblem
+	disabled     []*pb.SetRuleEnabledRequest
+	checks       int
+	statuses     int
+	savedDiffers bool
 }
 
 func (f *rulesDaemon) SetPower(context.Context, *pb.SetPowerRequest, ...grpc.CallOption) (*pb.SetPowerResponse, error) {
@@ -42,7 +43,7 @@ func (f *rulesDaemon) GetStatus(context.Context, *pb.GetStatusRequest, ...grpc.C
 
 func (f *rulesDaemon) CheckRules(context.Context, *pb.CheckRulesRequest, ...grpc.CallOption) (*pb.CheckRulesResponse, error) {
 	f.checks++
-	return &pb.CheckRulesResponse{Problems: f.problems}, nil
+	return &pb.CheckRulesResponse{Problems: f.problems, SavedDiffers: f.savedDiffers}, nil
 }
 
 func (f *rulesDaemon) SetRuleEnabled(_ context.Context, in *pb.SetRuleEnabledRequest, _ ...grpc.CallOption) (*pb.SetRuleEnabledResponse, error) {
@@ -174,5 +175,35 @@ func TestAnUpdateReportsRulesTheNewDaemonIsRunningWithout(t *testing.T) {
 	warnIfRulesSuspended() // nothing suspended: quiet
 	if f2.statuses != 1 {
 		t.Fatalf("status calls = %d", f2.statuses)
+	}
+}
+
+// rules check must not say "all can run" for the daemon's copy while the saved file, which an
+// update or a restart will use, has rules that can't.
+func TestRulesCheckSaysWhenTheSavedFileHasBrokenRules(t *testing.T) {
+	f := &rulesDaemon{savedDiffers: true, problems: []*pb.RuleProblem{iranProblem}}
+	useFake(t, f)
+	if err := reportSavedFileDiffers(f.problems); err != errReported {
+		t.Fatalf("err = %v, want a failing exit", err)
+	}
+	if err := reportSavedFileDiffers(nil); err != nil {
+		t.Fatalf("an edited file that is fine is a warning, not a failure: %v", err)
+	}
+	if len(f.disabled) != 0 {
+		t.Errorf("rules were turned off: the daemon doesn't have them")
+	}
+}
+
+func TestAnUpdateRefusalPointsAtTheFileWhenThatIsWhereTheRulesAre(t *testing.T) {
+	problems := []*pb.RuleProblem{iranProblem}
+	useFake(t, &rulesDaemon{savedDiffers: true, problems: problems})
+	adv, note := adviceForBrokenRules(problems)
+	if len(adv.cmds) != 2 || adv.cmds[0] != "masir daemon restart" || !strings.Contains(note, "saved file") {
+		t.Fatalf("advice = %+v, note = %q", adv, note)
+	}
+	useFake(t, &rulesDaemon{problems: problems})
+	adv, note = adviceForBrokenRules(problems)
+	if adv.cmds[0] != "masir rules disable iran-direct" || note != "Nothing was installed; what runs now is unchanged." {
+		t.Fatalf("advice = %+v, note = %q", adv, note)
 	}
 }

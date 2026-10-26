@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -105,9 +107,22 @@ func toPBProblems(problems []rulecheck.Problem, suspended map[string]bool) []*pb
 }
 
 func (s *Server) CheckRules(ctx context.Context, _ *pb.CheckRulesRequest) (*pb.CheckRulesResponse, error) {
+	saved := s.rulesNextStartWillLoad()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !sameRules(saved, s.state.Rules) {
+		// Someone edited the file while the daemon ran. What counts is what the next start
+		// will load, so that is what is checked, and the caller is told it isn't what runs.
+		return &pb.CheckRulesResponse{Problems: toPBProblems(rulecheck.Check(saved, s.geoData()), nil), SavedDiffers: true}, nil
+	}
 	return &pb.CheckRulesResponse{Problems: toPBProblems(rulecheck.Check(s.state.Rules, s.geoData()), s.suspended)}, nil
+}
+
+// sameRules reports whether two rule lists are the same rules, in the same order.
+func sameRules(a, b []store.Rule) bool {
+	x, err1 := json.Marshal(a)
+	y, err2 := json.Marshal(b)
+	return err1 == nil && err2 == nil && bytes.Equal(x, y)
 }
 
 func (s *Server) SetRuleEnabled(ctx context.Context, req *pb.SetRuleEnabledRequest) (*pb.SetRuleEnabledResponse, error) {

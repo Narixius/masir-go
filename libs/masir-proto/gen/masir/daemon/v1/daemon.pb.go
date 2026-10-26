@@ -2215,8 +2215,12 @@ func (*CheckRulesRequest) Descriptor() ([]byte, []int) {
 }
 
 type CheckRulesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Problems      []*RuleProblem         `protobuf:"bytes,1,rep,name=problems,proto3" json:"problems,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Problems []*RuleProblem         `protobuf:"bytes,1,rep,name=problems,proto3" json:"problems,omitempty"` // empty: every enabled rule can be built
+	// The saved rules file differs from the rules the daemon is running (it was edited while
+	// the daemon ran, and the daemon doesn't re-read it). The problems are then those of the
+	// saved file, which is what the next start, and an update's new version, will load.
+	SavedDiffers  bool `protobuf:"varint,2,opt,name=saved_differs,json=savedDiffers,proto3" json:"saved_differs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2256,6 +2260,13 @@ func (x *CheckRulesResponse) GetProblems() []*RuleProblem {
 		return x.Problems
 	}
 	return nil
+}
+
+func (x *CheckRulesResponse) GetSavedDiffers() bool {
+	if x != nil {
+		return x.SavedDiffers
+	}
+	return false
 }
 
 // SetRuleEnabled changes every listed rule in one step, so turning off all the rules
@@ -5968,9 +5979,10 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\amissing\x18\x02 \x03(\tR\amissing\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1c\n" +
 	"\tsuspended\x18\x04 \x01(\bR\tsuspended\"\x13\n" +
-	"\x11CheckRulesRequest\"N\n" +
+	"\x11CheckRulesRequest\"s\n" +
 	"\x12CheckRulesResponse\x128\n" +
-	"\bproblems\x18\x01 \x03(\v2\x1c.masir.daemon.v1.RuleProblemR\bproblems\"f\n" +
+	"\bproblems\x18\x01 \x03(\v2\x1c.masir.daemon.v1.RuleProblemR\bproblems\x12#\n" +
+	"\rsaved_differs\x18\x02 \x01(\bR\fsavedDiffers\"f\n" +
 	"\x15SetRuleEnabledRequest\x12\x1b\n" +
 	"\trule_tags\x18\x01 \x03(\tR\bruleTags\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x16\n" +

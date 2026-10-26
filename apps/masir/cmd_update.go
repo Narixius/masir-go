@@ -320,8 +320,8 @@ func watchUpdate(target pb.UpdateTarget) error {
 	case pb.UpdateState_UPDATE_STATE_FAILED:
 		if len(job.BlockedRules) > 0 { // the new version can't build some of the user's rules
 			pr.Fail(fmt.Sprintf("Update failed: the new version can't build %s.", ofYourRules(len(job.BlockedRules))))
-			printFailureBody(problemText(job.BlockedRules), brokenRulesAdvice(job.BlockedRules),
-				"Nothing was installed; what runs now is unchanged.")
+			adv, note := adviceForBrokenRules(job.BlockedRules)
+			printFailureBody(problemText(job.BlockedRules), adv, note)
 			return errReported
 		}
 		headline, adv := friendlyUpdateError(job.Error)

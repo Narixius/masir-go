@@ -136,6 +136,9 @@ func cmdRulesCheck(a args) error {
 			enabled++
 		}
 	}
+	if res.SavedDiffers {
+		return reportSavedFileDiffers(res.Problems)
+	}
 	if len(res.Problems) == 0 {
 		ui.Success(fmt.Sprintf("All %s can run with the installed geo data.", counted(enabled, "enabled rule")))
 		return nil
@@ -227,4 +230,42 @@ func warnIfRulesSuspended() {
 	ui.Warn(fmt.Sprintf("masir is running without %s that can't run with the installed geo data.", counted(len(st.RuleProblems), "rule")))
 	ui.Message(ui.Visual(problemText(st.RuleProblems)))
 	ui.Advise("To fix it:", brokenRulesAdvice(st.RuleProblems).cmds)
+}
+
+// savedFileAdvice is what to do when the rules file was edited while masir runs: masir
+// doesn't re-read it, so it loads at the next start, and rules turned off or fixed in
+// the file take effect then.
+var savedFileAdvice = advice{
+	text: "masir keeps using its own copy until it restarts. To load the file, then look at the rules again:",
+	cmds: []string{"masir daemon restart", "masir rules check"},
+}
+
+const savedFileNote = "Until then masir runs as before, and an update or a restart will use the saved file."
+
+// reportSavedFileDiffers reports rules that can't run in a saved file that differs from what
+// masir runs. Nothing can be turned off from here: the daemon doesn't have those rules.
+func reportSavedFileDiffers(problems []*pb.RuleProblem) error {
+	if len(problems) == 0 {
+		ui.Warn("The saved rules file was edited while masir runs; masir still uses its own copy.")
+		ui.Advise("The edited rules can all run. To load them:", []string{"masir daemon restart"})
+		return nil
+	}
+	printFailure(fmt.Sprintf("%s in the saved rules file can't run with the installed geo data.", capitalize(counted(len(problems), "rule"))),
+		problemText(problems), savedFileAdvice, savedFileNote)
+	return errReported
+}
+
+// adviceForBrokenRules is what to do about rules an update found can't run. They usually
+// are the daemon's own, but when the saved file was edited under it they are only in the
+// file, and the way out is different.
+func adviceForBrokenRules(problems []*pb.RuleProblem) (advice, string) {
+	inRulesPrompt = true
+	defer func() { inRulesPrompt = false }()
+	res, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.CheckRulesResponse, error) {
+		return c.CheckRules(ctx, &pb.CheckRulesRequest{})
+	})
+	if err == nil && res.SavedDiffers {
+		return savedFileAdvice, "Nothing was installed; what runs now is unchanged. " + savedFileNote
+	}
+	return brokenRulesAdvice(problems), "Nothing was installed; what runs now is unchanged."
 }
