@@ -40,18 +40,18 @@ func TestResizeOnlyAtRest(t *testing.T) {
 	if err := tt.Click("Back"); err != nil {
 		t.Fatal(err)
 	}
-	if len(asked) != 1 || asked[0] >= a.subHeight() {
-		t.Fatalf("coming back asked for %v, want one request of the main page's height", asked)
+	if len(asked) != 0 {
+		t.Fatalf("resized before the settings page left: %v", asked)
 	}
 	for i := 0; i < 40; i++ {
 		tt.Advance(8 * time.Millisecond)
-		if p := a.motion.page.x; p > 0 && p < 1 && len(asked) > 1 {
+		if p := a.motion.page.x; p > 0 && p < 1 && len(asked) > 0 {
 			t.Fatalf("resized while the page moved back at %v: %v", p, asked)
 		}
 	}
 	tt.Advance(time.Second)
-	if len(asked) > 2 {
-		t.Fatalf("going back asked for the height %d times: %v", len(asked), asked)
+	if len(asked) != 1 || asked[0] >= a.subHeight() {
+		t.Fatalf("coming back asked for %v, want one request of the main page's height", asked)
 	}
 }
 

@@ -159,12 +159,17 @@ func rpc() (context.Context, context.CancelFunc) {
 // openScreen slides another page over the main one. The window is resized once, to the
 // page's height, before it slides: never while it moves.
 func (a *app) openScreen(s screen) {
+	from := a.screen
 	a.lastSub, a.screen = s, s
 	if s == screenSettings {
 		a.cliChecked = false  // look for the command-line tool again
 		a.refreshLoginState() // and for the login item, in the background
 	}
-	a.requestHeight()
+	if from == screenMain {
+		// A page opening from the main one: size the window before it slides. Coming back,
+		// the window stays as it is until the page has gone, and aimMotion shrinks it then.
+		a.requestHeight()
+	}
 }
 
 // notify queues a toast for the next frame.

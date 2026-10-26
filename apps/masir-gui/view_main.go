@@ -300,14 +300,17 @@ func (a *app) serverRow(c *ui.Context, p palette) {
 }
 
 func (a *app) toggle(s section) {
-	if a.open == s {
-		a.open = sectionNone
-	} else {
+	opening := a.open != s
+	if opening {
 		a.open = s
+	} else {
+		a.open = sectionNone
 	}
-	// The window takes the list's height before it unfolds, and gives it back after it
-	// has folded: it is never resized while the list moves.
-	a.requestHeight()
+	// A list takes the window's height before it unfolds. Closing leaves the window as it
+	// is until the list has folded, and aimMotion shrinks it then.
+	if opening {
+		a.requestHeight()
+	}
 }
 
 // panelBar is the search row at the top of the open panels: the field and a button.
