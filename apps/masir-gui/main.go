@@ -211,9 +211,7 @@ func main() {
 		})
 	}
 	mygo.App.OnSecondInstance(func([]string, string) {
-		if !s.open {
-			s.show()
-		}
+		s.show()
 	})
 	mygo.App.WhenReady(func() {
 		a.binary = daemonBinary()

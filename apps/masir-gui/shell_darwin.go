@@ -12,6 +12,10 @@ import (
 // show opens the panel in the system's popover, anchored to the tray icon: AppKit draws
 // its material, arrow and shadow, and animates it.
 func (s *shell) show() {
+	if s.open {
+		s.win.Focus()
+		return
+	}
 	height := int(math.Round(float64(s.a.measure())))
 	s.start()
 	s.win = mygo.NewFlyout(mygo.FlyoutOptions{

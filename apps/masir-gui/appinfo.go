@@ -28,10 +28,12 @@ type appInfos struct {
 func newAppInfos() *appInfos { return &appInfos{known: map[string]*appMeta{}} }
 
 // fallbackName is an application's name from its path alone: "/Applications/Spotify.app/"
-// is "Spotify".
+// is "Spotify", and "C:\...\Spotify.exe" is "Spotify".
 func fallbackName(path string) string {
 	base := filepath.Base(strings.TrimSuffix(path, "/"))
-	return strings.TrimSuffix(base, ".app")
+	base = strings.TrimSuffix(base, ".app")
+	base = strings.TrimSuffix(base, ".exe")
+	return base
 }
 
 // lookup returns what is known of the application at path, and has it read in the

@@ -26,7 +26,7 @@ func (a *app) view(c *ui.Context) {
 	root := ui.Box(c).Fill().Background(p.rootTint).TextColor(p.text).FontSize(sizeBody).FixedLineHeight(18).Clip()
 	if !c.Vibrancy() { // no material under the panel: draw its own
 		root.Background(c.Theme().Surface)
-		if runtime.GOOS != "windows" { // Windows rounds and outlines a flyout itself
+		if runtime.GOOS == "darwin" { // the popover's own; a window has the system's frame
 			root.Radius(panelRadius).Border(1, p.borderDefault)
 		}
 	}

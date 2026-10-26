@@ -13,6 +13,10 @@ import (
 // taskbar entry, whose close button puts it away in the tray. It is not resizable by the
 // user: its height follows the page and its lists.
 func (s *shell) show() {
+	if s.open {
+		s.win.Focus()
+		return
+	}
 	height := int(math.Round(float64(s.a.measure())))
 	s.start()
 	if s.win == nil {
