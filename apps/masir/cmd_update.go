@@ -38,7 +38,7 @@ func cmdUpdate(a args) error {
 		ui.Message(ui.Dim(rel.Url))
 	case !force:
 		sp.Stop(fmt.Sprintf("masir %s is the latest version.", rel.CurrentVersion))
-		if !strings.HasPrefix(rel.CurrentVersion, "v") && rel.CurrentVersion != rel.LatestVersion {
+		if isDevVersion(rel.CurrentVersion) {
 			ui.Info(fmt.Sprintf("This is a development build; `masir update --force` installs %s.", rel.LatestVersion))
 		}
 		return nil
@@ -704,4 +704,11 @@ func jobSummary(j *pb.UpdateJob) string {
 		return "stopped" + when
 	}
 	return stateText(j)
+}
+
+// isDevVersion reports whether v isn't a release version (release builds are stamped
+// without the tag's "v", so "0.2.1" and "v0.2.1" are both releases; a plain build is "dev").
+func isDevVersion(v string) bool {
+	v = strings.TrimPrefix(v, "v")
+	return v == "" || v[0] < '0' || v[0] > '9'
 }
