@@ -215,3 +215,16 @@ func rulesCheckCommands() []*cobra.Command {
 	enable.ValidArgsFunction = completeRules
 	return []*cobra.Command{check, disable, enable}
 }
+
+// warnIfRulesSuspended tells the user, after an update restarted the daemon, when the
+// new daemon is running without rules it can't build. The daemon decides that at start; this
+// only reports it, so it doesn't pass unseen.
+func warnIfRulesSuspended() {
+	st, err := currentStatus()
+	if err != nil || len(st.RuleProblems) == 0 {
+		return
+	}
+	ui.Warn(fmt.Sprintf("masir is running without %s that can't run with the installed geo data.", counted(len(st.RuleProblems), "rule")))
+	ui.Message(ui.Visual(problemText(st.RuleProblems)))
+	ui.Advise("To fix it:", brokenRulesAdvice(st.RuleProblems).cmds)
+}

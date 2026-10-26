@@ -345,7 +345,11 @@ func watchUpdate(target pb.UpdateTarget) error {
 		if err := updateSelf(job); err != nil {
 			return err
 		}
-		return syncServiceBinary(job)
+		if err := syncServiceBinary(job); err != nil {
+			return err
+		}
+		warnIfRulesSuspended()
+		return nil
 	default:
 		pr.Stop("Update finished.")
 	}

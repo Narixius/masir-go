@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/rulecheck"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/store"
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/update"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
@@ -22,14 +23,12 @@ import (
 // it is. The new version answers with its own rules code and its own Xray, which is the
 // only way to know what it will accept.
 func (s *Server) checkWithNewVersion(ctx context.Context, bin string) error {
-	s.mu.Lock()
 	req := rulecheck.Request{AssetDir: s.xray.AssetDir()}
-	for _, r := range s.state.Rules {
+	for _, r := range s.rulesNextStartWillLoad() {
 		if !r.Disabled {
 			req.Rules = append(req.Rules, rulecheck.Rule{Tag: r.Tag, Match: r.Match})
 		}
 	}
-	s.mu.Unlock()
 	if len(req.Rules) == 0 {
 		return nil // nothing to hold the update back
 	}
@@ -45,6 +44,25 @@ func (s *Server) checkWithNewVersion(ctx context.Context, bin string) error {
 		return out
 	}
 	return nil
+}
+
+// rulesNextStartWillLoad is what the new version will read when it starts: the saved
+// rules, which are the daemon's own unless someone edited the file by hand while it ran
+// (the daemon doesn't re-read it). Checking the saved file means a hand edit can't slip
+// past the check and surface only after the restart. The daemon's own copy is the
+// fallback if the file can't be read.
+func (s *Server) rulesNextStartWillLoad() []store.Rule {
+	s.mu.Lock()
+	dir, mine := s.dir, s.state.Rules
+	s.mu.Unlock()
+	if dir == "" {
+		return mine
+	}
+	saved, err := store.Load(dir)
+	if err != nil {
+		return mine
+	}
+	return saved.Rules
 }
 
 // askBinary runs `bin daemon check` with req on stdin and reads the rules it reports.

@@ -22,6 +22,7 @@ type rulesDaemon struct {
 	problems   []*pb.RuleProblem
 	disabled   []*pb.SetRuleEnabledRequest
 	checks     int
+	statuses   int
 }
 
 func (f *rulesDaemon) SetPower(context.Context, *pb.SetPowerRequest, ...grpc.CallOption) (*pb.SetPowerResponse, error) {
@@ -32,6 +33,11 @@ func (f *rulesDaemon) SetPower(context.Context, *pb.SetPowerRequest, ...grpc.Cal
 		return nil, err
 	}
 	return &pb.SetPowerResponse{}, nil
+}
+
+func (f *rulesDaemon) GetStatus(context.Context, *pb.GetStatusRequest, ...grpc.CallOption) (*pb.GetStatusResponse, error) {
+	f.statuses++
+	return &pb.GetStatusResponse{Status: &pb.Status{RuleProblems: f.problems}}, nil
 }
 
 func (f *rulesDaemon) CheckRules(context.Context, *pb.CheckRulesRequest, ...grpc.CallOption) (*pb.CheckRulesResponse, error) {
@@ -153,5 +159,20 @@ func TestPhrasesDoNotDoublePlurals(t *testing.T) {
 	}
 	if got := counted(2, "rule"); got != "2 rules" {
 		t.Errorf("counted = %q", got)
+	}
+}
+
+func TestAnUpdateReportsRulesTheNewDaemonIsRunningWithout(t *testing.T) {
+	f := &rulesDaemon{problems: []*pb.RuleProblem{{RuleTag: "iran-direct", Message: "geoip:in-ir isn't in geoip.dat", Suspended: true}}}
+	useFake(t, f)
+	warnIfRulesSuspended()
+	if f.statuses != 1 {
+		t.Fatalf("status calls = %d: the daemon decides which rules are suspended, the CLI asks it", f.statuses)
+	}
+	f2 := &rulesDaemon{}
+	useFake(t, f2)
+	warnIfRulesSuspended() // nothing suspended: quiet
+	if f2.statuses != 1 {
+		t.Fatalf("status calls = %d", f2.statuses)
 	}
 }
