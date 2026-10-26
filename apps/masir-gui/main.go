@@ -176,6 +176,35 @@ func fileExists(p string) bool {
 	return err == nil && !fi.IsDir()
 }
 
+// demoCycle goes between the main page and settings on repeat, for watching the
+// transition and its window resizing when no one is there to click.
+func demoCycle(s *shell) {
+	const n = 12
+	for i := 0; i < n; i++ {
+		time.Sleep(1200 * time.Millisecond)
+		mygo.RunOnMain(func() {
+			if !s.open {
+				s.show()
+			}
+			s.a.openScreen(screenSettings)
+			s.sync()
+		})
+		time.Sleep(1400 * time.Millisecond)
+		mygo.RunOnMain(func() {
+			s.a.screen = screenMain
+			s.sync()
+		})
+	}
+	mygo.RunOnMain(func() {
+		if !s.open {
+			s.show()
+		}
+		s.a.screen = screenMain
+		s.sync()
+	})
+	log.Printf("demo: %d transitions done", n)
+}
+
 func round32(f float32) float32 {
 	return float32(int(f + 0.5))
 }
@@ -235,11 +264,17 @@ func main() {
 		}
 		// MASIR_DEMO=servers|rules|settings|add opens that part of the panel a moment
 		// after launch, for watching the transitions when no one is there to click.
+		// MASIR_DEMO=cycle goes between the main page and settings, on repeat, to watch
+		// the transition and its window resizing hold up.
 		if demo := os.Getenv("MASIR_DEMO"); demo != "" {
 			time.AfterFunc(2500*time.Millisecond, func() {
 				mygo.RunOnMain(func() {
 					if !s.open {
 						s.show()
+					}
+					if demo == "cycle" {
+						go demoCycle(s)
+						return
 					}
 					switch demo {
 					case "servers":

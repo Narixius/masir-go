@@ -50,7 +50,9 @@ make gui-dev
 
 builds `masir` into `dist/` and runs the app against it, rebuilding as you edit. Set
 `MASIR_DEMO=servers|rules|settings|add` to open that part of the panel a moment after
-launch.
+launch, or `MASIR_DEMO=cycle` to go between the main page and settings on repeat (useful
+for watching the transition and its window resizing), and `MYGO_FRAME_STATS=1` to log
+frames that take longer than 8 ms.
 
 ## Tests
 

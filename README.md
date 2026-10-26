@@ -126,10 +126,10 @@ needs no separate download:
 
 | System | Download |
 |---|---|
-| macOS, Apple Silicon | `Masir-<version>-darwin-arm64.dmg` |
-| macOS, Intel | `Masir-<version>-darwin-amd64.dmg` |
-| Windows, x86-64 | `Masir-<version>-windows-amd64.zip` |
-| Windows, ARM64 | `Masir-<version>-windows-arm64.zip` |
+| macOS, Apple Silicon | `masir-desktop-<version>-arm64.dmg` |
+| macOS, Intel | `masir-desktop-<version>-amd64.dmg` |
+| Windows, x86-64 | `Masir-v<version>-windows-amd64.zip` |
+| Windows, ARM64 | `Masir-v<version>-windows-arm64.zip` |
 | Linux, x86-64 | `masir-desktop_<version>_amd64.deb`, or the tarball's `install.sh` |
 | Linux, ARM64 | `masir-desktop_<version>_arm64.deb`, or the tarball's `install.sh` |
 
