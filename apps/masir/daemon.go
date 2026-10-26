@@ -103,7 +103,16 @@ func daemonDisable(args) error {
 // daemonCheck answers a running daemon that is about to install this version: stdin
 // holds the user's rules and where the geo data is, stdout gets the rules this version
 // can't build. It changes nothing.
-func daemonCheck(args) error { return masird.CheckRules(os.Stdin, os.Stdout) }
+//
+// The daemon runs it with pipes. Typed at a terminal it would wait on stdin for ever, which
+// looks like a hang, so it says what it is instead.
+func daemonCheck(args) error {
+	if ui.Interactive() {
+		return advised("This is an internal command: the daemon runs it on a new version before installing it.",
+			"To check your own rules, run:", "masir rules check")
+	}
+	return masird.CheckRules(os.Stdin, os.Stdout)
+}
 
 // daemonRun runs the daemon in this process, in the foreground: it's how the background
 // daemon and the root service run (both start this same executable).
