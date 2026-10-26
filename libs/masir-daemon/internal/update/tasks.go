@@ -106,6 +106,10 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	r.StagedDir(staged)
 	if m.Preflight != nil {
 		if err := m.Preflight(ctx, filepath.Join(staged, exe("masir"))); err != nil {
+			var re *RulesError
+			if errors.As(err, &re) {
+				r.Rules(re.Problems)
+			}
 			return err
 		}
 	}

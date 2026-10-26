@@ -222,7 +222,8 @@ func applySetting(s setting, v string) error {
 			return c.SetFallback(ctx, &pb.SetFallbackRequest{Fallback: f})
 		})
 		if status.Code(err) == codes.FailedPrecondition {
-			return fail("%s; pick one with `masir use`", message(err))
+			msg, _ := describe(err)
+			return advised(sentence(msg), "Pick one with:", "masir use")
 		}
 		if err != nil {
 			return err

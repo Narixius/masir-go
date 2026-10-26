@@ -25,7 +25,7 @@ func cmdConnect(a args) error {
 	if _, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.SetPowerResponse, error) {
 		return c.SetPower(ctx, &pb.SetPowerRequest{On: true})
 	}); err != nil {
-		sp.Fail("Couldn't turn masir on: " + message(err))
+		failWith(sp, "Couldn't turn masir on: ", err)
 		return errReported
 	}
 	_, tunErr := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.SetTunEnabledResponse, error) {
@@ -33,7 +33,7 @@ func cmdConnect(a args) error {
 	})
 	st, err := currentStatus()
 	if err != nil {
-		sp.Fail(message(err))
+		failWith(sp, "", err)
 		return errReported
 	}
 	switch {
@@ -119,7 +119,8 @@ func cmdMode(a args) error {
 		return c.SetFallback(ctx, &pb.SetFallbackRequest{Fallback: f})
 	})
 	if status.Code(err) == codes.FailedPrecondition {
-		return fail("%s; pick one with `masir use`", message(err))
+		msg, _ := describe(err)
+		return advised(sentence(msg), "Pick one with:", "masir use")
 	}
 	if err != nil {
 		return err

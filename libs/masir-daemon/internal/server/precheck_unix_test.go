@@ -4,10 +4,13 @@ package server
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/update"
 )
 
 // fakeMasir writes a "new version" that answers `daemon check` with stdout, or fails.
@@ -30,8 +33,8 @@ func TestUpdateIsRefusedWhenTheNewVersionCantBuildTheRules(t *testing.T) {
 		want   string // "" accepted
 	}{
 		"builds them all":   {`cat >/dev/null; echo '[]'`, ""},
-		"can't build one":   {`cat >/dev/null; echo '[{"tag":"ssh","message":"port syntax changed"}]'`, "can't build 1 of your rules (ssh: port syntax changed)"},
-		"crashes":           {`echo 'illegal instruction' >&2; exit 4`, "couldn't be checked against your rules, so it wasn't installed: illegal instruction"},
+		"can't build one":   {`cat >/dev/null; echo '[{"tag":"ssh","message":"port syntax changed"}]'`, "can't build 1 of your rules"},
+		"crashes":           {`echo 'illegal instruction' >&2; exit 4`, "couldn't be checked against your rules, so nothing was installed: illegal instruction"},
 		"answers with junk": {`cat >/dev/null; echo 'hello'`, "unreadable"},
 		"isn't a masir":     {`exit 0`, "unreadable"},
 	} {
@@ -42,6 +45,15 @@ func TestUpdateIsRefusedWhenTheNewVersionCantBuildTheRules(t *testing.T) {
 				t.Fatalf("refused: %v", err)
 			case c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)):
 				t.Fatalf("err = %v, want one containing %q", err, c.want)
+			}
+			// The rules come back as data, for the client to list, not only as text.
+			var re *update.RulesError
+			if c.want == "can't build 1 of your rules" {
+				if !errors.As(err, &re) || len(re.Problems) != 1 || re.Problems[0].RuleTag != "ssh" || re.Problems[0].Message != "port syntax changed" {
+					t.Fatalf("err = %#v, want a RulesError naming ssh", err)
+				}
+			} else if errors.As(err, &re) {
+				t.Fatalf("err = %v is a RulesError, but no rule was named", err)
 			}
 		})
 	}

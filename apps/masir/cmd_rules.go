@@ -306,7 +306,7 @@ func pickTarget(all []subNodes, current string) (string, error) {
 		return choice, err
 	}
 	if len(all) == 0 {
-		return "", fail("no subscriptions to pin to; add one with `masir sub add <url>`")
+		return "", advised("There are no subscriptions to pin to.", "Add one:", "masir sub add <url>")
 	}
 	key, err := pickNode(all, "Pin the rule to which proxy?", strings.TrimPrefix(current, "config:"))
 	if err != nil {
@@ -330,7 +330,7 @@ func targetFromFlags(a args, all []subNodes) (string, bool, error) {
 	}
 	s, cfg, ok := findNode(all, v)
 	if !ok {
-		return "", false, fail("no proxy with id %q (see `masir use`)", v)
+		return "", false, advised(fmt.Sprintf("There is no proxy with id %q.", v), "See the list:", "masir use")
 	}
 	return "config:" + nodeKey(s.sub.Id, cfg.Id), true, nil
 }
@@ -363,7 +363,7 @@ func cmdRulesAdd(a args) error {
 	interactive := !fromFlags && !a.has("json")
 	if interactive {
 		if !ui.Interactive() {
-			return fail("pass matchers as flags (see `masir rules add --help`), or run in a terminal for the wizard")
+			return advised("Without a terminal, a rule's matchers must be passed as flags.", "See them:", "masir rules add --help")
 		}
 		if match, err = pickMatch(match); err != nil {
 			return err
@@ -397,7 +397,7 @@ func cmdRulesAdd(a args) error {
 	if _, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.AddRoutingResponse, error) {
 		return c.AddRouting(ctx, &pb.AddRoutingRequest{RuleTag: name, RuleJson: match.json(), Target: target})
 	}); err != nil {
-		sp.Fail(message(err))
+		failWith(sp, "", err)
 		return errReported
 	}
 	st, _ := currentStatus()
@@ -537,7 +537,7 @@ func cmdRulesTest(a args) error {
 	})
 	if err != nil {
 		if strings.Contains(message(err), "not running") {
-			return fail("masir is off; routes can only be tested while it runs (`masir connect`)")
+			return advised("masir is off, and routes can only be tested while it runs.", "Turn it on:", "masir connect")
 		}
 		return err
 	}

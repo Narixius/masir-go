@@ -155,7 +155,7 @@ func enableService(user string) error {
 		return elevate("daemon", "enable", "--user", currentUser())
 	}
 	if user == "" || user == "0" {
-		return fail("run `masir daemon enable` as your normal user; it asks for permission itself")
+		return advised("This needs your normal user, not root: masir asks for permission itself.", "Run it again without sudo:", "masir daemon enable")
 	}
 	if !service.Supported() {
 		return errNoService

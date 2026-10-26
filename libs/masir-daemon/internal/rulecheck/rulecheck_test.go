@@ -67,21 +67,28 @@ func TestRefs(t *testing.T) {
 }
 
 func TestCheckFindsRulesUsingMissingCategories(t *testing.T) {
-	d := data(t, []string{"ir", "de", "private"}, []string{"google", "category-ir"})
+	d := data(t, []string{"ir", "in", "no", "de", "private"}, []string{"google", "category-ir"}) // "in" (India) exists, and is not what in-ir meant
 	rules := []store.Rule{
 		rule("ok", `{"domain":["geosite:google"],"ip":["geoip:de"]}`),
 		rule("iran-direct", `{"ip":["geoip:ir","geoip:in-ir","geoip:blacklist-ir"]}`),
 		rule("ports", `{"port":"22"}`),
 		rule("gone-site", `{"domain":["geosite:category-ai-cn"]}`),
+		rule("no-guess", `{"ip":["geoip:no-such-country"]}`),
 	}
 	got := Check(rules, d)
-	if len(got) != 2 || got[0].Tag != "iran-direct" || got[1].Tag != "gone-site" {
+	if len(got) != 3 || got[0].Tag != "iran-direct" || got[1].Tag != "gone-site" || got[2].Tag != "no-guess" {
 		t.Fatalf("problems = %+v", got)
 	}
 	if !reflect.DeepEqual(got[0].Missing, []string{"geoip:blacklist-ir", "geoip:in-ir"}) {
 		t.Errorf("missing = %v", got[0].Missing)
 	}
-	if !strings.Contains(got[0].Message, "geoip:in-ir isn't in geoip.dat (similar: ir)") {
+	// Existing categories that merely share a part with the code are not suggestions.
+	for _, p := range got {
+		if strings.Contains(p.Message, "did you mean") {
+			t.Errorf("%s: a guess from the meaning of a code: %q", p.Tag, p.Message)
+		}
+	}
+	if !strings.Contains(got[0].Message, "geoip:in-ir isn't in geoip.dat") {
 		t.Errorf("message = %q", got[0].Message)
 	}
 }
@@ -100,5 +107,72 @@ func TestCheckWithUnreadableData(t *testing.T) {
 	got := Check([]store.Rule{rule("a", `{"ip":["geoip:de"]}`), rule("b", `{"port":"22"}`)}, d)
 	if len(got) != 1 || got[0].Tag != "a" || !strings.Contains(got[0].Message, "geoip.dat can't be read") {
 		t.Fatalf("problems = %+v", got)
+	}
+}
+
+// Suggestions only fix typing. A wrong one is worse than none: on a direct rule it could
+// widen what bypasses the proxy.
+func TestSuggestionsOnlyFixTypos(t *testing.T) {
+	d := data(t, []string{"ir", "in", "no", "cn", "ru", "private", "abcde1", "abcde2"},
+		[]string{"google", "netflix", "cn", "category-ai-cn", "category-ads-all"})
+	for ref, want := range map[string]string{
+		// typos: one character off, or a different case or separator
+		"geoip:privat":            "geoip:private",
+		"geoip:prvate":            "geoip:private",
+		"geoip:privaet":           "geoip:private",
+		"geoip:privatte":          "geoip:private",
+		"geosite:gooogle":         "geosite:google",
+		"geosite:netflx":          "geosite:netflix",
+		"geosite:category_ai_cn":  "geosite:category-ai-cn",
+		"geosite:category-ads-al": "geosite:category-ads-all",
+		// not typos: other categories that happen to share a part, or sit close in length
+		"geoip:in-ir":              "",
+		"geoip:blacklist-ir":       "",
+		"geoip:google-cn":          "",
+		"geoip:telegram-ru":        "",
+		"geoip:no-such-country":    "",
+		"geosite:category-ai-chat": "",
+		"geosite:category-ir":      "",
+		// too short to tell, ambiguous between two, or too far
+		"geoip:xx":        "",
+		"geoip:de":        "",
+		"geoip:abcde":     "", // abcde1 and abcde2 are equally close
+		"geoip:privatez9": "",
+	} {
+		kind, code, _ := strings.Cut(ref, ":")
+		field := "ip"
+		if kind == "geosite" {
+			field = "domain"
+		}
+		match := `{"` + field + `":["` + ref + `"]}`
+		got := Check([]store.Rule{rule("r", match)}, d)
+		if len(got) != 1 {
+			t.Fatalf("%s: problems = %+v", ref, got)
+		}
+		msg := got[0].Message
+		if want == "" {
+			if strings.Contains(msg, "did you mean") {
+				t.Errorf("%s: suggested something: %q", ref, msg)
+			}
+			continue
+		}
+		if !strings.Contains(msg, "(did you mean "+want+"?)") {
+			t.Errorf("%s (%s): message = %q, want a suggestion of %s", ref, code, msg, want)
+		}
+	}
+}
+
+func TestOneEditApart(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want bool
+	}{
+		{"private", "privat", true}, {"privat", "private", true}, {"private", "privete", true}, {"private", "pirvate", true},
+		{"private", "private", false}, {"private", "privaets", false}, {"private", "prvt", false}, {"abc", "abd", true},
+		{"abcd", "abdc", true}, {"abcd", "badc", false}, {"a", "", true}, {"ab", "", false},
+	} {
+		if got := oneEditApart(c.a, c.b); got != c.want {
+			t.Errorf("oneEditApart(%q, %q) = %v, want %v", c.a, c.b, got, c.want)
+		}
 	}
 }

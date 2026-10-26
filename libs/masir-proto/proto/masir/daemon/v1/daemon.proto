@@ -480,7 +480,10 @@ message UpdateJob {
   // For a masir update: where the new binaries were unpacked, so a CLI installed
   // somewhere masird can't write can copy its own new binary from there.
   string staged_dir = 10;
-  repeated RuleProblem blocked_rules = 11; // with UPDATE_STATE_BLOCKED
+  // The enabled rules that stopped this job: with UPDATE_STATE_BLOCKED, the rules the new geo
+  // data can't build; with UPDATE_STATE_FAILED, the rules the new masir version can't build
+  // (nothing was replaced).
+  repeated RuleProblem blocked_rules = 11;
 }
 
 message CheckUpdateRequest {}

@@ -27,7 +27,7 @@ func cmdUpdate(a args) error {
 		return c.CheckUpdate(ctx, &pb.CheckUpdateRequest{})
 	})
 	if err != nil {
-		sp.Fail("Couldn't check for updates: " + message(err))
+		failWith(sp, "Couldn't check for updates: ", err)
 		return errReported
 	}
 	rel := res.Release
@@ -101,9 +101,10 @@ func startUpdate(target pb.UpdateTarget, force, disableBroken bool) error {
 // the user's call; with no terminal to ask, the flag says it ahead of time.
 func blockedGeoUpdate(job *pb.UpdateJob) error {
 	if !ui.Interactive() {
-		ui.Warn(fmt.Sprintf("The new geo data wasn't installed: it can't build %s:", counted(len(job.BlockedRules), "of your rules")))
-		fmt.Println(ui.Visual(indent(problemText(job.BlockedRules), "  ")))
-		fmt.Println(ui.Dim("The current geo data is unchanged. Fix or remove those rules (`masir rules edit`), or turn them off and install with `masir update geo --disable-broken-rules`."))
+		printFailure(fmt.Sprintf("The new geo data wasn't installed: it can't build %s.", ofYourRules(len(job.BlockedRules))),
+			problemText(job.BlockedRules),
+			advice{"Fix or remove those rules, or turn them off and install anyway:", []string{"masir rules check", "masir update geo --disable-broken-rules"}},
+			"The current geo data is unchanged.")
 		return errReported
 	}
 	ui.Note(problemText(job.BlockedRules), ui.Yellow("▲ Rules the new geo data can't build"))
@@ -279,7 +280,7 @@ func watchUpdate(target pb.UpdateTarget) error {
 			if job != nil && job.State == pb.UpdateState_UPDATE_STATE_RESTARTING {
 				break // the daemon went away to restart, as expected
 			}
-			pr.Fail(message(err))
+			failWith(pr, "", err)
 			return errReported
 		}
 		job = res.Job
@@ -317,7 +318,15 @@ func watchUpdate(target pb.UpdateTarget) error {
 	case pb.UpdateState_UPDATE_STATE_STOPPED:
 		pr.Stop("The update was stopped.")
 	case pb.UpdateState_UPDATE_STATE_FAILED:
-		pr.Fail("Update failed: " + friendlyUpdateError(job.Error))
+		if len(job.BlockedRules) > 0 { // the new version can't build some of the user's rules
+			pr.Fail(fmt.Sprintf("Update failed: the new version can't build %s.", ofYourRules(len(job.BlockedRules))))
+			printFailureBody(problemText(job.BlockedRules), brokenRulesAdvice(job.BlockedRules),
+				"Nothing was installed; what runs now is unchanged.")
+			return errReported
+		}
+		headline, adv := friendlyUpdateError(job.Error)
+		pr.Fail("Update failed: " + headline)
+		printFailureBody("", adv, "")
 		return errReported
 	case pb.UpdateState_UPDATE_STATE_BLOCKED:
 		pr.Stop("The new geo data isn't installed yet: it can't build some of your rules.")
@@ -494,25 +503,27 @@ func installPath(raw string) string {
 	return ""
 }
 
-// friendlyUpdateError turns the daemon's raw update failure into what to do next.
-func friendlyUpdateError(raw string) string {
+// friendlyUpdateError turns the daemon's raw update failure into what went wrong and what
+// to do next.
+func friendlyUpdateError(raw string) (string, advice) {
 	target := installPath(raw)
 	if target == "" {
 		target = "the daemon's binary"
 	}
 	switch {
 	case strings.Contains(raw, "permission denied"):
-		return fmt.Sprintf("masir doesn't have permission to replace %s. Run `masir daemon enable` to install the root service, or move masir to a writable directory.", target)
+		return fmt.Sprintf("masir doesn't have permission to replace %s.", target),
+			advice{"Install the root service, or move masir somewhere you can write:", []string{"masir daemon enable"}}
 	case strings.Contains(raw, "read-only file system"):
-		return fmt.Sprintf("%s is read-only; move masir to a writable directory.", target)
+		return fmt.Sprintf("%s is read-only.", target), advice{text: "Move masir to a directory you can write to."}
 	case strings.Contains(raw, "no space left on device"):
-		return "the disk is full; free some space and run `masir update` again."
+		return "The disk is full.", advice{"Free some space, then try again:", []string{"masir update"}}
 	case strings.Contains(raw, "text file busy"), strings.Contains(raw, "being used by another process"):
-		return "the binary is in use; close the other masir process and run `masir update` again."
+		return "The binary is in use.", advice{"Close the other masir process, then try again:", []string{"masir update"}}
 	case strings.Contains(raw, "checksum"):
-		return raw + " Run `masir update` again to download a fresh copy."
+		return capitalize(raw), advice{"Download a fresh copy:", []string{"masir update"}}
 	}
-	return raw
+	return capitalize(raw), advice{}
 }
 
 // syncServiceBinary brings the system service's own copy of masir up to the new
@@ -684,7 +695,7 @@ func jobSummary(j *pb.UpdateJob) string {
 	case pb.UpdateState_UPDATE_STATE_FAILED:
 		return ui.Red("failed: "+j.Error) + when
 	case pb.UpdateState_UPDATE_STATE_BLOCKED:
-		return ui.Yellow(fmt.Sprintf("not installed: the new data can't build %s", counted(len(j.BlockedRules), "of your rules"))) + when
+		return ui.Yellow(fmt.Sprintf("not installed: the new data can't build %s", ofYourRules(len(j.BlockedRules)))) + when
 	case pb.UpdateState_UPDATE_STATE_STOPPED:
 		return "stopped" + when
 	}

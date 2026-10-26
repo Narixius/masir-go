@@ -100,7 +100,7 @@ func writeElevatedResult(ok bool) {
 
 func handleError(_ io.Writer, _ fang.Styles, err error) {
 	lastErr = err.Error()
-	ui.Problem(capitalize(err.Error()), "Run `masir --help` for usage.")
+	printFailure(capitalize(err.Error()), "", advice{"See the usage:", []string{"masir --help"}}, "")
 }
 
 // report prints a command's error the clack way and returns the exit code: 130 when

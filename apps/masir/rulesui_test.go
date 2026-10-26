@@ -61,7 +61,7 @@ func brokenErr(t *testing.T) error {
 	return st.Err()
 }
 
-var iranProblem = &pb.RuleProblem{RuleTag: "iran-direct", Missing: []string{"geoip:in-ir"}, Message: "geoip:in-ir isn't in geoip.dat (similar: ir)"}
+var iranProblem = &pb.RuleProblem{RuleTag: "iran-direct", Missing: []string{"geoip:in-ir"}, Message: "geoip:in-ir isn't in geoip.dat"}
 
 func setPower(ctx context.Context, c pb.DaemonServiceClient) (*pb.SetPowerResponse, error) {
 	return c.SetPower(ctx, &pb.SetPowerRequest{On: true})
@@ -71,8 +71,9 @@ func TestRefusalWithoutATerminalSaysWhatToDoAndChangesNothing(t *testing.T) {
 	f := &rulesDaemon{powerErrs: []error{brokenErr(t)}, problems: []*pb.RuleProblem{iranProblem}}
 	useFake(t, f)
 	_, err := call(setPower)
-	if err == nil || !strings.Contains(err.Error(), "iran-direct") || !strings.Contains(err.Error(), "masir rules disable") {
-		t.Fatalf("err = %v", err)
+	ue, ok := asUserError(err)
+	if !ok || !strings.Contains(ue.details, "iran-direct") || ue.advice.cmds[0] != "masir rules disable iran-direct" || ue.note == "" {
+		t.Fatalf("err = %#v", err)
 	}
 	if f.powerCalls != 1 || len(f.disabled) != 0 {
 		t.Errorf("power calls = %d, rules turned off = %v: with no terminal nothing is decided for the user", f.powerCalls, f.disabled)
@@ -117,10 +118,23 @@ func TestTurnOffNamesEveryRuleAndSaysWhy(t *testing.T) {
 }
 
 func TestProblemText(t *testing.T) {
-	got := problemText([]*pb.RuleProblem{iranProblem, {RuleTag: "ssh", Message: "x", Suspended: true}})
-	want := "iran-direct: geoip:in-ir isn't in geoip.dat (similar: ir)\nssh: x (masir is running without it for now)"
+	got := problemText([]*pb.RuleProblem{
+		{RuleTag: "iran-direct", Message: "geoip:blacklist-ir isn't in geoip.dat; geoip:in-ir isn't in geoip.dat"},
+		{RuleTag: "ssh", Message: "x", Suspended: true},
+	})
+	want := "iran-direct\n" +
+		"  geoip:blacklist-ir isn't in geoip.dat\n" +
+		"  geoip:in-ir isn't in geoip.dat\n" +
+		"ssh\n  x\n  masir is running without this rule for now"
 	if got != want {
 		t.Fatalf("problemText =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestBrokenRulesAdviceIsRunnableAsItStands(t *testing.T) {
+	adv := brokenRulesAdvice([]*pb.RuleProblem{{RuleTag: "iran-direct"}, {RuleTag: "ai"}})
+	if len(adv.cmds) != 2 || adv.cmds[0] != "masir rules disable iran-direct ai" || adv.cmds[1] != "masir rules check" || strings.Contains(adv.text, "`") {
+		t.Fatalf("advice = %+v", adv)
 	}
 }
 
@@ -128,5 +142,16 @@ func TestBlockedGeoUpdateWithoutATerminalFailsAndNamesTheFlag(t *testing.T) {
 	job := &pb.UpdateJob{State: pb.UpdateState_UPDATE_STATE_BLOCKED, BlockedRules: []*pb.RuleProblem{iranProblem}}
 	if err := blockedGeoUpdate(job); err != errReported {
 		t.Fatalf("err = %v, want errReported (a non-zero exit)", err)
+	}
+}
+
+func TestPhrasesDoNotDoublePlurals(t *testing.T) {
+	for n, want := range map[int]string{1: "1 of your rules", 2: "2 of your rules"} {
+		if got := ofYourRules(n); got != want {
+			t.Errorf("ofYourRules(%d) = %q, want %q", n, got, want)
+		}
+	}
+	if got := counted(2, "rule"); got != "2 rules" {
+		t.Errorf("counted = %q", got)
 	}
 }

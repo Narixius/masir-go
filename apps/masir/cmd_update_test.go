@@ -16,7 +16,8 @@ func TestFriendlyUpdateError(t *testing.T) {
 		"install /x: text file busy":                                                     "in use",
 		"something else":                                                                 "something else",
 	} {
-		if got := friendlyUpdateError(raw); !strings.Contains(strings.ToLower(got), want) {
+		headline, adv := friendlyUpdateError(raw)
+		if got := headline + " " + adv.plain(); !strings.Contains(strings.ToLower(got), want) {
 			t.Errorf("friendlyUpdateError(%q) = %q; missing %q", raw, got, want)
 		}
 	}

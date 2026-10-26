@@ -5004,8 +5004,11 @@ type UpdateJob struct {
 	FinishedAtMs int64                  `protobuf:"varint,9,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
 	// For a masir update: where the new binaries were unpacked, so a CLI installed
 	// somewhere masird can't write can copy its own new binary from there.
-	StagedDir     string         `protobuf:"bytes,10,opt,name=staged_dir,json=stagedDir,proto3" json:"staged_dir,omitempty"`
-	BlockedRules  []*RuleProblem `protobuf:"bytes,11,rep,name=blocked_rules,json=blockedRules,proto3" json:"blocked_rules,omitempty"` // with UPDATE_STATE_BLOCKED
+	StagedDir string `protobuf:"bytes,10,opt,name=staged_dir,json=stagedDir,proto3" json:"staged_dir,omitempty"`
+	// The enabled rules that stopped this job: with UPDATE_STATE_BLOCKED, the rules the new geo
+	// data can't build; with UPDATE_STATE_FAILED, the rules the new masir version can't build
+	// (nothing was replaced).
+	BlockedRules  []*RuleProblem `protobuf:"bytes,11,rep,name=blocked_rules,json=blockedRules,proto3" json:"blocked_rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

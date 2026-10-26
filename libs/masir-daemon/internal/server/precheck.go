@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/narixius/masir-go/libs/masir-daemon/internal/rulecheck"
+	"github.com/narixius/masir-go/libs/masir-daemon/internal/update"
+	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
 // checkWithNewVersion asks a newly downloaded masir whether it can build every enabled
@@ -33,16 +35,14 @@ func (s *Server) checkWithNewVersion(ctx context.Context, bin string) error {
 	}
 	problems, err := askBinary(ctx, bin, req)
 	if err != nil {
-		return fmt.Errorf("the new version couldn't be checked against your rules, so it wasn't installed: %w", err)
+		return fmt.Errorf("the new version couldn't be checked against your rules, so nothing was installed: %w", err)
 	}
 	if len(problems) > 0 {
-		var lines []string
+		out := &update.RulesError{}
 		for _, p := range problems {
-			lines = append(lines, p.Tag+": "+p.Message)
+			out.Problems = append(out.Problems, &pb.RuleProblem{RuleTag: p.Tag, Missing: p.Missing, Message: p.Message})
 		}
-		return fmt.Errorf("not installed: the new version can't build %d of your rules (%s). "+
-			"Fix or turn them off (`masir rules check`), then update again; what runs now is unchanged",
-			len(problems), strings.Join(lines, "; "))
+		return out
 	}
 	return nil
 }

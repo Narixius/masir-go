@@ -225,6 +225,11 @@ func (p *Reporter) Version(v string)       { p.update(func(j *pb.UpdateJob) { j.
 func (p *Reporter) File(name string)       { p.update(func(j *pb.UpdateJob) { j.File = name }) }
 func (p *Reporter) StagedDir(d string)     { p.update(func(j *pb.UpdateJob) { j.StagedDir = d }) }
 
+// Rules records the enabled rules that stopped the job, without changing its state.
+func (p *Reporter) Rules(problems []*pb.RuleProblem) {
+	p.update(func(j *pb.UpdateJob) { j.BlockedRules = problems })
+}
+
 // Blocked ends the job without installing: the new data can't build these enabled rules.
 func (p *Reporter) Blocked(problems []*pb.RuleProblem) {
 	p.update(func(j *pb.UpdateJob) {

@@ -128,12 +128,17 @@ func call[T any](fn func(ctx context.Context, c pb.DaemonServiceClient) (T, erro
 	}
 	// The daemon won't start or change Xray while rules can't be built. It has said what
 	// is wrong; the user decides, and the call that was refused is tried once more.
-	retry, perr := brokenRulesFlow()
+	retry, problems, perr := brokenRulesFlow()
 	if perr != nil {
 		return zero, perr
 	}
 	if !retry {
-		return zero, fail("%s. %s", strings.TrimSuffix(message(err), "."), brokenRulesHint)
+		return zero, &userError{
+			headline: brokenRulesHeadline(len(problems)),
+			details:  problemText(problems),
+			advice:   brokenRulesAdvice(problems),
+			note:     "Nothing was changed.",
+		}
 	}
 	ctx2, cancel2 := rpc()
 	defer cancel2()
@@ -153,27 +158,33 @@ func errorReason(err error) string {
 // message turns an error into what the user reads: the daemon's message without the
 // gRPC wrapping, or what to do when the daemon can't be reached.
 func message(err error) string {
-	msg, hint := describe(err)
-	if hint != "" {
-		return msg + "\n" + hint
+	if ue, ok := asUserError(err); ok {
+		return ue.Error()
 	}
-	return msg
+	msg, adv := describe(err)
+	if adv.empty() {
+		return msg
+	}
+	return msg + "\n" + adv.plain()
 }
 
-// describe splits an error into what went wrong and the next step, so the UI can style
-// them separately.
-func describe(err error) (string, string) {
+// describe splits an error into what went wrong and what to do about it, so the UI can
+// show them in separate places.
+func describe(err error) (string, advice) {
+	if ue, ok := asUserError(err); ok {
+		return ue.headline, ue.advice
+	}
 	st, ok := status.FromError(err)
 	if !ok {
-		return err.Error(), ""
+		return err.Error(), advice{}
 	}
 	// The daemon itself answers Unavailable when a subscription provider can't be
 	// reached; only a failed connection to the daemon means the daemon is gone.
 	if st.Code() == codes.Unavailable && strings.Contains(st.Message(), "connection error") {
-		return "Can't reach the masir daemon", "start it with `masir daemon start`"
+		return "Can't reach the masir daemon", advice{"Start it with:", []string{"masir daemon start"}}
 	}
 	if st.Code() == codes.Unimplemented {
-		return "The running masir daemon is older than this masir", staleDaemonHint()
+		return "The running masir daemon is older than this masir", staleDaemonAdvice()
 	}
 	msg := st.Message()
 	return msg, explain(msg)
@@ -181,56 +192,62 @@ func describe(err error) (string, string) {
 
 // showError prints a failure the way the rest of masir looks.
 func showError(err error) {
-	msg, hint := describe(err)
-	ui.Problem(msg, hint)
+	if ue, ok := asUserError(err); ok {
+		printFailure(ue.headline, ue.details, ue.advice, ue.note)
+		return
+	}
+	msg, adv := describe(err)
+	printFailure(msg, "", adv, "")
 }
 
 var portRe = regexp.MustCompile(`:(\d{2,5}): bind: address already in use`)
 
 // explain turns errors that come from the system into what to do about them.
-func explain(msg string) string {
+func explain(msg string) advice {
 	lower := strings.ToLower(msg)
 	switch {
 	case strings.Contains(lower, "failed to add system route") && strings.Contains(lower, "file exists"):
-		return "Another VPN or TUN app already routes your traffic. Quit it, then run `masir connect`."
+		return advice{"Another VPN or TUN app already routes your traffic. Quit it, then run:", []string{"masir connect"}}
 	case strings.Contains(lower, "address already in use"):
 		if m := portRe.FindStringSubmatch(msg); m != nil {
-			return fmt.Sprintf("Port %s is taken by another program. Quit it, or move masir with `masir settings set mixedPort <port>`.", m[1])
+			return advice{fmt.Sprintf("Port %s is taken by another program. Quit it, or move masir to another port, for example:", m[1]),
+				[]string{"masir settings set mixedPort 7891"}}
 		}
-		return "A port masir needs is taken by another program. Quit the other VPN or proxy, then try again."
+		return advice{text: "A port masir needs is taken by another program. Quit the other VPN or proxy, then try again."}
 	case strings.Contains(lower, "operation not permitted") && strings.Contains(lower, "tun"):
-		return "TUN needs the daemon to run as root: `masir daemon enable` sets that up."
+		return advice{"TUN needs the daemon to run as root. Set that up once:", []string{"masir daemon enable"}}
 	case strings.Contains(lower, "wintun.dll"):
-		return "TUN on Windows needs wintun.dll beside masir.exe; the service writes it there from masir.exe " +
-			"when it starts. Reinstall the service with `masir daemon enable` and see `masir logs` if this persists."
+		return advice{"TUN on Windows needs wintun.dll beside masir.exe; the service writes it there from masir.exe when it starts. " +
+			"Reinstall the service, and look at the log if this persists:", []string{"masir daemon enable", "masir logs"}}
 	case strings.Contains(lower, "failed to load code") || strings.Contains(lower, "failed to check code"):
-		return "That category isn't in the installed geo data (Loyalsoldier/v2ray-rules-dat): geoip.dat has every " +
-			"two-letter country code plus lists such as private, google, telegram, netflix and cloudflare; " +
-			"`masir update geo` fetches the latest."
+		return advice{"That category isn't in the installed geo data (Loyalsoldier/v2ray-rules-dat): geoip.dat has every " +
+			"two-letter country code plus lists such as private, google, telegram, netflix and cloudflare. Fetch the latest data:",
+			[]string{"masir update geo"}}
 	case strings.Contains(lower, "geosite") || strings.Contains(lower, "geoip.dat"):
-		return "geosite:/geoip: rules need geoip.dat and geosite.dat next to the masir executable: `masir update geo` downloads them."
+		return advice{"geosite: and geoip: rules need geoip.dat and geosite.dat next to the masir executable. Download them:", []string{"masir update geo"}}
 	case strings.Contains(lower, "permission denied"):
-		return "masir doesn't have permission to write there. If it's the system service or a root-owned file, run `masir daemon enable` or `sudo masir update` once."
+		return advice{"masir doesn't have permission to write there. If it's the system service or a root-owned file, do one of these once:",
+			[]string{"masir daemon enable", "sudo masir update"}}
 	case strings.Contains(lower, "read-only file system"):
-		return "That location is read-only. Move masir (and its geo files) somewhere you can write."
+		return advice{text: "That location is read-only. Move masir (and its geo files) somewhere you can write."}
 	case strings.Contains(lower, "no space left on device"):
-		return "The disk is full. Free some space, then try again."
+		return advice{text: "The disk is full. Free some space, then try again."}
 	case strings.Contains(lower, "text file busy"):
-		return "The file is still running. Try again in a moment."
+		return advice{text: "The file is still running. Try again in a moment."}
 	case strings.Contains(lower, "being used by another process"):
-		return "Another process is using the file. Close it, then try again."
+		return advice{text: "Another process is using the file. Close it, then try again."}
 	case strings.Contains(lower, "no such host") || strings.Contains(lower, "name resolution"):
-		return "The name didn't resolve. Check your connection or DNS; `masir status` shows both."
+		return advice{"The name didn't resolve. Check your connection and DNS; this shows both:", []string{"masir status"}}
 	case strings.Contains(lower, "connection refused"):
-		return "Nothing accepted the connection. Check the address and port, or switch proxy with `masir use`."
+		return advice{"Nothing accepted the connection. Check the address and port, or switch proxy:", []string{"masir use"}}
 	case strings.Contains(lower, "i/o timeout") || strings.Contains(lower, "deadline exceeded") || strings.Contains(lower, "timed out"):
-		return "The request timed out. Check your connection, or try another proxy with `masir use --fastest`."
+		return advice{"The request timed out. Check your connection, or try another proxy:", []string{"masir use --fastest"}}
 	case strings.Contains(lower, "certificate") || strings.Contains(lower, "tls handshake"):
-		return "TLS failed. The network may be filtered, or the server's certificate is wrong."
+		return advice{text: "TLS failed. The network may be filtered, or the server's certificate is wrong."}
 	case strings.Contains(lower, "401") || strings.Contains(lower, "403") || strings.Contains(lower, "404") || strings.Contains(lower, "429"):
-		return "The provider rejected the request. The subscription may have expired or be rate-limited; try `masir sub update`."
+		return advice{"The provider rejected the request. The subscription may have expired or be rate-limited. Try refreshing it:", []string{"masir sub update"}}
 	}
-	return ""
+	return advice{}
 }
 
 // errReported means the command already told the user what went wrong.
@@ -238,11 +255,11 @@ var errReported = errors.New("reported")
 
 func fail(format string, a ...any) error { return fmt.Errorf(format, a...) }
 
-// staleDaemonHint says how to run a daemon that matches this masir: the root service
+// staleDaemonAdvice says how to run a daemon that matches this masir: the root service
 // keeps its own copy of masir, which only `daemon enable` or `update` replaces.
-func staleDaemonHint() string {
+func staleDaemonAdvice() advice {
 	if service.Installed() {
-		return "Install the new one into the service with `masir daemon enable`, or use `masir update` once a release is out."
+		return advice{"Install the new one into the service:", []string{"masir daemon enable"}}
 	}
-	return "Restart it with `masir daemon restart` to run this version."
+	return advice{"Restart it to run this version:", []string{"masir daemon restart"}}
 }

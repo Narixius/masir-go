@@ -112,8 +112,8 @@ func Check(rules []store.Rule, d Data) []Problem {
 			if !cat.has(ref.Code) {
 				missing = append(missing, ref.String())
 				note := fmt.Sprintf("%s isn't in %s", ref, file)
-				if similar := cat.similar(ref.Code); len(similar) > 0 {
-					note += " (similar: " + strings.Join(similar, ", ") + ")"
+				if guess := cat.suggest(ref.Code); guess != "" {
+					note += fmt.Sprintf(" (did you mean %s:%s?)", ref.Kind, guess)
 				}
 				notes = append(notes, note)
 			}
@@ -161,14 +161,63 @@ func (c *catalog) load(path string) error {
 
 func (c *catalog) has(code string) bool { return c.codes[code] }
 
-// similar suggests codes the user may have meant: the parts of a compound code
-// ("in-ir" → "ir"), and codes that contain it.
-func (c *catalog) similar(code string) []string {
-	var out []string
-	for _, part := range strings.Split(code, "-") {
-		if part != "" && part != code && c.codes[part] && !slices.Contains(out, part) {
-			out = append(out, part)
+// suggest returns the category the user most likely meant, or "" when it can't tell. It
+// only corrects typing: a code that differs from an existing one by case or "_" for "-",
+// or by a single missing, extra, wrong or swapped character (for codes of five or more
+// characters, and only when exactly one category is that close). It never guesses from
+// meaning: "google-cn" is not "cn", and "in-ir" is not "ir", and a wrong suggestion on a
+// rule could widen what it matches.
+func (c *catalog) suggest(code string) string {
+	norm := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(code)), "_", "-")
+	if norm != code && c.codes[norm] {
+		return norm
+	}
+	if len(code) < 5 {
+		return ""
+	}
+	found := ""
+	for known := range c.codes {
+		if oneEditApart(code, known) {
+			if found != "" {
+				return "" // more than one candidate: don't pick
+			}
+			found = known
 		}
 	}
-	return out
+	return found
+}
+
+// oneEditApart reports whether a and b differ by exactly one inserted, deleted or
+// substituted character, or by two neighbouring characters swapped.
+func oneEditApart(a, b string) bool {
+	if a == b {
+		return false
+	}
+	switch len(a) - len(b) {
+	case 0:
+		var diffs []int
+		for i := range a {
+			if a[i] != b[i] {
+				diffs = append(diffs, i)
+			}
+		}
+		if len(diffs) == 1 {
+			return true
+		}
+		return len(diffs) == 2 && diffs[1] == diffs[0]+1 && a[diffs[0]] == b[diffs[1]] && a[diffs[1]] == b[diffs[0]]
+	case 1:
+		return deletesOne(a, b)
+	case -1:
+		return deletesOne(b, a)
+	}
+	return false
+}
+
+// deletesOne reports whether removing one character from long gives short.
+func deletesOne(long, short string) bool {
+	i := 0
+	for i < len(short) && long[i] == short[i] {
+		i++
+	}
+	return long[i+1:] == short[i:]
 }

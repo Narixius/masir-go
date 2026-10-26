@@ -499,3 +499,30 @@ func TestMasirUpdateStopsBeforeInstallingWhenThePreflightRefuses(t *testing.T) {
 		}
 	}
 }
+
+func TestMasirUpdateRecordsTheRulesThePreflightNamed(t *testing.T) {
+	gh := newFakeGitHub(t)
+	name := ArchiveName("v0.2.0", runtime.GOOS, runtime.GOARCH)
+	arc := archive(t, name, map[string]string{exe("masir"): "new masir"})
+	gh.publish(ReleaseRepo, "v0.2.0", map[string][]byte{
+		name: arc, "checksums.txt": []byte(fmt.Sprintf("%s  %s\n", sum(arc), name)),
+	})
+	bin := filepath.Join(t.TempDir(), exe("masir"))
+	os.WriteFile(bin, []byte("old masir"), 0o755)
+	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, t.TempDir())
+	r.Start(Masir{Clients: clients(), Current: "0.1.0", Binary: bin, WorkDir: r.workDir,
+		Preflight: func(context.Context, string) error {
+			return &RulesError{Problems: []*pb.RuleProblem{{RuleTag: "iran-direct", Missing: []string{"geoip:in-ir"}, Message: "geoip:in-ir isn't in geoip.dat"}}}
+		},
+	}.Run)
+	job := wait(t, r)
+	if job.State != pb.UpdateState_UPDATE_STATE_FAILED || !strings.Contains(job.Error, "can't build 1 of your rules") {
+		t.Fatalf("job = %v %q", job.State, job.Error)
+	}
+	if len(job.BlockedRules) != 1 || job.BlockedRules[0].RuleTag != "iran-direct" || job.BlockedRules[0].Missing[0] != "geoip:in-ir" {
+		t.Fatalf("the job should carry the rules: %+v", job.BlockedRules)
+	}
+	if got, _ := os.ReadFile(bin); string(got) != "old masir" {
+		t.Errorf("binary = %q", got)
+	}
+}

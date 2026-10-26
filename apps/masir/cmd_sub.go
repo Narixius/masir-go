@@ -43,7 +43,7 @@ func cmdSubAdd(a args) error {
 	name = strings.TrimSpace(name)
 	for _, s := range all {
 		if name != "" && strings.EqualFold(s.sub.Name, name) {
-			return fail("subscription %q already exists; refresh it with `masir sub update --name %s`", name, name)
+			return advised(fmt.Sprintf("Subscription %q already exists.", name), "Refresh it instead:", "masir sub update --name "+quoteArg(name))
 		}
 	}
 	var interval uint32
@@ -64,7 +64,7 @@ func cmdSubAdd(a args) error {
 		return c.AddSubscription(ctx, &pb.AddSubscriptionRequest{Url: rawURL, Name: name, CustomUpdateIntervalMinutes: interval})
 	})
 	if err != nil {
-		sp.Fail(message(err))
+		failWith(sp, "", err)
 		return errReported
 	}
 	sub := res.Subscription

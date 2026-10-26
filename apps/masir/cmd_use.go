@@ -15,7 +15,7 @@ func cmdUse(a args) error {
 		return err
 	}
 	if len(all) == 0 {
-		return fail("no subscriptions yet; add one with `masir sub add <url>`")
+		return advised("There are no subscriptions yet.", "Add one:", "masir sub add <url>")
 	}
 
 	var key, reason string
@@ -31,7 +31,7 @@ func cmdUse(a args) error {
 		key = nodeKey(s.sub.Id, cfg.Id)
 		reason = "id"
 	case !ui.Interactive():
-		return fail("pass a proxy id: masir use <id> (ids are in `masir sub list --nodes`), or --fastest")
+		return advised("Without a terminal, pass a proxy id, or --fastest.", "The ids are listed by:", "masir sub list --nodes")
 	default:
 		key, err = pickNode(all, "Choose active outbound configuration", activeKey())
 		reason = "interactive"

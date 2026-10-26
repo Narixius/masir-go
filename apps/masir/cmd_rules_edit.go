@@ -26,7 +26,7 @@ func cmdRulesEdit(a args) error {
 		return err
 	}
 	if len(rules) == 0 {
-		return fail("no rules yet; add one with `masir rules add`")
+		return advised("There are no rules yet.", "Add one:", "masir rules add")
 	}
 	name := a.arg(0)
 	if name == "" {
@@ -61,7 +61,7 @@ func cmdRulesEdit(a args) error {
 		return saveRule(orig, draft, rules, all)
 	}
 	if !ui.Interactive() {
-		return fail("pass changes as flags (see `masir rules edit --help`), or run in a terminal for the menu")
+		return advised("Without a terminal, changes must be passed as flags.", "See them:", "masir rules edit --help")
 	}
 	return editMenu(orig, rules, all)
 }
@@ -233,14 +233,14 @@ func saveRule(orig, d ruleDraft, rules []*pb.RoutingRule, all []subNodes) error 
 	if _, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.AlterRoutingResponse, error) {
 		return c.AlterRouting(ctx, req)
 	}); err != nil {
-		sp.Fail(message(err))
+		failWith(sp, "", err)
 		return errReported
 	}
 	if d.index != orig.index {
 		if _, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.MoveRoutingResponse, error) {
 			return c.MoveRouting(ctx, &pb.MoveRoutingRequest{RuleTag: d.name, Index: uint32(d.index)})
 		}); err != nil {
-			sp.Fail(message(err))
+			failWith(sp, "", err)
 			return errReported
 		}
 	}

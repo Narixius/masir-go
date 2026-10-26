@@ -138,7 +138,7 @@ func cmdGetConfig(args) error {
 		return err
 	}
 	if res.Json == "" {
-		return fail("xray isn't running, so there's no config yet; `masir connect` starts it")
+		return advised("Xray isn't running, so there's no config yet.", "Start it with:", "masir connect")
 	}
 	var out bytes.Buffer
 	if json.Indent(&out, []byte(res.Json), "", "  ") != nil {

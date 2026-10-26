@@ -19,15 +19,20 @@ import (
 // inRulesPrompt stops the calls the prompt itself makes from prompting again.
 var inRulesPrompt bool
 
-// problemText lists the rules that can't run, one per line.
+// problemText lists the rules that can't run, each with what is missing under it:
+//
+//	iran-direct
+//	  geoip:in-ir isn't in geoip.dat
 func problemText(problems []*pb.RuleProblem) string {
 	var lines []string
 	for _, p := range problems {
-		line := p.RuleTag + ": " + p.Message
-		if p.Suspended {
-			line += " (masir is running without it for now)"
+		lines = append(lines, p.RuleTag)
+		for _, note := range strings.Split(p.Message, "; ") {
+			lines = append(lines, "  "+note)
 		}
-		lines = append(lines, line)
+		if p.Suspended {
+			lines = append(lines, "  masir is running without this rule for now")
+		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -80,24 +85,38 @@ func counted(n int, word string) string {
 	return fmt.Sprintf("%d %ss", n, word)
 }
 
-const brokenRulesHint = "Turn them off with `masir rules disable <name>`, fix them with `masir rules edit <name>`, " +
-	"or update the geo data with `masir update geo`. `masir rules check` lists them."
+// ofYourRules reads "1 of your rules", "2 of your rules": the phrase doesn't take a plural.
+func ofYourRules(n int) string { return fmt.Sprintf("%d of your rules", n) }
+
+// brokenRulesAdvice is what to do about rules that can't run, with their names filled in
+// so the command can be run as it is.
+func brokenRulesAdvice(problems []*pb.RuleProblem) advice {
+	return advice{
+		text: "To go on, turn them off, or look at them first:",
+		cmds: []string{"masir rules disable " + strings.Join(problemTags(problems), " "), "masir rules check"},
+	}
+}
+
+func brokenRulesHeadline(n int) string {
+	return fmt.Sprintf("%s can't run with the installed geo data.", capitalize(counted(n, "rule")))
+}
 
 // brokenRulesFlow answers the daemon's refusal: it asks the daemon which rules can't run,
 // and offers to turn them off. It reports whether the refused call should be tried again.
-func brokenRulesFlow() (retry bool, err error) {
+func brokenRulesFlow() (retry bool, problems []*pb.RuleProblem, err error) {
 	inRulesPrompt = true
 	defer func() { inRulesPrompt = false }()
 	res, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.CheckRulesResponse, error) {
 		return c.CheckRules(ctx, &pb.CheckRulesRequest{})
 	})
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if len(res.Problems) == 0 {
-		return true, nil // sorted out since
+		return true, nil, nil // sorted out since
 	}
-	return offerToTurnOff(res.Problems, "Turn these rules off and continue?")
+	retry, err = offerToTurnOff(res.Problems, "Turn these rules off and continue?")
+	return retry, res.Problems, err
 }
 
 func cmdRulesCheck(a args) error {
@@ -126,9 +145,8 @@ func cmdRulesCheck(a args) error {
 	if off, err := offerToTurnOff(res.Problems, "Turn these rules off?"); err != nil || off {
 		return err
 	}
-	ui.Warn(fmt.Sprintf("%s of %d can't run with the installed geo data:", counted(len(res.Problems), "rule"), enabled))
-	fmt.Println(ui.Visual(indent(problemText(res.Problems), "  ")))
-	fmt.Println(ui.Dim(brokenRulesHint))
+	printFailure(fmt.Sprintf("%s of %d can't run with the installed geo data.", capitalize(counted(len(res.Problems), "rule")), enabled),
+		problemText(res.Problems), brokenRulesAdvice(res.Problems), "")
 	return errReported
 }
 

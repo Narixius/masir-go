@@ -76,6 +76,30 @@ func Command(cmd string) {
 	fmt.Println(cmd)
 }
 
+// Gap separates blocks of text when there is no rail to do it: a blank line, but only
+// outside a terminal.
+func Gap() {
+	if !styled {
+		fmt.Println()
+	}
+}
+
+// Advise prints what to do about a problem: a sentence on the rail, then each command
+// alone on its own line, without the rail or colors, so selecting the line copies exactly
+// the command. The sentence should end with a colon when commands follow.
+func Advise(text string, commands []string) {
+	if text != "" {
+		Message(text)
+	}
+	indent := "  "
+	if styled {
+		indent = "   " // under the text on the rail
+	}
+	for _, c := range commands {
+		fmt.Println(indent + c)
+	}
+}
+
 // Message prints lines on the rail without a symbol.
 func Message(msg string) {
 	if !styled {
