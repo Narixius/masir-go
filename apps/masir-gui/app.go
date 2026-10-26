@@ -72,6 +72,7 @@ type app struct {
 
 	// What the person is doing.
 	screen    screen
+	backTo    screen // where a page's back arrow goes
 	open      section
 	busy      string // what a running action is called, e.g. "Connecting…"
 	query     string // search in the server list
@@ -165,6 +166,13 @@ func (a *app) openScreen(s screen) {
 	if s == screenSettings {
 		a.cliChecked = false  // look for the command-line tool again
 		a.refreshLoginState() // and for the login item, in the background
+	}
+	// The back arrow returns to the page this one opened over: the settings page can open
+	// its own add-subscription form, which then returns to it.
+	if s == screenAddSubscription && from == screenSettings {
+		a.backTo = screenSettings
+	} else {
+		a.backTo = screenMain
 	}
 	if from == screenMain {
 		// A page opening from the main one: size the window before it slides. Coming back,

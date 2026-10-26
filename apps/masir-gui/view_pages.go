@@ -67,7 +67,10 @@ func (a *app) screenHeader(c *ui.Context, p palette, title string) {
 	ui.Row(c).Padding(0, 0, tw(3)).AlignItems(ui.Center).Shrink(0).Children(func() {
 		ui.Row(c).Width(tw(7)).Children(func() {
 			if iconButton(c, "back", iconBack, "Back", p, iconSM, variantGhost, 16) {
-				a.screen = screenMain
+				a.screen = a.backTo
+				if a.screen != screenMain {
+					a.requestHeight()
+				}
 			}
 		})
 		label(c, title, sizeTitle, 18, 600, p.text).TextAlign(ui.Center).Grow(1).SingleLine()

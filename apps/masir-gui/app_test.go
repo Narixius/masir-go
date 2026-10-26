@@ -240,6 +240,31 @@ func TestSettingsAndBack(t *testing.T) {
 	}
 }
 
+// TestAddSubscriptionReturnsToSettings checks that the add form opened from settings goes
+// back there, not to the main page.
+func TestAddSubscriptionReturnsToSettings(t *testing.T) {
+	a := newTestApp(ukServers())
+	tt := tester(a)
+	if err := tt.Click("Settings"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if err := tt.Click("Add"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !tt.HasText("Add Subscription") {
+		t.Fatalf("not on the add page: %q", tt.Texts())
+	}
+	if err := tt.Click("Back"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if !tt.HasText("Always-on Proxy Port") || !tt.HasText("Settings") {
+		t.Fatalf("not back in settings: %q", tt.Texts())
+	}
+}
+
 func TestSpeedAndDurationFormats(t *testing.T) {
 	for in, want := range map[uint64]string{0: "0KB/s", 2048: "2KB/s", 3 << 20: "3.0MB/s", 50 << 20: "50MB/s"} {
 		if got := speed(in); got != want {
