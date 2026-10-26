@@ -14,7 +14,7 @@ import (
 
 // Flags are drawn, not typed: Windows' emoji font has no flag glyphs, and some Linux
 // systems have no emoji font at all. The drawings are the 4x3 SVGs of lipis/flag-icons
-// (see flags.LICENSE.txt), packed to keep them one small file.
+// (see resources/flags.LICENSE.txt), packed to keep them one small file.
 //
 //go:embed flags.json.gz
 var flagFiles []byte
