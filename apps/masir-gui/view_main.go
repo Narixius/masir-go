@@ -539,12 +539,24 @@ func (a *app) rulesPanel(c *ui.Context, p palette) {
 	a.lastRuleTop, a.lastRuleEnd = first, last
 
 	a.ruleItems = a.ruleListItems(a.filteredRules())
+	maxHeight := 212 - (2*tw(2) + tw(7) + 1)
+	height := a.ruleListH
+	if height <= 0 {
+		height = maxHeight
+	}
 	if len(a.ruleItems) == 0 {
 		msg := "No rules configured."
 		if count > 0 {
 			msg = "No matching rules found."
 		}
-		label(c, msg, sizeSubhead, 18, 400, p.muted).TextAlign(ui.Center).Padding(10, 0)
+		empty := ui.Column(c.Key("rule-empty")).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+			label(c, msg, sizeSubhead, 18, 400, p.muted).TextAlign(ui.Center)
+		})
+		if count > 0 {
+			empty.Height(height) // keep the open list's height while a search narrows it
+		} else {
+			empty.Padding(10, 0)
+		}
 		return
 	}
 	list := ui.List(c, &a.rulesList, len(a.ruleItems), func(i int) {
@@ -554,7 +566,15 @@ func (a *app) rulesPanel(c *ui.Context, p palette) {
 			return
 		}
 		a.ruleRow(c, p, it.rule)
-	}).MaxHeight(212-(2*tw(2)+tw(7)+1)).Padding(tw(1), tw(1.5), tw(1), tw(1)).Gap(tw(1.5)).Shrink(0)
+	}).Padding(tw(1), tw(1.5), tw(1), tw(1)).Gap(tw(1.5)).Shrink(0)
+	if a.ruleQuery == "" {
+		list.MaxHeight(maxHeight)
+		if h := list.Bounds().H; h > 0 {
+			a.ruleListH = h
+		}
+	} else {
+		list.Height(height)
+	}
 	if !enabled {
 		list.Opacity(0.5)
 	}

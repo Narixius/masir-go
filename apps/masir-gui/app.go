@@ -129,6 +129,7 @@ type app struct {
 	baseHeight   float32            // the main page's height with both lists closed
 	natural      map[string]float32 // the height each list has when fully open
 	serverListH  float32            // the server list's height with no search, so filtering keeps it
+	ruleListH    float32            // the rules list's height with no search, so filtering keeps it
 	pend         pending            // changes shown ahead of the daemon
 
 	// Rules: the swipe of each row, which row is open, the right-click menu, the app names

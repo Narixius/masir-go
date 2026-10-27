@@ -430,6 +430,26 @@ func TestServerListKeepsItsHeightWhenSearching(t *testing.T) {
 	}
 }
 
+func TestRulesListKeepsItsHeightWhenSearching(t *testing.T) {
+	a, _, tt := openRules(t)
+	if a.ruleListH <= 0 {
+		t.Fatalf("the open rules list was not measured: %v", a.ruleListH)
+	}
+	before, ok := tt.Find("Masir v0.1.0")
+	if !ok {
+		t.Fatalf("no footer: %q", tt.Texts())
+	}
+	tt.Type("no-such-rule")
+	tt.Frame()
+	after, ok := tt.Find("Masir v0.1.0")
+	if !ok {
+		t.Fatalf("no footer after searching: %q", tt.Texts())
+	}
+	if d := before.Y - after.Y; d > 1 || d < -1 {
+		t.Fatalf("the rules list changed height while searching: footer at %v then %v", before.Y, after.Y)
+	}
+}
+
 func TestFlagOf(t *testing.T) {
 	flag, rest := flagOf("🇬🇧 United Kingdom")
 	if flag != "🇬🇧" || rest != "United Kingdom" {
