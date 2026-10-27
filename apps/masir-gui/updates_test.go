@@ -211,6 +211,23 @@ func TestDaemonStartForgetsAnIgnoredPrompt(t *testing.T) {
 	}
 }
 
+func TestTheAppCatchesUpADaemonLeftBehindByAnAppOnlyUpdate(t *testing.T) {
+	f := ukServers()
+	a := newTestApp(f) // daemon and app both 0.1.0, so no catch-up yet
+	f.status.Version = "0.4.0"
+	f.release = releaseInfo("0.4.0", "v0.4.1")
+	f.updateJob = &pb.UpdateJob{
+		Target:  pb.UpdateTarget_UPDATE_TARGET_MASIR,
+		State:   pb.UpdateState_UPDATE_STATE_UP_TO_DATE,
+		Version: "v0.4.1",
+	}
+	a.version = "0.4.1"
+	a.applyStatus(f.status)
+	if !f.called("start update") {
+		t.Fatalf("the daemon left at 0.4.0 was not updated: %v", f.calls)
+	}
+}
+
 func TestDeferredDaemonUpdateRestartsWithoutAnAppUpdate(t *testing.T) {
 	f := ukServers()
 	f.status.Version = "0.2.0"

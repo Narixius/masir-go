@@ -69,6 +69,7 @@ type updateState struct {
 	pendingVersion  string
 	pendingAtLaunch bool
 	restarting      bool
+	catchUp         bool // this app launch already checked a daemon left behind by an app-only update
 }
 
 // The app's updater is behind variables so tests do not need a signed release or a
@@ -107,6 +108,7 @@ func (a *app) observeUpdates(st *pb.Status) {
 		a.upd.rel = nil
 	}
 	a.maybeFinishPending(st)
+	a.catchUpDaemon(st)
 	a.maybeCheckUpdates()
 	if !a.upd.attached {
 		// A job started by the CLI or a previous GUI is still the one to show.
@@ -130,6 +132,43 @@ func (a *app) applyRelease(rel *pb.ReleaseInfo) {
 	if a.upd.phase == updateIdle && a.hasUpdate() {
 		a.upd.phase = updateAvailable
 	}
+}
+
+// catchUpDaemon handles the one case the app update can leave behind: the desktop app
+// reached a release before the daemon's cached release check knew about it, so the update
+// only replaced the app. The daemon and the app should run the same release; ask GitHub
+// directly, then install the daemon if it is behind.
+func (a *app) catchUpDaemon(st *pb.Status) {
+	if a.upd.catchUp || a.busyUpdate() || a.upd.checking || a.upd.restarting {
+		return
+	}
+	if a.version == "" || st.GetVersion() == "" || sameVersion(a.version, st.GetVersion()) {
+		return
+	}
+	a.upd.catchUp = true
+	a.checkDaemonReleaseForced()
+}
+
+// checkDaemonReleaseForced asks GitHub through the daemon, ignoring its one-day cache,
+// and starts the daemon update when the app is newer than what runs.
+func (a *app) checkDaemonReleaseForced() {
+	a.upd.checking = true
+	a.async(func() {
+		ctx, cancel := rpc()
+		res, err := a.d.CheckUpdate(ctx, &pb.CheckUpdateRequest{Force: true})
+		cancel()
+		a.post(func() {
+			a.upd.checking = false
+			if err == nil && res.GetRelease() != nil {
+				a.applyRelease(res.GetRelease())
+				if a.daemonUpdateAvailable() && !a.busyUpdate() {
+					a.startDaemonUpdate()
+					return
+				}
+			}
+			a.maybeCheckUpdates()
+		})
+	})
 }
 
 // maybeCheckUpdates asks the daemon for a release when its cached one is missing or old,
