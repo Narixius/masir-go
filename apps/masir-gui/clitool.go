@@ -7,13 +7,15 @@ import (
 	"strings"
 )
 
-// cliStatus is what Settings shows of the masir command-line tool: whether the app
-// installed it, and whether a shell finds it.
+// cliStatus is what Settings shows of the masir command-line tool: whether it is
+// installed, whether it is this app's, and whether a shell finds it.
 type cliStatus struct {
-	installed bool
-	onPath    bool
-	path      string // the command itself
-	dir       string // where it is, for the PATH hint
+	installed  bool
+	ours       bool // the command is this app's link or binary
+	onPath     bool
+	needsShell bool   // a shell config was changed and an open terminal predates it
+	path       string // the command itself
+	dir        string // where it is, for the PATH hint
 }
 
 // samePath reports whether a and b name the same file, resolving links. Windows paths are

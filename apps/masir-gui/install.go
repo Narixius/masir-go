@@ -3,6 +3,16 @@ package main
 // Installing what the app can give the system: the daemon as a background service, and
 // masir as a command-line tool. Both run off the main thread and report by toast.
 
+import (
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+
+	"github.com/egoist/mygo"
+)
+
 // cliState is the command-line tool as Settings shows it: the last check, refreshed in the
 // background, never with a shell or registry read in the frame that opens Settings.
 func (a *app) cliState() cliStatus {
@@ -10,6 +20,121 @@ func (a *app) cliState() cliStatus {
 		a.refreshCLIState()
 	}
 	return a.cli
+}
+
+// cliInstallFile records what the automatic install did: done after a successful one,
+// off when the person removed the command, so a later launch does not put it back.
+func cliInstallFile() string {
+	dir, err := mygo.App.Path(mygo.PathUserData)
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "cli-install")
+}
+
+func (a *app) cliChoice() string {
+	if a.cliFile == "" {
+		return ""
+	}
+	b, err := os.ReadFile(a.cliFile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func (a *app) setCLIChoice(v string) {
+	if a.cliFile == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(a.cliFile), 0o700); err != nil {
+		log.Printf("cli: %v", err)
+		return
+	}
+	if err := os.WriteFile(a.cliFile, []byte(v+"\n"), 0o600); err != nil {
+		log.Printf("cli: %v", err)
+	}
+}
+
+// stableInstallLocation keeps the automatic install out of a disk image, a translocated
+// copy, or a temporary extraction: a link into one of those would break as soon as it
+// went away. MASIR_CLI_INSTALL=1 forces it for development.
+func stableInstallLocation(bin string) bool {
+	if os.Getenv("MASIR_CLI_INSTALL") == "1" {
+		return true
+	}
+	p, err := filepath.Abs(bin)
+	if err != nil {
+		return false
+	}
+	if strings.Contains(p, string(filepath.Separator)+"AppTranslocation"+string(filepath.Separator)) {
+		return false
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		if strings.HasPrefix(p, "/Applications/") {
+			return true
+		}
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			return strings.HasPrefix(p, filepath.Join(home, "Applications")+string(filepath.Separator))
+		}
+		return false
+	case "windows":
+		low := strings.ToLower(p)
+		return !strings.Contains(low, `\appdata\local\temp\`) && !strings.HasPrefix(p, `\\`)
+	default:
+		for _, prefix := range []string{"/tmp/", "/var/tmp/", "/run/", "/media/", "/mnt/", "/Volumes/"} {
+			if strings.HasPrefix(p, prefix) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// autoInstallCLI installs masir on first launch without asking. It is silent on success
+// and on failure: Settings still shows the state and offers the manual install button.
+func (a *app) autoInstallCLI() {
+	a.cliChecked = true
+	bin := a.cliBinary()
+	force := os.Getenv("MASIR_CLI_INSTALL") == "1"
+	skip := bin == "" ||
+		os.Getenv("MASIR_NO_CLI_INSTALL") != "" ||
+		(!force && os.Getenv("MASIR_APP_NAME") != "" && os.Getenv("MASIR_APP_NAME") != "Masir") ||
+		!stableInstallLocation(bin)
+	if skip {
+		a.refreshCLIState()
+		return
+	}
+	choice := a.cliChoice()
+	if choice == "off" {
+		a.refreshCLIState()
+		return
+	}
+	done := choice == "done"
+	a.cliBusy = true
+	a.async(func() {
+		if done {
+			repairCLI(bin)
+		}
+		var st cliStatus
+		var err error
+		if done {
+			st = cliStatusNow(bin)
+		} else {
+			st, err = installCLI(bin)
+		}
+		if err != nil {
+			log.Printf("cli: %v", err)
+		}
+		a.post(func() {
+			a.cliBusy = false
+			a.cli, a.cliChecked = st, true
+			if err == nil && st.installed && st.ours && !done {
+				a.setCLIChoice("done")
+			}
+		})
+	})
 }
 
 // refreshCLIState checks where the command-line tool is, off the main thread.
@@ -52,10 +177,20 @@ func (a *app) installCommandLine() {
 				return
 			}
 			a.cli, a.cliChecked = st, true
-			if st.onPath {
+			if st.installed && st.ours {
+				a.setCLIChoice("done")
+			}
+			switch {
+			case st.installed && !st.ours:
+				a.notify("masir is already installed at " + st.path)
+			case st.needsShell:
+				a.notify("masir is installed; open a new terminal to use it")
+			case st.installed && st.onPath:
 				a.notify("masir is installed and on your PATH")
-			} else {
+			case st.installed:
 				a.notify("masir is installed in " + st.dir + "; add it to your PATH to use it")
+			default:
+				a.notify("masir was not installed; see the log for why")
 			}
 		})
 	})
@@ -75,7 +210,9 @@ func (a *app) removeCommandLine() {
 				a.fail("Couldn't remove the command line tool: ", err)
 				return
 			}
+			a.setCLIChoice("off")
 			a.cliChecked = false
+			a.refreshCLIState()
 			a.notify("The masir command was removed")
 		})
 	})

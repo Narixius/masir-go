@@ -102,6 +102,14 @@ subscriptions while smoke-testing unless that is the change under test.
   fallback. Do not start a second bundled root daemon. A daemon update installs the
   binary without restarting, the app updates and relaunches, and the new app asks the
   daemon to restart into it (the pending version is recorded in app user data).
+- **The CLI installs itself on first launch.** macOS and Linux get a `~/.local/bin/masir`
+  link; if the login shell does not already read that directory, the app appends a marked
+  block (`# >>> masir command line >>>`) to `.zshrc`, the bash login file, or a fish
+  `conf.d` file. Windows puts the app's `bin` directory on the user PATH. It is all
+  user-level, with no admin prompt. An existing `masir` is left alone, a broken link to a
+  moved Masir.app is repaired, and "Remove" records `cli-install=off` in app data so the
+  next launch does not reinstall it. `MASIR_CLI_INSTALL=1` forces the install from a
+  development build; `MASIR_NO_CLI_INSTALL=1` disables it.
 - **Geo files are verified, not just downloaded.** `scripts/fetch-geo.sh` checks an
   existing `build/geo` file against the source sum and downloads to a temporary file; a
   killed download must never leave a truncated `.dat` that later builds reuse. Use

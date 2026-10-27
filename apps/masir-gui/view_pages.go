@@ -475,17 +475,29 @@ func (a *app) systemSection(c *ui.Context, p palette) {
 						badge(c, "Not Installed", nil, p.muted, p.neutralSurface, 0, 0)
 					}
 				})
-				label(c, "Use masir in your terminal; the app already ships it, so there is nothing to download.", sizeCaption, 14.85, 400, p.muted)
+				switch {
+				case cli.installed && cli.ours:
+					label(c, "Use masir in your terminal; the app keeps this command up to date.", sizeCaption, 14.85, 400, p.muted)
+				case cli.installed:
+					label(c, "masir is already installed at "+cli.path+"; Masir leaves it unchanged.", sizeCaption, 14.85, 400, p.muted)
+				default:
+					label(c, "Use masir in your terminal; the app sets it up automatically.", sizeCaption, 14.85, 400, p.muted)
+				}
 				ui.Row(c).Gap(tw(2)).Margin(4, 0, 0).Children(func() {
-					if cli.installed {
+					switch {
+					case cli.installed && cli.ours:
 						if button(c, "cli-remove", "Remove", false, a.cliBusy, a.cliBusy, p) {
 							a.removeCommandLine()
 						}
-					} else if button(c, "cli-install", "Install", true, a.cliBusy, a.cliBusy, p) {
-						a.installCommandLine()
+					case !cli.installed:
+						if button(c, "cli-install", "Install", true, a.cliBusy, a.cliBusy, p) {
+							a.installCommandLine()
+						}
 					}
 				})
-				if cli.installed && !cli.onPath {
+				if cli.needsShell {
+					label(c, "Open a new terminal to use masir.", sizeCaption, 14, 400, p.degraded)
+				} else if cli.installed && cli.ours && !cli.onPath {
 					label(c, "Add "+cli.dir+" to your PATH to run it by name.", sizeCaption, 14, 400, p.degraded)
 					mono(c, cli.path, sizeMicro, 13, 400, p.muted).MaxLines(2).Selectable()
 				}

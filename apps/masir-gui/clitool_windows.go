@@ -4,8 +4,9 @@ package main
 
 import (
 	"errors"
-	"os/exec"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unsafe"
 
@@ -14,46 +15,115 @@ import (
 )
 
 // The command-line tool on Windows is the app's own bin directory on the user's PATH:
-// nothing to copy, so an update of the app carries the command with it.
+// nothing to copy, so an update of the app carries the command with it. HKCU needs no
+// administrator.
 
 const userEnvKey = `Environment`
+
+const machineEnvKey = `SYSTEM\CurrentControlSet\Control\Session Manager\Environment`
 
 func cliCommand() string { return "masir.exe" }
 
 func cliStatusNow(bin string) cliStatus {
-	st := cliStatus{path: filepath.Join(filepath.Dir(bin), cliCommand()), dir: filepath.Dir(bin)}
-	st.installed = pathHasDir(userPath(), st.dir)
-	if !st.installed {
-		if p, err := exec.LookPath(cliCommand()); err == nil && samePath(p, bin) {
-			st.installed, st.onPath = true, true
-			return st
-		}
+	st := cliStatus{}
+	found, ok := findCLI()
+	if !ok {
+		return st
 	}
-	st.onPath = st.installed
+	st.installed = true
+	st.path = found
+	st.dir = filepath.Dir(found)
+	st.ours = samePath(found, filepath.Join(filepath.Dir(bin), cliCommand()))
+	st.onPath = windowsOnPath(st.dir)
 	return st
 }
 
-// installCLI adds the app's bin directory to the user's PATH. It changes nothing
-// machine-wide, so it asks for no permission.
+// findCLI looks for any masir the user's PATH reaches. It does not count the copy beside
+// the app until its directory is actually on the PATH.
+func findCLI() (string, bool) {
+	seen := map[string]bool{}
+	try := func(list string) (string, bool) {
+		for _, dir := range pathDirs(list) {
+			key := strings.ToLower(dir)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			p := filepath.Join(dir, cliCommand())
+			if fileExists(p) {
+				return p, true
+			}
+		}
+		return "", false
+	}
+	if p, ok := try(os.Getenv("PATH")); ok {
+		return p, true
+	}
+	if p, ok := try(userPath()); ok {
+		return p, true
+	}
+	if p, ok := try(machinePath()); ok {
+		return p, true
+	}
+	return "", false
+}
+
+func windowsOnPath(dir string) bool {
+	return pathHasDir(os.Getenv("PATH"), dir) ||
+		pathHasDir(userPath(), dir) ||
+		pathHasDir(machinePath(), dir)
+}
+
+// installCLI puts the app's bin directory on the user's PATH. It changes nothing
+// machine-wide, so it asks for no permission. A masir that is already on the PATH is
+// left where it is.
 func installCLI(bin string) (cliStatus, error) {
 	if bin == "" || !fileExists(bin) {
 		return cliStatus{}, errors.New("the app ships no masir executable to install")
 	}
-	dir := filepath.Dir(bin)
-	if err := addUserPath(dir); err != nil {
+	own := filepath.Join(filepath.Dir(bin), cliCommand())
+	if p, ok := findCLI(); ok && !samePath(p, own) {
+		return cliStatusNow(bin), nil
+	}
+	if err := addUserPath(filepath.Dir(bin)); err != nil {
 		return cliStatus{}, err
 	}
 	return cliStatusNow(bin), nil
 }
 
 func removeCLI(bin string) error {
+	if bin == "" {
+		return errors.New("the app ships no masir executable to remove")
+	}
 	return removeUserPath(filepath.Dir(bin))
+}
+
+func repairCLI(bin string) {
+	if bin != "" {
+		_, _ = installCLI(bin)
+	}
 }
 
 func userPath() string {
 	k, err := registry.OpenKey(registry.CURRENT_USER, userEnvKey, registry.QUERY_VALUE)
 	if err != nil {
 		return ""
+	}
+	defer k.Close()
+	v, _, err := k.GetStringValue("Path")
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+func machinePath() string {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, machineEnvKey, registry.QUERY_VALUE|registry.WOW64_64KEY)
+	if err != nil {
+		k, err = registry.OpenKey(registry.LOCAL_MACHINE, machineEnvKey, registry.QUERY_VALUE)
+		if err != nil {
+			return ""
+		}
 	}
 	defer k.Close()
 	v, _, err := k.GetStringValue("Path")
@@ -97,7 +167,7 @@ func removeUserPath(dir string) error {
 	parts := strings.Split(cur, ";")
 	out := parts[:0]
 	for _, p := range parts {
-		if p != "" && samePath(p, dir) {
+		if p != "" && samePath(expandWindowsEnv(p), dir) {
 			continue
 		}
 		out = append(out, p)
@@ -113,9 +183,36 @@ func removeUserPath(dir string) error {
 	return nil
 }
 
+// pathDirs splits a Windows PATH, expanding variables and dropping quotes.
+func pathDirs(list string) []string {
+	var out []string
+	for _, p := range strings.Split(list, ";") {
+		p = strings.TrimSpace(strings.Trim(p, `"`))
+		if p == "" {
+			continue
+		}
+		p = expandWindowsEnv(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+var windowsEnvVar = regexp.MustCompile(`%([^%]+)%`)
+
+// expandWindowsEnv expands both %VAR% (what the registry stores) and $VAR.
+func expandWindowsEnv(s string) string {
+	s = os.ExpandEnv(s)
+	return windowsEnvVar.ReplaceAllStringFunc(s, func(m string) string {
+		return os.Getenv(m[1 : len(m)-1])
+	})
+}
+
 // pathHasDir reports whether a PATH-like list holds dir.
 func pathHasDir(list, dir string) bool {
-	for _, p := range strings.Split(list, ";") {
+	for _, p := range pathDirs(list) {
 		if p != "" && samePath(p, dir) {
 			return true
 		}

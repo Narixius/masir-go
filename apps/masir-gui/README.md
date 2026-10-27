@@ -15,9 +15,12 @@ resources), so it can start the daemon when none is running. Country flags are d
 bundled SVGs rather than emoji, so they look the same on every OS, including Windows, whose
 emoji font has no flags. The daemon runs as the user, which is all proxy mode needs; tunnel
 mode asks for root through the OS prompt (the system password dialog on macOS and Linux,
-the UAC prompt on Windows). Settings can install the daemon as a background service, and
-install the `masir` command-line tool for the terminal (a link in `~/.local/bin`, or the
-app's `bin` folder on the user's `PATH` on Windows).
+the UAC prompt on Windows). Settings can install the daemon as a background service. The
+`masir` command-line tool installs itself on first launch: a link in `~/.local/bin` on
+macOS and Linux, with a marked PATH block added to the user's shell config when needed, or
+the app's `bin` folder on the user's PATH on Windows. Removing it in Settings records an
+opt-out, so a later launch does not put it back. `MASIR_CLI_INSTALL=1` forces the install
+from a development build, and `MASIR_NO_CLI_INSTALL=1` turns it off.
 
 ## Build
 

@@ -12,3 +12,4 @@ func installCLI(string) (cliStatus, error) {
 func removeCLI(string) error {
 	return errors.New("installing the command-line tool isn't supported here")
 }
+func repairCLI(string) {}

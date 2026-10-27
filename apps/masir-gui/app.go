@@ -98,6 +98,7 @@ type app struct {
 	cliBusy     bool
 	cli         cliStatus
 	cliChecked  bool
+	cliFile     string // where the automatic install records done or off
 
 	// Updates: the daemon's release check, the app's signed update, and the job
 	// downloading either.
