@@ -92,6 +92,7 @@ jobs:
           go-version-file: go.work
           cache-dependency-path: "**/go.sum"
       - name: Require the app update signing key
+        shell: bash
         env:
           SECRET: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: |
