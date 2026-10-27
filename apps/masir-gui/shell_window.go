@@ -4,7 +4,6 @@ package main
 
 import (
 	"math"
-	"runtime"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -21,7 +20,7 @@ func (s *shell) show() {
 	height := int(math.Round(float64(s.a.measure())))
 	s.start()
 	if s.win == nil {
-		opts := mygo.WindowOptions{
+		s.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:             "Masir",
 			Width:             panelWidth,
 			Height:            height,
@@ -32,15 +31,7 @@ func (s *shell) show() {
 			Hidden:            true,
 			BackgroundColor:   "light-dark(#f5f5f7, #1e1e1e)",
 			Content:           ui.View(s.a.view),
-		}
-		if runtime.GOOS == "windows" {
-			// A material puts the window on MyGo's DirectComposition path, which shows
-			// frames whole and clips them, instead of stretching a frame built for one
-			// height into a window of another while it resizes. The content draws its own
-			// opaque surface over the material, so the window looks the same.
-			opts.Vibrancy = mygo.VibrancyMica
-		}
-		s.win = mygo.NewWindow(opts)
+		})
 		s.win.OnClose(func(e *mygo.CloseEvent) {
 			if s.quitting { // quitting closes it for good
 				return
