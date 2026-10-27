@@ -228,6 +228,28 @@ func TestTheAppCatchesUpADaemonLeftBehindByAnAppOnlyUpdate(t *testing.T) {
 	}
 }
 
+func TestDeferredRestartingFromAnOlderDaemonCompletesTheInstall(t *testing.T) {
+	f := ukServers()
+	f.restartVersion = "0.4.3"
+	a := newTestApp(f)
+	a.pendingFile = t.TempDir() + "/pending-update"
+	a.upd.phase = updateRestarting
+	a.upd.deferRestart = true
+	a.upd.job = &pb.UpdateJob{
+		Target:  pb.UpdateTarget_UPDATE_TARGET_MASIR,
+		State:   pb.UpdateState_UPDATE_STATE_RESTARTING,
+		Version: "v0.4.3",
+	}
+
+	a.daemonWatchEnded()
+	if !f.called("restart") {
+		t.Fatalf("the deferred install never restarted the daemon: %v", f.calls)
+	}
+	if a.upd.phase != updateIdle || a.upd.pendingVersion != "" {
+		t.Fatalf("phase=%v pending=%q", a.upd.phase, a.upd.pendingVersion)
+	}
+}
+
 func TestDeferredDaemonUpdateRestartsWithoutAnAppUpdate(t *testing.T) {
 	f := ukServers()
 	f.status.Version = "0.2.0"

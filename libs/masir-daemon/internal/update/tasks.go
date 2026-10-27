@@ -127,9 +127,14 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 		// effort: the CLI checks content afterwards and finishes it with sudo if needed.
 		_ = replaceFile(filepath.Join(staged, exe("masir")), m.ClientBinary)
 	}
-	r.State(pb.UpdateState_UPDATE_STATE_RESTARTING)
 	if m.Restart != nil {
+		r.State(pb.UpdateState_UPDATE_STATE_RESTARTING)
 		m.Restart()
+	} else {
+		// A deferred update leaves the running daemon alone; the GUI starts the new
+		// binary on its next launch. DONE says the install is complete, not that this
+		// process is about to disappear.
+		r.State(pb.UpdateState_UPDATE_STATE_DONE)
 	}
 	return nil
 }

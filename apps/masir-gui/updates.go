@@ -423,6 +423,13 @@ func (a *app) daemonWatchEnded() {
 		return // the deferred restart is driven by restartDaemon
 	}
 	if a.upd.phase == updateRestarting {
+		if a.upd.deferRestart {
+			// An older daemon finishes a deferred install as RESTARTING. It means the
+			// binary is installed and this process is intentionally still running; the
+			// GUI records the install and does the restart itself.
+			a.daemonInstalled()
+			return
+		}
 		a.awaitDaemon(a.upd.job.GetVersion())
 		return
 	}
@@ -468,6 +475,7 @@ func (a *app) daemonInstalled() {
 	version := a.upd.job.GetVersion()
 	a.upd.daemonDone = true
 	a.upd.job = nil
+	a.upd.deferRestart = false
 	if a.upd.rel != nil {
 		rel := proto.Clone(a.upd.rel).(*pb.ReleaseInfo)
 		rel.Available = false

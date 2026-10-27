@@ -65,8 +65,8 @@ func TestUpdateInstallsAReleaseSignedByATrustedKey(t *testing.T) {
 	trust(t, pub)
 	bin, r, task := release(t, func(sums []byte) []byte { return minisign.Sign(priv, sums) })
 	r.Start(task.Run)
-	if job := wait(t, r); job.State != pb.UpdateState_UPDATE_STATE_RESTARTING || job.Error != "" {
-		t.Fatalf("job = %v (%s)", job.State, job.Error)
+	if job := wait(t, r); job.State != pb.UpdateState_UPDATE_STATE_DONE || job.Error != "" {
+		t.Fatalf("job = %v (%s); a deferred install must finish as done", job.State, job.Error)
 	}
 	if got := installed(t, bin); got != "new masir" {
 		t.Errorf("installed %q", got)
