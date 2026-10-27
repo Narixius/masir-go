@@ -40,6 +40,45 @@ add github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.host "${MA
 add github.com/narixius/masir-go/libs/masir-daemon/internal/update.publicKeys "${MASIR_UPDATE_PUBKEY:-}"
 ldflags="$ldflags -X main.version=$version"
 
+# MyGo's Windows swap chain stretches a frame drawn for one client height into a window
+# that has changed height, which magnifies the content for a moment on every resize. The
+# patch in patches/ makes it show the stale frame unscaled and fill the rest with the
+# window's background. Build against a patched copy, and put the module files back after.
+work="$root/.mygo-patched"
+go_mod="$root/apps/masir-gui/go.mod"
+go_sum="$root/apps/masir-gui/go.sum"
+go_mod_orig="$root/.mygo-patched.go.mod"
+go_sum_orig="$root/.mygo-patched.go.sum"
+cleanup() {
+	if [ -f "$go_mod_orig" ]; then
+		cp "$go_mod_orig" "$go_mod"
+		rm -f "$go_mod_orig"
+	fi
+	if [ -f "$go_sum_orig" ]; then
+		cp "$go_sum_orig" "$go_sum"
+		rm -f "$go_sum_orig"
+	fi
+	rm -rf "$work"
+}
+trap cleanup EXIT INT TERM
+
+mygo_dir=$(cd apps/masir-gui && go list -m -f '{{.Dir}}' github.com/egoist/mygo)
+if [ -z "$mygo_dir" ] || [ ! -d "$mygo_dir" ]; then
+	echo "build-gui: cannot find the MyGo module source" >&2
+	exit 1
+fi
+rm -rf "$work"
+cp -R "$mygo_dir" "$work"
+chmod -R u+w "$work"
+printf 'Patching MyGo for the Windows resize...\n'
+if ! git apply -p1 --directory=.mygo-patched --whitespace=nowarn "$root/patches/mygo-dxgi-no-stretch.patch"; then
+	echo "build-gui: patches/mygo-dxgi-no-stretch.patch does not apply to mygo $(cd apps/masir-gui && go list -m -f '{{.Version}}' github.com/egoist/mygo)" >&2
+	exit 1
+fi
+cp "$go_mod" "$go_mod_orig"
+cp "$go_sum" "$go_sum_orig"
+(cd apps/masir-gui && go mod edit -replace github.com/egoist/mygo=../../.mygo-patched)
+
 built=
 for os in $os_list; do
 	for arch in $arch_list; do

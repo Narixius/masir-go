@@ -20,3 +20,8 @@ apps/masir-gui/.mygo
 apps/masir-gui/resources/darwin-*/
 apps/masir-gui/resources/linux-*/
 apps/masir-gui/resources/windows-*/
+
+# the patched mygo copy a GUI build makes (scripts/build-gui.sh)
+.mygo-patched
+.mygo-patched.go.mod
+.mygo-patched.go.sum
