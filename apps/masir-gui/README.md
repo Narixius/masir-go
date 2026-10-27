@@ -22,13 +22,19 @@ app's `bin` folder on the user's `PATH` on Windows).
 ## Build
 
 ```sh
-make gui           # this machine's architecture, in apps/masir-gui/dist/darwin-<arch>
-make gui-windows   # windows-amd64 (GUI_WIN_ARCH=arm64 for ARM)
-make gui-linux     # linux-amd64 (GUI_LINUX_ARCH=arm64 for ARM)
+make gui                                   # darwin, linux and windows; amd64 and arm64
+make gui GUI_OS=darwin                     # one system, both architectures
+make gui GUI_ARCHES=arm64                  # all systems, one architecture
+make gui GUI_OS=windows GUI_ARCHES=arm64   # one build
 ```
 
-`make gui` builds `dist/darwin-<arch>/Masir.app` (and a `.dmg`) with `masir` and the geo
-data in `Contents/Resources/bin`. Drag it to Applications, or:
+`GUI_OS` is `darwin`, `linux` and/or `windows`; `GUI_ARCHES` is `amd64` and/or `arm64`.
+Space or comma separated; the default is all six builds. Each goes to
+`apps/masir-gui/dist/<os>-<arch>`, with the `masir` executable and the geo data in the
+`bin` folder of the resources it ships.
+
+The macOS build is `dist/darwin-<arch>/Masir.app` (and a `.dmg`); drag it to Applications,
+or:
 
 ```sh
 cp -R apps/masir-gui/dist/darwin-arm64/Masir.app /Applications/
@@ -37,10 +43,10 @@ cp -R apps/masir-gui/dist/darwin-arm64/Masir.app /Applications/
 The app is signed ad hoc. If macOS refuses to open it the first time, right-click it and
 choose Open.
 
-On Windows, `dist/windows-<arch>` holds `Masir.exe` and `bin/masir.exe`; the installer is
-made on Windows. On Linux, `dist/linux-<arch>` holds the executable, a Debian package, a
-tarball with `install.sh`, and the desktop entry; the app installs for one user, without
-root.
+The Windows build is `dist/windows-<arch>` with `Masir.exe` and `bin/masir.exe`; the
+installer is made on Windows. The Linux build is `dist/linux-<arch>` with the executable,
+a Debian package, a tarball with `install.sh`, and the desktop entry; the app installs for
+one user, without root.
 
 ## Run from source
 

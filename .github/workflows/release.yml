@@ -99,32 +99,15 @@ jobs:
       - name: Build the macOS app (arm64 and Intel)
         if: matrix.name == 'darwin'
         shell: bash
-        run: |
-          make gui GUI_ARCH=arm64
-          make gui GUI_ARCH=amd64
+        run: make gui GUI_OS=darwin
       - name: Build the Windows app (amd64 and arm64)
         if: matrix.name == 'windows'
         shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          ldflags="-X github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.apiKey=$MASIR_POSTHOG_KEY \
-            -X github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.host=$MASIR_POSTHOG_HOST \
-            -X github.com/narixius/masir-go/libs/masir-daemon/internal/update.publicKeys=$MASIR_UPDATE_PUBKEY \
-            -X main.version=$version"
-          sh scripts/fetch-geo.sh
-          for arch in amd64 arm64; do
-            res="apps/masir-gui/resources/windows-$arch/bin"
-            mkdir -p "$res"
-            GOOS=windows GOARCH=$arch CGO_ENABLED=0 go build -ldflags "$ldflags" -o "$res/masir.exe" ./apps/masir
-            cp build/geo/geoip.dat build/geo/geosite.dat "$res/"
-            (cd apps/masir-gui && go tool mygo build -platform windows/$arch)
-          done
+        run: GUI_OS=windows GUI_ARCHES="amd64 arm64" sh scripts/build-gui.sh
       - name: Build the Linux app (amd64 and arm64)
         if: matrix.name == 'linux'
         shell: bash
-        run: |
-          make gui-linux GUI_LINUX_ARCH=amd64
-          make gui-linux GUI_LINUX_ARCH=arm64
+        run: make gui GUI_OS=linux
       - name: Upload the macOS app
         if: matrix.name == 'darwin'
         shell: bash
