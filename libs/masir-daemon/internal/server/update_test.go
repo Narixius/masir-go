@@ -20,7 +20,7 @@ func stubRelease(t *testing.T, calls *int) {
 	t.Cleanup(func() { latestRelease = old })
 }
 
-func TestUpdateCheckIsCachedForTwoDaysAndForcedOnDemand(t *testing.T) {
+func TestUpdateCheckIsCachedForOneDaysAndForcedOnDemand(t *testing.T) {
 	s := newTestServer(t)
 	s.upd = &updates{}
 	calls := 0

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,11 +97,12 @@ func TestDaemonUpdatePauseResumeAndStop(t *testing.T) {
 func TestDaemonUpdateThenAppUpdateRelaunches(t *testing.T) {
 	f := ukServers()
 	f.release = releaseInfo("0.1.0", "v0.2.0")
-	f.updateJob = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_DONE}
+	f.updateJob = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_DONE, Version: "v0.2.0"}
 	f.updateStream = &fakeUpdateStream{jobs: []*pb.UpdateJob{
 		f.updateJob,
 	}}
 	a := newTestApp(f) // attaches to an empty stream; start this job explicitly
+	a.pendingFile = t.TempDir() + "/pending-update"
 	a.upd.rel = releaseInfo("0.1.0", "v0.2.0")
 	a.upd.phase = updateAvailable
 	a.upd.daemonDone = false
@@ -125,6 +128,12 @@ func TestDaemonUpdateThenAppUpdateRelaunches(t *testing.T) {
 	}
 	if !installed || !relaunched {
 		t.Fatalf("installed=%v relaunched=%v", installed, relaunched)
+	}
+	if a.upd.pendingVersion != "v0.2.0" {
+		t.Fatalf("pending version = %q", a.upd.pendingVersion)
+	}
+	if b, err := os.ReadFile(a.pendingFile); err != nil || strings.TrimSpace(string(b)) != "v0.2.0" {
+		t.Fatalf("pending file = %q, %v", b, err)
 	}
 }
 
@@ -166,7 +175,7 @@ func TestAppUpdatePauseAndResume(t *testing.T) {
 	}
 }
 
-func TestCheckUsesTheDaemonsTwoDayCache(t *testing.T) {
+func TestCheckUsesTheDaemonsOneDayCache(t *testing.T) {
 	f := ukServers()
 	f.release = releaseInfo("0.1.0", "v0.2.0")
 	a := newTestApp(f)
@@ -199,5 +208,51 @@ func TestDaemonStartForgetsAnIgnoredPrompt(t *testing.T) {
 	}
 	if a.upd.phase != updateAvailable || a.ignored("v0.2.0") {
 		t.Fatalf("after the daemon restarted: phase=%v ignored=%q", a.upd.phase, a.upd.rel.GetIgnoredVersion())
+	}
+}
+
+func TestDeferredDaemonUpdateRestartsWithoutAnAppUpdate(t *testing.T) {
+	f := ukServers()
+	f.status.Version = "0.2.0"
+	f.release = releaseInfo("0.1.0", "v0.2.0")
+	f.updateJob = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_DONE, Version: "v0.2.0"}
+	f.updateStream = &fakeUpdateStream{jobs: []*pb.UpdateJob{f.updateJob}}
+	a := newTestApp(f)
+	a.pendingFile = t.TempDir() + "/pending-update"
+	a.upd.rel = releaseInfo("0.1.0", "v0.2.0")
+	a.upd.phase = updateAvailable
+
+	a.startUpdate()
+	if !f.called("restart") {
+		t.Fatalf("a daemon-only update did not restart: %v", f.calls)
+	}
+	if a.upd.phase != updateIdle || a.upd.pendingVersion != "" {
+		t.Fatalf("phase=%v pending=%q", a.upd.phase, a.upd.pendingVersion)
+	}
+	if _, err := os.Stat(a.pendingFile); !os.IsNotExist(err) {
+		t.Fatalf("the pending file outlived the restart: %v", err)
+	}
+}
+
+func TestPendingDaemonRestartHappensOnTheNextLaunch(t *testing.T) {
+	f := ukServers()
+	f.status.Version = "0.1.0"
+	f.restartVersion = "0.2.0"
+	f.release = releaseInfo("0.2.0", "v0.2.0")
+	a := newTestApp(f)
+	a.pendingFile = t.TempDir() + "/pending-update"
+	a.upd.pendingVersion = "v0.2.0"
+	a.upd.pendingAtLaunch = true
+	a.savePending("v0.2.0")
+
+	a.applyStatus(f.status)
+	if !f.called("restart") {
+		t.Fatalf("the pending daemon was not restarted: %v", f.calls)
+	}
+	if a.upd.pendingVersion != "" || a.upd.pendingAtLaunch {
+		t.Fatalf("pending stayed: %q %v", a.upd.pendingVersion, a.upd.pendingAtLaunch)
+	}
+	if _, err := os.Stat(a.pendingFile); !os.IsNotExist(err) {
+		t.Fatalf("the pending file stayed: %v", err)
 	}
 }

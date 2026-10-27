@@ -24,6 +24,7 @@ const (
 	DaemonService_GetStatus_FullMethodName               = "/masir.daemon.v1.DaemonService/GetStatus"
 	DaemonService_WatchStatus_FullMethodName             = "/masir.daemon.v1.DaemonService/WatchStatus"
 	DaemonService_Shutdown_FullMethodName                = "/masir.daemon.v1.DaemonService/Shutdown"
+	DaemonService_Restart_FullMethodName                 = "/masir.daemon.v1.DaemonService/Restart"
 	DaemonService_StreamLogs_FullMethodName              = "/masir.daemon.v1.DaemonService/StreamLogs"
 	DaemonService_WatchTraffic_FullMethodName            = "/masir.daemon.v1.DaemonService/WatchTraffic"
 	DaemonService_CaptureEvent_FullMethodName            = "/masir.daemon.v1.DaemonService/CaptureEvent"
@@ -81,6 +82,9 @@ type DaemonServiceClient interface {
 	WatchStatus(ctx context.Context, in *WatchStatusRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchStatusResponse], error)
 	// Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
 	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
+	// Restart starts the masir binary on disk in place of this process, after an update
+	// installed one without restarting. The daemon re-execs itself.
+	Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartResponse, error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamLogsResponse], error)
 	// Sends the current traffic speed every interval while Xray runs, until the client
 	// goes away. Nothing is sent while Xray is stopped.
@@ -132,7 +136,7 @@ type DaemonServiceClient interface {
 	GetActiveConfig(ctx context.Context, in *GetActiveConfigRequest, opts ...grpc.CallOption) (*GetActiveConfigResponse, error)
 	// Updates run as jobs in the daemon, one per target, so any UI can show progress
 	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading,
-	// from a cache two days old at most unless forced.
+	// from a cache one day old at most unless forced.
 	CheckUpdate(ctx context.Context, in *CheckUpdateRequest, opts ...grpc.CallOption) (*CheckUpdateResponse, error)
 	// IgnoreUpdate hides this update prompt in the GUI until the next release check or
 	// until the daemon restarts. It does not change whether an update is available.
@@ -209,6 +213,16 @@ func (c *daemonServiceClient) Shutdown(ctx context.Context, in *ShutdownRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ShutdownResponse)
 	err := c.cc.Invoke(ctx, DaemonService_Shutdown_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestartResponse)
+	err := c.cc.Invoke(ctx, DaemonService_Restart_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -693,6 +707,9 @@ type DaemonServiceServer interface {
 	WatchStatus(*WatchStatusRequest, grpc.ServerStreamingServer[WatchStatusResponse]) error
 	// Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
 	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
+	// Restart starts the masir binary on disk in place of this process, after an update
+	// installed one without restarting. The daemon re-execs itself.
+	Restart(context.Context, *RestartRequest) (*RestartResponse, error)
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[StreamLogsResponse]) error
 	// Sends the current traffic speed every interval while Xray runs, until the client
 	// goes away. Nothing is sent while Xray is stopped.
@@ -744,7 +761,7 @@ type DaemonServiceServer interface {
 	GetActiveConfig(context.Context, *GetActiveConfigRequest) (*GetActiveConfigResponse, error)
 	// Updates run as jobs in the daemon, one per target, so any UI can show progress
 	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading,
-	// from a cache two days old at most unless forced.
+	// from a cache one day old at most unless forced.
 	CheckUpdate(context.Context, *CheckUpdateRequest) (*CheckUpdateResponse, error)
 	// IgnoreUpdate hides this update prompt in the GUI until the next release check or
 	// until the daemon restarts. It does not change whether an update is available.
@@ -782,6 +799,9 @@ func (UnimplementedDaemonServiceServer) WatchStatus(*WatchStatusRequest, grpc.Se
 }
 func (UnimplementedDaemonServiceServer) Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Shutdown not implemented")
+}
+func (UnimplementedDaemonServiceServer) Restart(context.Context, *RestartRequest) (*RestartResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Restart not implemented")
 }
 func (UnimplementedDaemonServiceServer) StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[StreamLogsResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
@@ -1012,6 +1032,24 @@ func _DaemonService_Shutdown_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DaemonServiceServer).Shutdown(ctx, req.(*ShutdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_Restart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestartRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).Restart(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_Restart_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).Restart(ctx, req.(*RestartRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1784,6 +1822,10 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Shutdown",
 			Handler:    _DaemonService_Shutdown_Handler,
+		},
+		{
+			MethodName: "Restart",
+			Handler:    _DaemonService_Restart_Handler,
 		},
 		{
 			MethodName: "CaptureEvent",

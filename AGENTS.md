@@ -97,6 +97,15 @@ subscriptions while smoke-testing unless that is the change under test.
   apply and run `make gui-local`.
 - **Flags are 1:1** in tiles (`Fit(ui.Cover)`, rounded corners). Use `iconTile` for flags
   and app icons so both stay centered; `TestIconTileCentersWhatItHolds` guards it.
+- **Service first.** When a masir service is installed, the app uses its
+  `/usr/local/lib/masir` binary and geo data; the bundled daemon is only the no-service
+  fallback. Do not start a second bundled root daemon. A daemon update installs the
+  binary without restarting, the app updates and relaunches, and the new app asks the
+  daemon to restart into it (the pending version is recorded in app user data).
+- **Geo files are verified, not just downloaded.** `scripts/fetch-geo.sh` checks an
+  existing `build/geo` file against the source sum and downloads to a temporary file; a
+  killed download must never leave a truncated `.dat` that later builds reuse. Use
+  `MASIR_GEO_SKIP=1` only for an offline build with known-good files.
 - **Desktop updates are signed.** The public key is in `apps/masir-gui/mygo.json`; the
   matching private key is `MYGO_UPDATER_PRIVATE_KEY`, kept in `.env` or the GitHub secret.
   Generate it with `cd apps/masir-gui && go tool mygo keygen`; never commit the private

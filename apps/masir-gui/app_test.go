@@ -31,6 +31,7 @@ type fakeDaemon struct {
 	releaseErr                           error
 	updateJob                            *pb.UpdateJob
 	updateStream                         *fakeUpdateStream
+	restartVersion                       string
 }
 
 func (f *fakeDaemon) log(s string) {
@@ -109,6 +110,23 @@ func (f *fakeDaemon) IgnoreUpdate(_ context.Context, r *pb.IgnoreUpdateRequest, 
 	rel.IgnoredVersion = r.Version
 	f.release = rel
 	return &pb.IgnoreUpdateResponse{Release: f.release}, nil
+}
+
+func (f *fakeDaemon) GetStatus(context.Context, *pb.GetStatusRequest, ...grpc.CallOption) (*pb.GetStatusResponse, error) {
+	return &pb.GetStatusResponse{Status: f.status}, nil
+}
+
+func (f *fakeDaemon) Restart(context.Context, *pb.RestartRequest, ...grpc.CallOption) (*pb.RestartResponse, error) {
+	f.log("restart")
+	if f.restartVersion != "" {
+		f.status.Version = f.restartVersion
+	}
+	return &pb.RestartResponse{}, nil
+}
+
+func (f *fakeDaemon) Shutdown(context.Context, *pb.ShutdownRequest, ...grpc.CallOption) (*pb.ShutdownResponse, error) {
+	f.log("shutdown")
+	return &pb.ShutdownResponse{}, nil
 }
 
 func (f *fakeDaemon) StartUpdate(context.Context, *pb.StartUpdateRequest, ...grpc.CallOption) (*pb.StartUpdateResponse, error) {

@@ -11,6 +11,9 @@ service DaemonService {
   rpc WatchStatus(WatchStatusRequest) returns (stream WatchStatusResponse);
   // Tears down TUN and Xray and exits cleanly, so a service manager leaves it stopped.
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+  // Restart starts the masir binary on disk in place of this process, after an update
+  // installed one without restarting. The daemon re-execs itself.
+  rpc Restart(RestartRequest) returns (RestartResponse);
   rpc StreamLogs(StreamLogsRequest) returns (stream StreamLogsResponse);
   // Sends the current traffic speed every interval while Xray runs, until the client
   // goes away. Nothing is sent while Xray is stopped.
@@ -63,7 +66,7 @@ service DaemonService {
 
   // Updates run as jobs in the daemon, one per target, so any UI can show progress
   // and offer pause, resume and stop. CheckUpdate asks GitHub without downloading,
-  // from a cache two days old at most unless forced.
+  // from a cache one day old at most unless forced.
   rpc CheckUpdate(CheckUpdateRequest) returns (CheckUpdateResponse);
   // IgnoreUpdate hides this update prompt in the GUI until the next release check or
   // until the daemon restarts. It does not change whether an update is available.
@@ -142,6 +145,8 @@ message WatchTrafficResponse {
 
 message ShutdownRequest {}
 message ShutdownResponse {}
+message RestartRequest {}
+message RestartResponse {}
 
 // power, modes and settings
 
@@ -521,7 +526,7 @@ message UpdateJob {
 }
 
 message CheckUpdateRequest {
-  // Force asks GitHub now, even when the last check is less than two days old.
+  // Force asks GitHub now, even when the last check is less than one day old.
   bool force = 1;
 }
 message CheckUpdateResponse { ReleaseInfo release = 1; }
@@ -539,6 +544,9 @@ message StartUpdateRequest {
   // Geo update: turn off the enabled rules the new data can't build, and install. Without
   // it such an update is blocked. Never set by background updates.
   bool disable_broken_rules = 5;
+  // DeferRestart installs the new masir binary but leaves the running daemon as it is,
+  // so the GUI can update itself and restart into the new binary on its next launch.
+  bool defer_restart = 6;
 }
 message StartUpdateResponse { UpdateJob job = 1; }
 

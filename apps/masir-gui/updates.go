@@ -3,19 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/narixius/masir-go/libs/masir-core/service"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
 // The GUI checks for a new release at most as often as the daemon does, and an ignored
 // prompt comes back when a fresh check runs (or when the daemon restarts).
 const (
-	updateCheckEvery = 48 * time.Hour
+	updateCheckEvery = 24 * time.Hour
 	updateRetryWait  = updateCheckEvery
 )
 
@@ -62,6 +65,10 @@ type updateState struct {
 	ignoreBusy      bool
 	attached        bool
 	attaching       bool
+	deferRestart    bool
+	pendingVersion  string
+	pendingAtLaunch bool
+	restarting      bool
 }
 
 // The app's updater is behind variables so tests do not need a signed release or a
@@ -86,6 +93,7 @@ func (a *app) observeUpdates(st *pb.Status) {
 		a.upd.appChecked = false
 		a.upd.lastAttempt = time.Time{}
 		a.upd.attached = false
+		a.upd.deferRestart = false
 		if a.upd.phase == updateAvailable || a.upd.phase == updateFailed {
 			a.upd.phase = updateIdle
 		}
@@ -98,6 +106,7 @@ func (a *app) observeUpdates(st *pb.Status) {
 	} else if !a.busyUpdate() {
 		a.upd.rel = nil
 	}
+	a.maybeFinishPending(st)
 	a.maybeCheckUpdates()
 	if !a.upd.attached {
 		// A job started by the CLI or a previous GUI is still the one to show.
@@ -147,7 +156,7 @@ func (a *app) maybeCheckUpdates() {
 }
 
 // checkDaemonRelease asks the daemon for the latest release. The daemon caches it for
-// two days, so this is cheap when another UI already checked.
+// one day, so this is cheap when another UI already checked.
 func (a *app) checkDaemonRelease() {
 	a.upd.checking = true
 	a.async(func() {
@@ -251,14 +260,27 @@ func (a *app) startUpdate() {
 
 func (a *app) startDaemonUpdate() {
 	a.upd.phase = updateStarting
+	a.upd.deferRestart = true
 	client := ""
 	if a.cli.installed {
 		client = a.cli.path
 	}
+	root := a.privileged()
 	a.async(func() {
+		if service.Installed() && !root {
+			if err := a.becomePrivileged(); err != nil {
+				a.post(func() {
+					a.upd.phase = updateFailed
+					a.upd.err = describe(err)
+					a.notify("The update failed: " + a.upd.err)
+				})
+				return
+			}
+		}
 		ctx, cancel := rpc()
 		res, err := a.d.StartUpdate(ctx, &pb.StartUpdateRequest{
 			Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, Trigger: "user", ClientBinary: client,
+			DeferRestart: true,
 		})
 		cancel()
 		a.post(func() {
@@ -334,7 +356,9 @@ func (a *app) applyJob(job *pb.UpdateJob) {
 		a.upd.phase = updateInstalling
 	case pb.UpdateState_UPDATE_STATE_RESTARTING:
 		a.upd.phase = updateRestarting
-	case pb.UpdateState_UPDATE_STATE_DONE, pb.UpdateState_UPDATE_STATE_UP_TO_DATE:
+	case pb.UpdateState_UPDATE_STATE_DONE:
+		a.daemonInstalled()
+	case pb.UpdateState_UPDATE_STATE_UP_TO_DATE:
 		a.daemonFinished()
 	case pb.UpdateState_UPDATE_STATE_STOPPED:
 		a.upd.phase = updateAvailable
@@ -356,6 +380,9 @@ func (a *app) applyJob(job *pb.UpdateJob) {
 // to restart into the new version.
 func (a *app) daemonWatchEnded() {
 	a.upd.attaching = false
+	if a.upd.phase == updateRestarting && a.upd.restarting {
+		return // the deferred restart is driven by restartDaemon
+	}
 	if a.upd.phase == updateRestarting {
 		a.awaitDaemon(a.upd.job.GetVersion())
 		return
@@ -393,7 +420,38 @@ func (a *app) awaitDaemon(version string) {
 	})
 }
 
-// daemonFinished moves on to the desktop app update, or back to the version text.
+// daemonInstalled records a deferred daemon install and moves on to the app update, or
+// restarts the daemon when there is no app update to follow.
+func (a *app) daemonInstalled() {
+	if a.upd.phase == updateAppDownloading || a.upd.phase == updateAppPaused || a.upd.phase == updateAppInstalling {
+		return
+	}
+	version := a.upd.job.GetVersion()
+	a.upd.daemonDone = true
+	a.upd.job = nil
+	if a.upd.rel != nil {
+		rel := proto.Clone(a.upd.rel).(*pb.ReleaseInfo)
+		rel.Available = false
+		rel.IgnoredVersion = ""
+		a.upd.rel = rel
+	}
+	if version != "" {
+		a.upd.pendingVersion = version
+		a.upd.pendingAtLaunch = false
+		a.savePending(version)
+	}
+	if a.appUpdateAvailable() {
+		a.startAppUpdate()
+		return
+	}
+	if version != "" {
+		a.restartDaemon(version)
+		return
+	}
+	a.upd.phase = updateIdle
+}
+
+// daemonFinished moves on after an immediate daemon restart, or back to the version text.
 func (a *app) daemonFinished() {
 	if a.upd.phase == updateAppDownloading || a.upd.phase == updateAppPaused || a.upd.phase == updateAppInstalling {
 		return // the app update already started from the daemon's final job
@@ -654,4 +712,102 @@ func (a *app) updateLabel() string {
 		return "Update failed"
 	}
 	return ""
+}
+
+// pendingUpdateFile is where the GUI remembers a daemon binary it installed but did not
+// restart yet. It is separate from the daemon's data, so an app update keeps it.
+func pendingUpdateFile() string {
+	dir, err := mygo.App.Path(mygo.PathUserData)
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "pending-update")
+}
+
+func readPendingUpdate(path string) string {
+	if path == "" {
+		return ""
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func (a *app) savePending(version string) {
+	if a.pendingFile == "" || version == "" {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(a.pendingFile), 0o700)
+	_ = os.WriteFile(a.pendingFile, []byte(version+"\n"), 0o600)
+}
+
+func (a *app) clearPending() {
+	if a.pendingFile != "" {
+		_ = os.Remove(a.pendingFile)
+	}
+}
+
+// maybeFinishPending restarts a daemon whose new binary was installed by the previous
+// app session, once the app has been updated and started again.
+func (a *app) maybeFinishPending(st *pb.Status) {
+	version := a.upd.pendingVersion
+	if version == "" {
+		return
+	}
+	if st.GetVersion() != "" && sameVersion(st.GetVersion(), version) {
+		a.upd.pendingVersion, a.upd.pendingAtLaunch = "", false
+		a.clearPending()
+		if a.upd.phase == updateRestarting {
+			a.upd.phase = updateIdle
+		}
+		return
+	}
+	if a.upd.pendingAtLaunch && !a.busyUpdate() && !a.upd.restarting {
+		a.restartDaemon(version)
+	}
+}
+
+// restartDaemon stops the running daemon so the service (or the app's watch) starts the
+// binary installed by the deferred daemon update.
+func (a *app) restartDaemon(version string) {
+	if a.upd.restarting {
+		return
+	}
+	a.upd.restarting = true
+	a.upd.phase = updateRestarting
+	a.upd.err = ""
+	a.async(func() {
+		ctx, cancel := rpc()
+		_, err := a.d.Restart(ctx, &pb.RestartRequest{})
+		cancel()
+		if err != nil { // an older daemon without Restart, or no longer reachable
+			ctx, cancel := rpc()
+			_, _ = a.d.Shutdown(ctx, &pb.ShutdownRequest{})
+			cancel()
+		}
+		deadline := time.Now().Add(2 * time.Minute)
+		for time.Now().Before(deadline) {
+			ctx, cancel := rpc()
+			res, err := a.d.GetStatus(ctx, &pb.GetStatusRequest{})
+			cancel()
+			if err == nil && (version == "" || sameVersion(res.GetStatus().GetVersion(), version)) {
+				a.post(func() {
+					a.upd.restarting = false
+					a.upd.pendingVersion, a.upd.pendingAtLaunch = "", false
+					a.clearPending()
+					a.upd.phase = updateIdle
+				})
+				return
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		a.post(func() {
+			a.upd.restarting = false
+			a.upd.phase = updateFailed
+			a.upd.err = "the daemon didn't restart into the installed version"
+			a.notify("The update failed: " + a.upd.err)
+		})
+	})
 }

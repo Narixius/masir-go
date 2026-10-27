@@ -147,6 +147,14 @@ func (s *Server) Idle() bool { return s.idle.Load() }
 // Stopped is closed when a client asks the daemon to shut down.
 func (s *Server) Stopped() <-chan struct{} { return s.stopped }
 
+// Restart ends the daemon so it starts the binary on disk in its place, as after a
+// deferred update.
+func (s *Server) Restart(_ context.Context, _ *pb.RestartRequest) (*pb.RestartResponse, error) {
+	s.Log("info", "restart requested")
+	s.restartForUpdate()
+	return &pb.RestartResponse{}, nil
+}
+
 func (s *Server) Shutdown(ctx context.Context, _ *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	s.Log("info", "shutdown requested")
 	s.TrackDaemonStopped("client")

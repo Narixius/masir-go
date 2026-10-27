@@ -23,6 +23,7 @@ app's `bin` folder on the user's `PATH` on Windows).
 
 ```sh
 make gui-local                             # this machine only: the fast build while developing
+# MASIR_GEO_SKIP=1 skips the geo checksum check for an offline build with good files
 make gui                                   # darwin, linux and windows; amd64 and arm64
 make gui GUI_OS=darwin                     # one system, both architectures
 make gui GUI_ARCHES=arm64                  # all systems, one architecture

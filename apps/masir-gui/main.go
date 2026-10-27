@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/narixius/masir-go/libs/masir-core/client"
+	"github.com/narixius/masir-go/libs/masir-core/service"
 )
 
 // version is set at build time: -X main.version=...
@@ -144,6 +145,14 @@ func daemonBinary() string {
 	if p := os.Getenv("MASIR_BIN"); p != "" {
 		return p
 	}
+	// A service has its own copy of masir and its own geo data. Start that when a
+	// service is installed, even if it isn't running: the app should not bring up a
+	// second daemon from the bundle with different data.
+	if service.Installed() {
+		if p := service.BinaryPath(); fileExists(p) {
+			return p
+		}
+	}
 	if p := bundledBinary(); p != "" {
 		return p
 	}
@@ -259,6 +268,9 @@ func main() {
 		if v := mygo.App.Version(); v != "" { // the bundle's version, which is the app's
 			a.version = v
 		}
+		a.pendingFile = pendingUpdateFile()
+		a.upd.pendingVersion = readPendingUpdate(a.pendingFile)
+		a.upd.pendingAtLaunch = a.upd.pendingVersion != ""
 		s.ready()
 		a.refreshLoginState()
 		a.refreshCLIState()

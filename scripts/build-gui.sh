@@ -26,7 +26,10 @@ version=${GUI_VERSION:-$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' apps/masir-
 version=$(printf '%s' "$version" | tr -d '\r')
 [ -n "$version" ] || { echo "build-gui: no version in apps/masir-gui/mygo.json" >&2; exit 1; }
 
-if [ ! -f build/geo/geoip.dat ] || [ ! -f build/geo/geosite.dat ]; then
+# Verify the geo files against the source sums on every build, not just when they are
+# missing: a previous interrupted download could have left a truncated file. Set
+# MASIR_GEO_SKIP=1 for an offline build that already has its files.
+if [ "${MASIR_GEO_SKIP:-0}" != 1 ]; then
 	sh scripts/fetch-geo.sh
 fi
 

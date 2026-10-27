@@ -145,8 +145,9 @@ type app struct {
 	serverItems []serverListItem
 	onHeight    func(float32) // tells the window how tall the content is at rest
 
-	version string
-	palette palette // the colors of the frame being built, for helpers that format text
+	version     string
+	pendingFile string  // where a deferred daemon update is recorded
+	palette     palette // the colors of the frame being built, for helpers that format text
 }
 
 func newApp(d pb.DaemonServiceClient, binary string) *app {

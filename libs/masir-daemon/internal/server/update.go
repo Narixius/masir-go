@@ -32,7 +32,7 @@ const (
 	// checkEvery is how often the daemon asks GitHub for a new masir release. It only
 	// tells UIs; installing waits for StartUpdate. It is also how long an ignored
 	// prompt lasts when the daemon isn't restarted: a fresh check makes it show again.
-	checkEvery = 48 * time.Hour
+	checkEvery = 24 * time.Hour
 	// geoMaxAge is how old the geo files get before the daemon refreshes them itself.
 	geoMaxAge = 7 * 24 * time.Hour
 )
@@ -63,7 +63,14 @@ func (s *Server) initUpdates(dir string) {
 // name makes updates fail.
 func (s *Server) updateDir(configDir, target string) string {
 	if !s.id.Privileged || runtime.GOOS == "windows" { // Windows keeps it with the daemon's other files
-		return filepath.Join(configDir, "updates", target)
+		// A user daemon writes here. Keep it in its own subdirectory: an older root
+		// daemon may have left configDir/updates/<target> owned by root.
+		dir := filepath.Join(configDir, "updates", "user", target)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			log.Printf("updates are off: %v", err)
+			return ""
+		}
+		return dir
 	}
 	dirs := privilegedUpdateDirs(s.id.UID, target)
 	for _, d := range dirs {
@@ -115,7 +122,11 @@ func (s *Server) runner(t pb.UpdateTarget) (*update.Runner, error) {
 	return nil, status.Error(codes.InvalidArgument, "target must be masir or geo")
 }
 
-func (s *Server) masirTask(force bool, clientBinary, trigger string) update.Task {
+func (s *Server) masirTask(force bool, clientBinary, trigger string, deferRestart bool) update.Task {
+	restart := s.restartForUpdate
+	if deferRestart {
+		restart = nil
+	}
 	return s.wrapUpdate("masir", force, trigger, update.Masir{
 		Clients:       s.clients(),
 		Current:       Version,
@@ -126,7 +137,7 @@ func (s *Server) masirTask(force bool, clientBinary, trigger string) update.Task
 		Privileged:    s.id.Privileged,
 		WorkDir:       s.updateDir(s.dir, "masir"),
 		Preflight:     s.checkWithNewVersion,
-		Restart:       s.restartForUpdate,
+		Restart:       restart,
 	}.Run)
 }
 
@@ -350,7 +361,7 @@ func (s *Server) StartUpdate(_ context.Context, req *pb.StartUpdateRequest) (*pb
 	}
 	task := s.geoTask(req.Force, trigger, req.DisableBrokenRules && trigger != "background")
 	if req.Target == pb.UpdateTarget_UPDATE_TARGET_MASIR {
-		task = s.masirTask(req.Force, req.ClientBinary, trigger)
+		task = s.masirTask(req.Force, req.ClientBinary, trigger, req.GetDeferRestart())
 	}
 	job, err := r.Start(task)
 	if err != nil {
