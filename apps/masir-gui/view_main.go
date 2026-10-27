@@ -24,7 +24,10 @@ func (a *app) view(c *ui.Context) {
 	a.notices = nil
 
 	root := ui.Box(c).Fill().Background(p.rootTint).TextColor(p.text).FontSize(sizeBody).FixedLineHeight(18).Clip()
-	if !c.Vibrancy() { // no material under the panel: draw its own
+	// A window of its own always draws the panel's own surface, even when it was created
+	// with a material: on Windows the material is there only to put the window on MyGo's
+	// DirectComposition path, not to show through the content.
+	if !c.Vibrancy() || runtime.GOOS != "darwin" {
 		root.Background(c.Theme().Surface)
 		if runtime.GOOS == "darwin" { // the popover's own; a window has the system's frame
 			root.Radius(panelRadius).Border(1, p.borderDefault)
