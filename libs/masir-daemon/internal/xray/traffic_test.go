@@ -69,10 +69,14 @@ func TestTrafficCountsBytesThroughARunningXray(t *testing.T) {
 	if _, err := io.ReadFull(conn, make([]byte, len(payload))); err != nil {
 		t.Fatal(err)
 	}
+	// A direct connection to a plain TCP destination is spliced on Linux (and Android):
+	// Xray copies the response with TCPConn.ReadFrom and adds its bytes to the counters
+	// only when that copy ends, so close this side before asking. Elsewhere every write
+	// is counted as it happens.
+	conn.Close()
 
-	// Xray publishes its counters a moment after the bytes have passed, so a single
-	// read can catch the handshake but not the payload. Sample until both directions
-	// are counted rather than failing on the first look (this made the Ubuntu run red).
+	// Even then the counters are a moment behind the bytes; sample rather than failing
+	// on the first look.
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		got, ok, err := c.Traffic(context.Background())
