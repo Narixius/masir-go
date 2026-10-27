@@ -188,6 +188,7 @@ func (a *app) setFallback(f pb.Fallback) {
 
 func (a *app) selectServer(s server) {
 	a.open = sectionNone
+	a.query = ""
 	a.requestHeight() // the list folds away, and the window with it
 	a.pend.active.set(s.key)
 	a.mutate("Couldn't select that server: ", a.pend.active.done, a.pend.active.revert, func(ctx context.Context) error {

@@ -25,7 +25,7 @@ func (fakeDaemon) GetXrayVersion(context.Context, *pb.GetXrayVersionRequest) (*p
 }
 
 // serve answers on a socket of its own, which is the only one the client looks at.
-func serve(t *testing.T) (*grpc.Server, string) {
+func serve(t *testing.T) (func(), string) {
 	t.Helper()
 	dir, err := os.MkdirTemp("/tmp", "mc") // short: unix socket paths are
 	if err != nil {
@@ -37,10 +37,13 @@ func serve(t *testing.T) (*grpc.Server, string) {
 	sockets = func() ([]string, error) { return []string{sock}, nil }
 	userSocket = func() (string, error) { return sock, nil }
 	t.Cleanup(func() { sockets, userSocket = oldSockets, oldUser })
-	return listen(t, sock), sock
+	l, srv := listen(t, sock)
+	return func() { l.Close(); srv.Stop() }, sock
 }
 
-func listen(t *testing.T, sock string) *grpc.Server {
+// listen returns the listener as well as the server: closing the listener is what
+// makes the socket unreachable, and Stop alone can race with the Serve goroutine.
+func listen(t *testing.T, sock string) (net.Listener, *grpc.Server) {
 	t.Helper()
 	l, err := net.Listen("unix", sock)
 	if err != nil {
@@ -49,8 +52,8 @@ func listen(t *testing.T, sock string) *grpc.Server {
 	srv := grpc.NewServer()
 	pb.RegisterDaemonServiceServer(srv, fakeDaemon{})
 	go srv.Serve(l)
-	t.Cleanup(srv.Stop)
-	return srv
+	t.Cleanup(func() { l.Close(); srv.Stop() })
+	return l, srv
 }
 
 func TestDialReachesTheLiveDaemon(t *testing.T) {
@@ -75,13 +78,13 @@ func TestDialReachesTheLiveDaemon(t *testing.T) {
 }
 
 func TestDialSurvivesTheDaemonRestarting(t *testing.T) {
-	srv, sock := serve(t)
+	stop, sock := serve(t)
 	conn, c, err := Dial()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	srv.Stop()
+	stop()
 	if Alive() {
 		t.Fatal("Alive after the daemon stopped")
 	}

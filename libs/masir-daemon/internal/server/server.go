@@ -158,6 +158,10 @@ func (s *Server) Restart(_ context.Context, _ *pb.RestartRequest) (*pb.RestartRe
 func (s *Server) Shutdown(ctx context.Context, _ *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	s.Log("info", "shutdown requested")
 	s.TrackDaemonStopped("client")
+	// Tear the TUN and proxy down before answering. A new daemon waits for this reply
+	// before taking the socket, so returning first would let it start while the old TUN
+	// still held its address.
+	_ = s.xray.Close()
 	s.stopOnce.Do(func() { close(s.stopped) })
 	return &pb.ShutdownResponse{}, nil
 }

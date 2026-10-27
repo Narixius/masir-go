@@ -326,7 +326,7 @@ func (a *app) advancedSection(c *ui.Context, p palette) {
 				a.setAlwaysOnProxy(on)
 			})
 			cardDivider(c, p)
-			ui.Row(c.Key("port-row")).Padding(tw(2.5), tw(3)).Gap(tw(3)).AlignItems(ui.Center).Justify(ui.SpaceBetween).Opacity(map[bool]float32{true: 1, false: 0.5}[always]).Shrink(0).Children(func() {
+			ui.Row(c.Key("port-row")).Padding(tw(2.5), tw(3)).Gap(tw(3)).AlignItems(ui.Center).Justify(ui.SpaceBetween).Shrink(0).Children(func() {
 				ui.Column(c).Gap(tw(0.5)).Grow(1).Basis(0).MinWidth(0).Children(func() {
 					label(c, "Port Number", sizeSubhead, 18, 500, p.text)
 					label(c, "Mixed SOCKS5 / HTTP", sizeCaption, 15, 400, p.muted)

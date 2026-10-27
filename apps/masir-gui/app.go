@@ -44,6 +44,7 @@ type server struct {
 	key     serverKey
 	subName string
 	cfg     *pb.SubscriptionConfig
+	search  string // lowercased text the search matches, including the flag's country
 }
 
 // app is everything the panel shows and does. It is read and changed on the main thread
@@ -127,6 +128,7 @@ type app struct {
 	measuredOpen section            // the section that was open when mainHeight was measured
 	baseHeight   float32            // the main page's height with both lists closed
 	natural      map[string]float32 // the height each list has when fully open
+	serverListH  float32            // the server list's height with no search, so filtering keeps it
 	pend         pending            // changes shown ahead of the daemon
 
 	// Rules: the swipe of each row, which row is open, the right-click menu, the app names
@@ -355,7 +357,12 @@ func (a *app) refreshLists() {
 				continue
 			}
 			for _, cfg := range full.GetConfigs() {
-				servers = append(servers, server{key: serverKey{s.Id, cfg.Id}, subName: s.Name, cfg: cfg})
+				servers = append(servers, server{
+					key:     serverKey{s.Id, cfg.Id},
+					subName: s.Name,
+					cfg:     cfg,
+					search:  serverSearchText(cfg.GetName(), s.Name, cfg),
+				})
 			}
 		}
 		rulesRes, rerr := a.d.ListRoutingRules(ctx, &pb.ListRoutingRulesRequest{})
@@ -400,6 +407,18 @@ func (a *app) active() (server, bool) {
 	return server{key: k, subName: "", cfg: &pb.SubscriptionConfig{Id: k.cfg, Name: st.GetActiveConfigName()}}, true
 }
 
+// serverSearchText is everything the picker's search matches: the provider's own name,
+// the country its flag stands for, the subscription, protocol, address and country code.
+// It is built when the lists load, not on every frame of typing.
+func serverSearchText(name, sub string, cfg *pb.SubscriptionConfig) string {
+	flag, title, detail := serverTitle(name)
+	parts := []string{name, title, detail, sub, cfg.GetProtocol(), cfg.GetAddress()}
+	if code := emojiCode(flag); code != "" {
+		parts = append(parts, code)
+	}
+	return strings.ToLower(strings.Join(parts, " "))
+}
+
 // filteredServers are the servers matching the search, in the order of their subscriptions.
 func (a *app) filteredServers() []server {
 	q := strings.ToLower(strings.TrimSpace(a.query))
@@ -408,7 +427,10 @@ func (a *app) filteredServers() []server {
 	}
 	var out []server
 	for _, s := range a.servers {
-		hay := strings.ToLower(s.cfg.Name + " " + s.subName + " " + s.cfg.Protocol + " " + s.cfg.Address)
+		hay := s.search
+		if hay == "" { // a server made without the list, as in a test
+			hay = serverSearchText(s.cfg.GetName(), s.subName, s.cfg)
+		}
 		if strings.Contains(hay, q) {
 			out = append(out, s)
 		}

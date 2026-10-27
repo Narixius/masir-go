@@ -314,12 +314,25 @@ func (a *app) serverRow(c *ui.Context, p palette) {
 func (a *app) toggle(s section) {
 	if a.open == s {
 		a.open = sectionNone
+		a.clearSearch(s)
 	} else {
+		a.clearSearch(a.open)
 		a.open = s
 	}
 	// The window takes the list's height as it unfolds, and gives it back as it folds: it
 	// is one resize with the list's movement, not one after it.
 	a.requestHeight()
+}
+
+// clearSearch empties the search of a list when it closes, so it opens on the whole list
+// next time.
+func (a *app) clearSearch(s section) {
+	switch s {
+	case sectionServers:
+		a.query = ""
+	case sectionRules:
+		a.ruleQuery = ""
+	}
 }
 
 // panelBar is the search row at the top of the open panels: the field and a button.
@@ -332,6 +345,10 @@ func panelBar(c *ui.Context, p palette, field func(), button func()) {
 	ui.Box(c).Height(1).Background(p.borderSubtle).Shrink(0)
 }
 
+// maxServerListHeight caps the picker; below it, the list keeps the height it has with
+// no search while a search narrows its rows.
+const maxServerListHeight float32 = 300
+
 func (a *app) serverPicker(c *ui.Context, p palette) {
 	panelBar(c, p, func() { searchInput(c, "server-search", &a.query, "Search country, or remarks...", p) }, func() {
 		busy := len(a.testing) > 0
@@ -340,8 +357,12 @@ func (a *app) serverPicker(c *ui.Context, p palette) {
 		}
 	})
 	servers := a.filteredServers()
+	height := a.serverListH
+	if height <= 0 {
+		height = maxServerListHeight
+	}
 	if len(servers) == 0 {
-		ui.Column(c).AlignItems(ui.Center).Gap(tw(1)).Padding(tw(6), 0).Children(func() {
+		ui.Column(c.Key("server-empty")).Height(height).AlignItems(ui.Center).Justify(ui.Center).Gap(tw(1)).Children(func() {
 			label(c, "No matching outbounds", sizeSubhead, 18, 500, p.muted)
 			label(c, "Try a different search term", sizeMicro, 14, 400, p.tertiary)
 		})
@@ -359,14 +380,22 @@ func (a *app) serverPicker(c *ui.Context, p palette) {
 		}
 	}
 	a.serverItems = items
-	ui.List(c, &a.serversList, len(items), func(i int) {
+	list := ui.List(c, &a.serversList, len(items), func(i int) {
 		it := a.serverItems[i]
 		if it.group != nil {
 			a.groupHeader(c, p, *it.group)
 			return
 		}
 		a.serverItem(c, p, it.srv)
-	}).MaxHeight(300).Padding(0, tw(1.5), 0, tw(1)).Gap(2).Shrink(0)
+	}).Padding(0, tw(1.5), 0, tw(1)).Gap(2).Shrink(0)
+	if a.query == "" {
+		list.MaxHeight(maxServerListHeight)
+		if h := list.Bounds().H; h > 0 {
+			a.serverListH = h
+		}
+	} else {
+		list.Height(height)
+	}
 }
 
 type serverGroup struct {

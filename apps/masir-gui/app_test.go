@@ -378,6 +378,58 @@ func TestServerTitleUsesTheCountryOfTheFlag(t *testing.T) {
 	}
 }
 
+func TestServerSearchMatchesTheFlagCountry(t *testing.T) {
+	a := newTestApp(ukServers())
+	a.query = "Germany"
+	got := a.filteredServers()
+	if len(got) != 1 || got[0].key.cfg != "c2" {
+		t.Fatalf("searching Germany found %+v", got)
+	}
+	a.query = "United Kingdom"
+	if got := a.filteredServers(); len(got) != 1 || got[0].key.cfg != "c1" {
+		t.Fatalf("searching United Kingdom found %+v", got)
+	}
+}
+
+func TestClosingAListClearsItsSearch(t *testing.T) {
+	a := newTestApp(ukServers())
+	a.open, a.query = sectionServers, "Germany"
+	a.toggle(sectionServers)
+	if a.query != "" {
+		t.Fatalf("the server search stayed: %q", a.query)
+	}
+	a.open, a.ruleQuery = sectionRules, "google"
+	a.toggle(sectionRules)
+	if a.ruleQuery != "" {
+		t.Fatalf("the rules search stayed: %q", a.ruleQuery)
+	}
+}
+
+func TestServerListKeepsItsHeightWhenSearching(t *testing.T) {
+	a := newTestApp(ukServers())
+	tt := tester(a)
+	if err := tt.Click(ltr("United Kingdom")); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	before, ok := tt.Find("RULES")
+	if !ok {
+		t.Fatalf("no rules header: %q", tt.Texts())
+	}
+	if a.serverListH <= 0 {
+		t.Fatalf("the open list was not measured: %v", a.serverListH)
+	}
+	tt.Type("no-such-outbound")
+	tt.Frame()
+	after, ok := tt.Find("RULES")
+	if !ok {
+		t.Fatalf("no rules header after searching: %q", tt.Texts())
+	}
+	if d := before.Y - after.Y; d > 1 || d < -1 {
+		t.Fatalf("the list changed height while searching: rules at %v then %v", before.Y, after.Y)
+	}
+}
+
 func TestFlagOf(t *testing.T) {
 	flag, rest := flagOf("🇬🇧 United Kingdom")
 	if flag != "🇬🇧" || rest != "United Kingdom" {

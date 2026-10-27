@@ -98,6 +98,20 @@ func TestWatchStatusStreamsChanges(t *testing.T) {
 	}
 }
 
+func TestShutdownStopsXrayBeforeReturning(t *testing.T) {
+	s := newTestServer(t)
+	on(t, s)
+	if !s.xray.Running() {
+		t.Fatal("setup: xray didn't start")
+	}
+	if _, err := s.Shutdown(context.Background(), &pb.ShutdownRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if s.xray.Running() {
+		t.Fatal("TUN and proxy still run after Shutdown returned")
+	}
+}
+
 func TestBackgroundFailureIsReportedAndRetried(t *testing.T) {
 	s := newTestServer(t)
 	busy, err := net.Listen("tcp", "127.0.0.1:0")
