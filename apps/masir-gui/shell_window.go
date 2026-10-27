@@ -68,5 +68,7 @@ func (s *shell) hide() {
 // beforeTrayMenu leaves the window alone: its menu is the tray's, not the window's.
 func (s *shell) beforeTrayMenu() {}
 
-// platformReady does nothing: a window stays where it is while the app is inactive.
-func (s *shell) platformReady() {}
+// platformReady makes the window follow the content's height every frame: a window of its
+// own has no popover resize animation to fight, and a big jump would stretch the old frame
+// until the new one is drawn.
+func (s *shell) platformReady() { s.frameSize = true }

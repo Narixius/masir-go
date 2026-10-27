@@ -120,6 +120,95 @@ func TestListGivesItsHeightBackAtOnce(t *testing.T) {
 	}
 }
 
+// TestWindowHeightFollowsThePage checks that a window of its own (Windows, Linux) takes the
+// page's height a frame at a time, so the window grows and shrinks with the pages instead
+// of jumping to the end and stretching the old frame.
+func TestWindowHeightFollowsThePage(t *testing.T) {
+	a := newTestApp(ukServers())
+	a.frameSize = true
+	a.motion.instant = false
+	var heights []float32
+	a.onHeight = func(h float32) { heights = append(heights, h) }
+	tt := ui.NewTester(a.view, panelWidth, 900)
+	tt.Frame()
+	mainHeight := a.restHeight()
+	heights = nil
+
+	if err := tt.Click("Settings"); err != nil {
+		t.Fatal(err)
+	}
+	if len(heights) != 0 {
+		t.Fatalf("asked for %v at once; the window should follow the springs", heights)
+	}
+	for i := 0; i < 40; i++ {
+		tt.Advance(8 * time.Millisecond)
+	}
+	tt.Advance(time.Second)
+	if len(heights) < 5 {
+		t.Fatalf("only %d height steps for the transition: %v", len(heights), heights)
+	}
+	if heights[0] >= a.subHeight()-20 {
+		t.Fatalf("the first step is already the settings height: %v", heights)
+	}
+	prev := mainHeight
+	for i, h := range heights {
+		if h < prev-1 {
+			t.Fatalf("height went back at step %d: %v after %v", i, h, prev)
+		}
+		prev = h
+	}
+	if last := heights[len(heights)-1]; abs32(last-a.subHeight()) > 2 {
+		t.Fatalf("the window ended at %v, want %v", last, a.subHeight())
+	}
+
+	heights = nil
+	if err := tt.Click("Back"); err != nil {
+		t.Fatal(err)
+	}
+	if len(heights) != 0 {
+		t.Fatalf("asked for %v at once on the way back", heights)
+	}
+	for i := 0; i < 40; i++ {
+		tt.Advance(8 * time.Millisecond)
+	}
+	tt.Advance(time.Second)
+	if len(heights) < 5 {
+		t.Fatalf("only %d height steps coming back: %v", len(heights), heights)
+	}
+	if heights[0] <= mainHeight+20 {
+		t.Fatalf("the first step back is already the main height: %v", heights)
+	}
+	prev = a.subHeight()
+	for i, h := range heights {
+		if h > prev+1 {
+			t.Fatalf("height grew at step %d: %v after %v", i, h, prev)
+		}
+		prev = h
+	}
+	if last := heights[len(heights)-1]; abs32(last-mainHeight) > 2 {
+		t.Fatalf("the window ended at %v, want %v", last, mainHeight)
+	}
+}
+
+// TestWindowHeightInstantChange checks that a change with no animation still asks for the
+// exact height on a window that follows the springs, so nothing is left unsized.
+func TestWindowHeightInstantChange(t *testing.T) {
+	a := newTestApp(ukServers()) // instant motion
+	a.frameSize = true
+	var asked []float32
+	a.onHeight = func(h float32) { asked = append(asked, h) }
+	tt := ui.NewTester(a.view, panelWidth, 900)
+	tt.Frame()
+	asked = nil
+	if err := tt.Click("Settings"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if len(asked) != 1 || asked[0] != a.subHeight() {
+		t.Fatalf("asked for %v, want one request of %v", asked, a.subHeight())
+	}
+}
+
 // TestSpringsFollowTheFrameClock checks that the view moves the springs itself, one step
 // per frame, instead of a timer of its own.
 func TestSpringsFollowTheFrameClock(t *testing.T) {

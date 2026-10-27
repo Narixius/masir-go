@@ -109,10 +109,12 @@ type app struct {
 	trayOn bool // the tray shows the connected icon
 
 	// Transitions and the window's height. The springs say how far each part is open; the
-	// view steps them from the frame's clock, and the window is resized once per change,
-	// never frame by frame.
+	// view steps them from the frame's clock. A macOS popover is resized once per change,
+	// a window of its own every frame, following the springs.
 	motion       motion
 	lastMotion   time.Time          // the frame the springs last stepped on
+	lastSize     time.Time          // when a window that follows the springs last asked for its height
+	frameSize    bool               // the window can follow the springs every frame
 	lastSub      screen             // the page that slides over the main one, kept while it slides out
 	mainHeight   float32            // the main page's height as last measured
 	measuredOpen section            // the section that was open when mainHeight was measured
@@ -597,7 +599,7 @@ func b2f(b bool) float32 {
 // can be seen. A frame may build the view more than once; only its first pass steps the
 // springs.
 func (a *app) aimMotion(c *ui.Context) {
-	a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
+	changed := a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
 	now := c.Now()
 	moving := !a.motion.settled()
 	switch {
@@ -607,24 +609,66 @@ func (a *app) aimMotion(c *ui.Context) {
 		dt := float32(min(now.Sub(a.lastMotion).Seconds(), 0.05))
 		a.lastMotion = now
 		a.motion.step(dt)
-		if moving && a.motion.settled() {
+		switch {
+		case a.frameSize && !a.motion.settled():
+			// A window of its own follows the springs as they move: the height grows and
+			// shrinks with the page or list instead of jumping to the end. Resizing the
+			// window makes MyGo draw a frame at once, which builds the view again; ask for
+			// a height at most every 12 ms, so those draws don't chase each other.
+			if a.onHeight != nil && (a.lastSize.IsZero() || now.Sub(a.lastSize) >= 12*time.Millisecond) {
+				a.lastSize = now
+				a.onHeight(a.windowHeight())
+			}
+		case moving && a.motion.settled():
 			// The content has come to rest: its exact height may differ from the estimate
 			// it grew to, so settle the window on it once, now that nothing moves.
 			a.requestHeight()
 		}
+	}
+	if a.frameSize && changed && a.motion.settled() && a.onHeight != nil {
+		// An instant change (tests) has nothing to follow; ask for the exact height.
+		a.requestHeight()
 	}
 	if !a.motion.settled() {
 		c.AnimationFrame()
 	}
 }
 
-// requestHeight tells the window how tall the content will be once at rest. Call it when
-// the state changes: the shell coalesces it and applies it after the frame, never inside
-// one.
+// requestHeight tells the window how tall the content will be once at rest. On a window
+// that can follow the springs (Windows, Linux), a transition is sized frame by frame
+// instead, so the window and the content move together; only a change with no movement is
+// asked for here.
 func (a *app) requestHeight() {
-	if a.onHeight != nil {
-		a.onHeight(a.restHeight())
+	if a.onHeight == nil {
+		return
 	}
+	if a.frameSize && a.willMove() {
+		return
+	}
+	a.onHeight(a.restHeight())
+}
+
+// willMove reports whether the state asks for a spring to move that is not there yet.
+func (a *app) willMove() bool {
+	return a.motion.servers.x != b2f(a.open == sectionServers) ||
+		a.motion.rules.x != b2f(a.open == sectionRules) ||
+		a.motion.page.x != b2f(a.screen != screenMain)
+}
+
+// windowHeight is the window's height for the springs as they are: the main page with its
+// lists as far open as they are, blended with the page sliding over it. It is what a
+// window that follows the animation every frame is set to, so the window grows and shrinks
+// with the content instead of jumping to the end.
+func (a *app) windowHeight() float32 {
+	base := a.baseHeight
+	if base == 0 {
+		base = 262
+	}
+	main := base + a.motion.servers.x*a.naturalHeight("servers") + a.motion.rules.x*a.naturalHeight("rules")
+	if a.motion.settled() && a.mainHeight > 0 {
+		main = a.mainHeight
+	}
+	return main + (a.subHeight()-main)*a.motion.page.x
 }
 
 // naturalHeight is how tall a list is when fully open: as measured the last time it was

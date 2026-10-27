@@ -28,11 +28,15 @@ type shell struct {
 	open     bool
 	quitting bool
 
-	// The window's size, coalesced: the view asks for it once per change and never frame
-	// by frame, and the shell applies the last ask after the frame that made it.
+	// The window's size, coalesced: a macOS popover is asked once per change, a window of
+	// its own every frame; either way the shell applies the latest ask after the frame.
 	wantHeight int
 	lastHeight int
 	sizeQueued bool
+
+	// frameSize says the window can follow the animation every frame: a window of its own
+	// can, a macOS popover cannot without stuttering.
+	frameSize bool
 }
 
 func (s *shell) toggle() {
@@ -48,6 +52,8 @@ func (s *shell) start() {
 	s.a.screen, s.a.open, s.a.lastSub = screenMain, sectionNone, screenMain
 	s.a.motion = motion{instant: s.a.motion.instant} // a new panel starts at rest
 	s.a.lastMotion = time.Time{}
+	s.a.lastSize = time.Time{}
+	s.a.frameSize = s.frameSize
 	s.a.onHeight = s.setHeight
 	s.a.watchTraffic()
 }
