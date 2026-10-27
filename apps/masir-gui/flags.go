@@ -67,14 +67,17 @@ func flagDrawing(code string) *ui.SVG {
 	return svg
 }
 
-// flagElement draws a flag as wide as w and as tall as h. flag may be a flag emoji (as the
-// server names use) or a two-letter code (as the rules use); when the app has no drawing,
-// the emoji itself is drawn, and the system's fonts do what they can with it.
-func flagElement(c *ui.Context, flag string, w, h float32) ui.Element {
+// flagElement draws a flag as a square icon of side size, as the tiles and badges that
+// hold one are square: a 4:3 drawing fills it by cropping its sides. flag may be a flag
+// emoji (as the server names use) or a two-letter code (as the rules use); when the app has
+// no drawing, the emoji itself is drawn, and the system's fonts do what they can with it.
+func flagElement(c *ui.Context, flag string, size float32) ui.Element {
 	if svg := flagDrawing(flagCode(flag)); svg != nil {
 		// Its corners curve like its tile's, so it sits in the tile as a picture in a
 		// frame rather than a sharp rectangle in a rounded one.
-		return ui.Image(c, svg).Size(w, h).Radius(h * 0.3)
+		return ui.Image(c, svg).Size(size, size).Fit(ui.Cover).Radius(size * 0.22)
 	}
-	return ui.Text(c, flag).FontSize(h).FixedLineHeight(h)
+	return ui.Box(c).Size(size, size).Center().Shrink(0).Children(func() {
+		ui.Text(c, flag).FontSize(size * 0.75).FixedLineHeight(size * 0.75)
+	})
 }

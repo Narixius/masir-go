@@ -109,24 +109,24 @@ func field(c *ui.Context, p palette, key, title string, value *string, placehold
 	ui.Column(c.Key(key)).Gap(tw(1)).Shrink(0).Children(func() {
 		label(c, strings.ToUpper(title), sizeCaption, 14, 600, p.muted).LetterSpacing(0.4).Padding(0, tw(0.5))
 		box := ui.Row(c).Gap(tw(1.5)).Padding(tw(0.5), tw(2.5)).Radius(tw(2)).AlignItems(ui.Center).Shrink(0)
-		in := ui.TextInputBase(c.Key(key+"-input"), value).Placeholder(placeholder).Grow(1).
-			FontSize(sizeSubhead).TextColor(p.text).Padding(tw(1.5), 0)
-		if key == "sub-url" {
-			in.AutoFocus()
-		}
-		focused := in.Focused()
-		bg, border := p.subdued, p.borderDefault
-		if focused {
-			bg, border = p.card, p.borderFocus
-		}
-		box.Background(bg).Border(1, border).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.02))
+		var in ui.Element
 		box.Children(func() {
 			ui.Icon(c, icon).FontSize(15).TextColor(iconColor).Shrink(0)
+			in = ui.TextInputBase(c.Key(key+"-input"), value).Placeholder(placeholder).Grow(1).
+				FontSize(sizeSubhead).TextColor(p.text).Padding(tw(1.5), 0)
+			if key == "sub-url" {
+				in.AutoFocus()
+			}
 			in.Valid()
 			if trailing != nil {
 				trailing()
 			}
 		})
+		bg, border := p.subdued, p.borderDefault
+		if in.Focused() {
+			bg, border = p.card, p.borderFocus
+		}
+		box.Background(bg).Border(1, border).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.02))
 		submitted = in.Submitted()
 	})
 	return submitted
@@ -332,14 +332,17 @@ func (a *app) advancedSection(c *ui.Context, p palette) {
 					label(c, "Mixed SOCKS5 / HTTP", sizeCaption, 15, 400, p.muted)
 				})
 				box := ui.Row(c).Width(76).Padding(tw(1), tw(2)).Radius(tw(1.5)).Shrink(0).Clip()
-				in := ui.TextInputBase(c.Key("port"), &a.portText).Grow(1).MinWidth(0).FontSize(sizeSubhead).TextAlign(ui.End).
-					Font("monospace").FontWeight(500).TextColor(p.text)
+				var in ui.Element
+				box.Children(func() {
+					in = ui.TextInputBase(c.Key("port"), &a.portText).Grow(1).MinWidth(0).FontSize(sizeSubhead).TextAlign(ui.End).
+						Font("monospace").FontWeight(500).TextColor(p.text)
+					in.Valid()
+				})
 				bg, border := p.subdued, p.borderDefault
 				if in.Focused() {
 					bg, border = p.card, p.borderFocus
 				}
 				box.Background(bg).Border(1, border)
-				box.Children(func() { in.Valid() })
 				if in.Submitted() || (!in.Focused() && a.portText != fmt.Sprint(set.GetProxyPort()) && a.portEdited) {
 					a.applyPort()
 				}

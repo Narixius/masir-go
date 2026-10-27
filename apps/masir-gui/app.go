@@ -727,8 +727,9 @@ func (a *app) aimMotion(c *ui.Context) {
 			// The window follows the springs as they move: the height grows and shrinks
 			// with the page or list instead of jumping to the end. Resizing the window makes
 			// MyGo draw a frame at once, which builds the view again; ask for a height at
-			// most every 12 ms, so those draws don't chase each other.
-			if a.onHeight != nil && (a.lastSize.IsZero() || now.Sub(a.lastSize) >= 12*time.Millisecond) {
+			// most every 6 ms, under a 120 Hz frame, so those draws don't chase each other
+			// but every frame of the springs still moves the window.
+			if a.onHeight != nil && (a.lastSize.IsZero() || now.Sub(a.lastSize) >= 6*time.Millisecond) {
 				a.lastSize = now
 				a.onHeight(a.windowHeight())
 			}

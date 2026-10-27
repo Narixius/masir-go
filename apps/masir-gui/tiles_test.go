@@ -15,7 +15,7 @@ func TestIconTileCentersWhatItHolds(t *testing.T) {
 				ui.Image(c, iconGlobe).Size(18, 18).Label("icon")
 			})
 			iconTile(c, paletteFor(c), func() {
-				flagElement(c, "🇩🇪", 18, 13.5).Label("flag")
+				flagElement(c, "🇩🇪", 18).Label("flag")
 			})
 		})
 	}, 300, 100)
@@ -27,7 +27,7 @@ func TestIconTileCentersWhatItHolds(t *testing.T) {
 		w, h  float32
 	}{
 		{"icon", 18, 18},
-		{"flag", 18, 13.5},
+		{"flag", 18, 18},
 	} {
 		r, ok := tt.Find(tc.label)
 		if !ok {

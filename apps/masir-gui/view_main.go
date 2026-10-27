@@ -280,7 +280,7 @@ func (a *app) serverRow(c *ui.Context, p palette) {
 		}
 		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(tw(1)).Children(func() {
-				flagElement(c, flag, 17, 12.75)
+				flagElement(c, flag, 17)
 				ltrLabel(c, title, sizeTitle, 17, 600, p.text)
 			})
 			if ok {
@@ -401,7 +401,7 @@ func orderedGroups(servers []server) []serverGroup {
 }
 
 func (a *app) groupHeader(c *ui.Context, p palette, g serverGroup) {
-	ui.Row(c).Padding(tw(1), tw(2)).Radius(tw(1)).Background(p.subdued).AlignItems(ui.Center).Justify(ui.SpaceBetween).Shrink(0).Children(func() {
+	ui.Row(c).Padding(tw(1), tw(2)).Radius(tw(1)).Background(p.listHeader).AlignItems(ui.Center).Justify(ui.SpaceBetween).Shrink(0).Children(func() {
 		label(c, strings.ToUpper(ltr(g.name)), sizeMicro, 18, 600, p.muted).LetterSpacing(0.5).SingleLine().Grow(1).MarginEnd(tw(2))
 		ui.Row(c).Gap(tw(1.5)).AlignItems(ui.Center).Shrink(0).Children(func() {
 			n := fmt.Sprintf("%d node", len(g.servers))
@@ -432,7 +432,7 @@ func (a *app) serverItem(c *ui.Context, p palette, s server) {
 	row.Children(func() {
 		flag, title, detail := serverTitle(s.cfg.Name)
 		ui.Row(c).Gap(tw(2.5)).AlignItems(ui.Center).Grow(1).Basis(0).MinWidth(0).MarginEnd(tw(2)).Children(func() {
-			iconTile(c, p, func() { flagElement(c, flag, 18, 13.5) })
+			iconTile(c, p, func() { flagElement(c, flag, 18) })
 			ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
 				ltrLabel(c, title, sizeBody, 16, 600, p.text)
 				if detail != "" {
@@ -546,9 +546,10 @@ func (a *app) ruleListItems(rules []*pb.RoutingRule) []ruleListItem {
 }
 
 // ruleSectionRow is a section's title in the rules list; the list keeps it at the top
-// while its rows scroll under it.
+// while its rows scroll under it. Its background is opaque, unlike the list's tint: rows
+// passing under a translucent header would show through it.
 func (a *app) ruleSectionRow(c *ui.Context, p palette, title string, count int) {
-	ui.Row(c).Padding(tw(1.5), tw(2), tw(0.5)).Background(p.subdued).Children(func() {
+	ui.Row(c).Padding(tw(1.5), tw(2), tw(0.5)).Background(p.listHeader).Children(func() {
 		label(c, fmt.Sprintf("%s (%d)", strings.ToUpper(title), count), sizeMicro, 18, 600, p.muted).LetterSpacing(0.5)
 	})
 }
@@ -650,7 +651,7 @@ func (a *app) ruleContent(c *ui.Context, p palette, r *pb.RoutingRule) {
 			case icon != nil:
 				ui.Image(c, icon).Size(18, 18).Radius(4)
 			case info.flag != "":
-				flagElement(c, info.flag, 18, 13.5)
+				flagElement(c, info.flag, 18)
 			default:
 				ui.Icon(c, info.icon).FontSize(14).TextColor(p.muted)
 			}
@@ -728,7 +729,7 @@ func (a *app) destinationBadge(c *ui.Context, p palette, target string) {
 		}
 		ui.Row(c).Gap(tw(1)).Padding(tw(0.5), tw(1.5)).Radius(6).Background(p.pinnedSurface).Height(tw(7)).AlignItems(ui.Center).Shrink(0).Children(func() {
 			ui.Icon(c, iconPin).FontSize(10).TextColor(p.pinned)
-			flagElement(c, flag, 14, 10.5)
+			flagElement(c, flag, 14)
 			label(c, ltr(name), sizeSubhead, 14, 500, p.pinned).SingleLine().MaxWidth(120)
 		})
 	}
