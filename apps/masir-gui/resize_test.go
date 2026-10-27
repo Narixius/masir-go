@@ -7,10 +7,10 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// TestResizeOnlyAtRest checks the rule that keeps the panel smooth: a transition asks for
-// the window's height once before it starts and once when it comes to rest, and never
-// while the pages move. It is the regression test for the popover freeze.
-func TestResizeOnlyAtRest(t *testing.T) {
+// TestPageResizeAtOnce checks that a page change asks for the new page's height in the
+// same frame as the click, so the window and the pages move together, and then at most
+// once more when everything has come to rest.
+func TestPageResizeAtOnce(t *testing.T) {
 	a := newTestApp(ukServers())
 	a.motion.instant = false
 	var asked []float32
@@ -28,7 +28,7 @@ func TestResizeOnlyAtRest(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		tt.Advance(8 * time.Millisecond)
 		if p := a.motion.page.x; p > 0 && p < 1 && len(asked) > 1 {
-			t.Fatalf("resized while the page moved at %v: %v", p, asked)
+			t.Fatalf("resized again while the page moved at %v: %v", p, asked)
 		}
 	}
 	tt.Advance(time.Second)
@@ -40,18 +40,18 @@ func TestResizeOnlyAtRest(t *testing.T) {
 	if err := tt.Click("Back"); err != nil {
 		t.Fatal(err)
 	}
-	if len(asked) != 0 {
-		t.Fatalf("resized before the settings page left: %v", asked)
+	if len(asked) != 1 || asked[0] >= a.subHeight() {
+		t.Fatalf("coming back asked for %v, want one request of the main page's height at once", asked)
 	}
 	for i := 0; i < 40; i++ {
 		tt.Advance(8 * time.Millisecond)
-		if p := a.motion.page.x; p > 0.05 && len(asked) > 0 {
-			t.Fatalf("resized while the page was still on screen at %v: %v", p, asked)
+		if p := a.motion.page.x; p > 0 && p < 1 && len(asked) > 1 {
+			t.Fatalf("resized again while the page moved back at %v: %v", p, asked)
 		}
 	}
 	tt.Advance(time.Second)
-	if len(asked) < 1 || len(asked) > 2 || asked[0] >= a.subHeight() {
-		t.Fatalf("coming back asked for %v, want the main page's height once it was nearly gone", asked)
+	if len(asked) > 2 {
+		t.Fatalf("going back asked for the height %d times: %v", len(asked), asked)
 	}
 }
 

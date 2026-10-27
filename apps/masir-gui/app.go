@@ -113,7 +113,6 @@ type app struct {
 	// never frame by frame.
 	motion       motion
 	lastMotion   time.Time          // the frame the springs last stepped on
-	nearTarget   bool               // the window was already sized for a closing part
 	lastSub      screen             // the page that slides over the main one, kept while it slides out
 	mainHeight   float32            // the main page's height as last measured
 	measuredOpen section            // the section that was open when mainHeight was measured
@@ -175,11 +174,9 @@ func (a *app) openScreen(s screen) {
 	} else {
 		a.backTo = screenMain
 	}
-	if from == screenMain {
-		// A page opening from the main one: size the window before it slides. Coming back,
-		// the window stays as it is until the page has gone, and aimMotion shrinks it then.
-		a.requestHeight()
-	}
+	// The window takes the new page's height as the pages move, from the first frame, so
+	// the two animations are one.
+	a.requestHeight()
 }
 
 // notify queues a toast for the next frame.
@@ -600,10 +597,7 @@ func b2f(b bool) float32 {
 // can be seen. A frame may build the view more than once; only its first pass steps the
 // springs.
 func (a *app) aimMotion(c *ui.Context) {
-	changed := a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
-	if changed {
-		a.nearTarget = false
-	}
+	a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
 	now := c.Now()
 	moving := !a.motion.settled()
 	switch {
@@ -613,14 +607,6 @@ func (a *app) aimMotion(c *ui.Context) {
 		dt := float32(min(now.Sub(a.lastMotion).Seconds(), 0.05))
 		a.lastMotion = now
 		a.motion.step(dt)
-		// The page over the main one gives the window its height back as soon as it is
-		// nearly gone, instead of after the spring's last invisible millimetres: the
-		// window would otherwise shrink a moment after the movement the person saw. A
-		// folding list is sized as it starts (see toggle), so it needs no wait.
-		if a.motion.pageClosing() && !a.nearTarget && abs32(a.motion.page.x) <= 0.05 {
-			a.nearTarget = true
-			a.requestHeight()
-		}
 		if moving && a.motion.settled() {
 			// The content has come to rest: its exact height may differ from the estimate
 			// it grew to, so settle the window on it once, now that nothing moves.

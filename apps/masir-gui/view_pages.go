@@ -68,9 +68,7 @@ func (a *app) screenHeader(c *ui.Context, p palette, title string) {
 		ui.Row(c).Width(tw(7)).Children(func() {
 			if iconButton(c, "back", iconBack, "Back", p, iconSM, variantGhost, 16) {
 				a.screen = a.backTo
-				if a.screen != screenMain {
-					a.requestHeight()
-				}
+				a.requestHeight() // the window takes the new page's height from the first frame
 			}
 		})
 		label(c, title, sizeTitle, 18, 600, p.text).TextAlign(ui.Center).Grow(1).SingleLine()

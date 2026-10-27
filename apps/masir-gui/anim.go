@@ -37,25 +37,18 @@ type motion struct {
 	instant bool
 }
 
-// aim sets where the springs are heading, and reports whether a target changed.
-func (m *motion) aim(servers, rules, page float32) (changed bool) {
+// aim sets where the springs are heading.
+func (m *motion) aim(servers, rules, page float32) {
 	for _, t := range []struct {
 		s *spring
 		v float32
 	}{{&m.servers, servers}, {&m.rules, rules}, {&m.page, page}} {
-		if t.s.target != t.v {
-			changed = true
-		}
 		t.s.target = t.v
 		if m.instant {
 			t.s.x, t.s.v = t.v, 0
 		}
 	}
-	return changed
 }
-
-// pageClosing reports whether the page over the main one is sliding away.
-func (m *motion) pageClosing() bool { return m.page.target == 0 && m.page.x > 0 }
 
 // step advances every spring and reports whether any is still moving.
 func (m *motion) step(dt float32) bool {

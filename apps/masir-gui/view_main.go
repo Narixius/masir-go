@@ -733,17 +733,14 @@ func (a *app) measure() float32 {
 	onHeight, notices := a.onHeight, a.notices
 	a.onHeight, a.notices = nil, nil
 	wasScreen, wasOpen, wasSub, wasMotion, wasLast := a.screen, a.open, a.lastSub, a.motion, a.lastMotion
-	wasNear := a.nearTarget
 	a.screen, a.open = screenMain, sectionNone
 	a.motion = motion{instant: a.motion.instant}
 	a.lastMotion = time.Time{}
-	a.nearTarget = false
 	tt := ui.NewTester(a.view, panelWidth, 900) // tall enough that nothing is cut off
 	tt.Frame()
 	tt.Frame() // an element knows its size from the frame before
 	h := a.restHeight()
 	a.screen, a.open, a.lastSub, a.motion, a.lastMotion = wasScreen, wasOpen, wasSub, wasMotion, wasLast
-	a.nearTarget = wasNear
 	a.onHeight, a.notices = onHeight, notices
 	return h
 }
