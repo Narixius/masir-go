@@ -63,12 +63,12 @@ It's the client I wanted for myself, for living with Xray configs and moving bet
 
    | System | Archive |
    |---|---|
-   | macOS, Apple Silicon | `masir_<version>_darwin_arm64.tar.gz` |
-   | macOS, Intel | `masir_<version>_darwin_amd64.tar.gz` |
-   | Linux, x86-64 | `masir_<version>_linux_amd64.tar.gz` |
-   | Linux, ARM64 | `masir_<version>_linux_arm64.tar.gz` |
-   | Windows, x86-64 | `masir_<version>_windows_amd64.zip` |
-   | Windows, ARM64 | `masir_<version>_windows_arm64.zip` |
+   | macOS, Apple Silicon | `masir-cli-darwin-<version>-arm64.tar.gz` |
+   | macOS, Intel | `masir-cli-darwin-<version>-amd64.tar.gz` |
+   | Linux, x86-64 | `masir-cli-linux-<version>-amd64.tar.gz` |
+   | Linux, ARM64 | `masir-cli-linux-<version>-arm64.tar.gz` |
+   | Windows, x86-64 | `masir-cli-windows-<version>-amd64.zip` |
+   | Windows, ARM64 | `masir-cli-windows-<version>-arm64.zip` |
 
    Each archive holds the `masir` executable plus `geosite.dat` and `geoip.dat`. Keep the three files together. (On Windows, the [Wintun](https://www.wintun.net) driver TUN mode needs is built into `masir.exe`.)
 
@@ -76,7 +76,7 @@ It's the client I wanted for myself, for living with Xray configs and moving bet
 
    ```sh
    mkdir -p ~/.local/masir
-   tar -xzf masir_*_darwin_arm64.tar.gz -C ~/.local/masir
+   tar -xzf masir-cli-darwin-<version>-arm64.tar.gz -C ~/.local/masir
    ln -s ~/.local/masir/masir ~/.local/bin/masir
    ```
 
@@ -126,12 +126,12 @@ needs no separate download:
 
 | System | Download |
 |---|---|
-| macOS, Apple Silicon | `masir-desktop-<version>-arm64.dmg` |
-| macOS, Intel | `masir-desktop-<version>-amd64.dmg` |
-| Windows, x86-64 | `Masir-v<version>-windows-amd64.zip` |
-| Windows, ARM64 | `Masir-v<version>-windows-arm64.zip` |
-| Linux, x86-64 | `masir-desktop_<version>_amd64.deb`, or the tarball's `install.sh` |
-| Linux, ARM64 | `masir-desktop_<version>_arm64.deb`, or the tarball's `install.sh` |
+| macOS, Apple Silicon | `masir-desktop-darwin-<version>-arm64.dmg` |
+| macOS, Intel | `masir-desktop-darwin-<version>-amd64.dmg` |
+| Windows, x86-64 | `masir-desktop-windows-<version>-amd64.zip` |
+| Windows, ARM64 | `masir-desktop-windows-<version>-arm64.zip` |
+| Linux, x86-64 | `masir-desktop-linux-<version>-amd64.deb`, or the portable `.tar.gz` |
+| Linux, ARM64 | `masir-desktop-linux-<version>-arm64.deb`, or the portable `.tar.gz` |
 
 It lives in the tray: a native popover on macOS, an app window on Windows and Linux. It
 starts the daemon when none is running, and asks for root through the system's own prompt

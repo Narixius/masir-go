@@ -30,7 +30,9 @@ builds:
 archives:
   - id: masir
     ids: [masir]
-    name_template: "masir_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Every download is named <app>-<os>-<version>-<arch>; the updater asks for exactly
+    # this name (see ArchiveName in libs/masir-daemon/internal/update).
+    name_template: "masir-cli-{{ .Os }}-{{ .Version }}-{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
       - goos: windows
@@ -51,6 +53,9 @@ changelog:
     exclude: ["^Merge ", "^chore"]
 
 release:
+  # Published only once every system's app is uploaded (the `publish` job in the release
+  # workflow), so a release never appears with half its downloads missing.
+  draft: true
   github:
     owner: Narixius
     name: masir-go

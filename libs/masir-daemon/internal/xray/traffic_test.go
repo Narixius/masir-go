@@ -70,12 +70,22 @@ func TestTrafficCountsBytesThroughARunningXray(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, ok, err := c.Traffic(context.Background())
-	if err != nil || !ok {
-		t.Fatalf("Traffic: ok=%v err=%v", ok, err)
-	}
-	if got.Up < 4096 || got.Down < 4096 {
-		t.Fatalf("counted %+v for 4096 bytes each way", got)
+	// Xray publishes its counters a moment after the bytes have passed, so a single
+	// read can catch the handshake but not the payload. Sample until both directions
+	// are counted rather than failing on the first look (this made the Ubuntu run red).
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got, ok, err := c.Traffic(context.Background())
+		if err != nil || !ok {
+			t.Fatalf("Traffic: ok=%v err=%v", ok, err)
+		}
+		if got.Up >= 4096 && got.Down >= 4096 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("counted %+v for 4096 bytes each way", got)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	_ = c.Close()

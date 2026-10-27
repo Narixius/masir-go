@@ -9,6 +9,9 @@
 # separated. Each build goes to apps/masir-gui/dist/<os>-<arch>, with the masir executable
 # and the geo data in the bin folder of its resources. The version is mygo.json's, so the
 # app and the masir it ships have the same one.
+#
+# The downloads are named masir-desktop-<os>-<version>-<arch>.<ext>, like the
+# masir-cli-<os>-<version>-<arch> archives the release also publishes.
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -63,7 +66,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-mygo_dir=$(cd apps/masir-gui && go list -m -f '{{.Dir}}' github.com/egoist/mygo)
+# go list -m reports the module's directory only when its source is already in the module
+# cache; it downloads nothing. A fresh runner (or one whose test job failed before saving
+# its cache) has no MyGo there, so ask for the download explicitly.
+mygo_dir=$(cd apps/masir-gui && go mod download -json github.com/egoist/mygo |
+	sed -n 's/.*"Dir": "\(.*\)".*/\1/p')
 if [ -z "$mygo_dir" ] || [ ! -d "$mygo_dir" ]; then
 	echo "build-gui: cannot find the MyGo module source" >&2
 	exit 1
@@ -82,6 +89,52 @@ cp "$go_mod" "$go_mod_orig"
 cp "$go_sum" "$go_sum_orig"
 (cd apps/masir-gui && go mod edit -replace github.com/egoist/mygo=../../.mygo-patched)
 
+# Every download is named after its system, then its version, then its architecture.
+# MyGo names what it builds after mygo.json (masir-desktop-<version>-<arch>.dmg,
+# masir-desktop_<version>_<arch>.deb, masir-desktop-<version>-linux-<arch>.tar.gz), so
+# each app build is renamed here: one place owns the names, and `make gui` produces the
+# files the release workflow uploads.
+expected() {
+	[ -f "$1" ] || {
+		echo "build-gui: mygo built no $(basename -- "$1")" >&2
+		exit 1
+	}
+}
+
+name_app() {
+	app_os=$1
+	app_arch=$2
+	app_dir="apps/masir-gui/dist/$app_os-$app_arch"
+	case "$app_os" in
+	darwin)
+		expected "$app_dir/masir-desktop-$version-$app_arch.dmg"
+		mv -f "$app_dir/masir-desktop-$version-$app_arch.dmg" \
+			"$app_dir/masir-desktop-darwin-$version-$app_arch.dmg"
+		;;
+	windows)
+		expected "$app_dir/masir-desktop-setup-$version-$app_arch.exe"
+		mv -f "$app_dir/masir-desktop-setup-$version-$app_arch.exe" \
+			"$app_dir/masir-desktop-setup-windows-$version-$app_arch.exe"
+		;;
+	linux)
+		expected "$app_dir/masir-desktop_${version}_${app_arch}.deb"
+		mv -f "$app_dir/masir-desktop_${version}_${app_arch}.deb" \
+			"$app_dir/masir-desktop-linux-$version-$app_arch.deb"
+		expected "$app_dir/masir-desktop-$version-linux-$app_arch.tar.gz"
+		mv -f "$app_dir/masir-desktop-$version-linux-$app_arch.tar.gz" \
+			"$app_dir/masir-desktop-linux-$version-$app_arch.tar.gz"
+		# install.sh, which sits beside them, looks for the archive under MyGo's name;
+		# teach it the one it is next to now, and the one the usage text shows.
+		expected "$app_dir/install.sh"
+		sed -i.bak 's/\$name-\$version-\$target\.tar\.gz/masir-desktop-${target%%-*}-$version-${target##*-}.tar.gz/g' \
+			"$app_dir/install.sh"
+		sed -i.bak 's|\$name-\$version-<platform>\.tar\.gz|masir-desktop-<os>-<version>-<arch>.tar.gz|g' \
+			"$app_dir/install.sh"
+		rm -f "$app_dir/install.sh.bak"
+		;;
+	esac
+}
+
 built=
 for os in $os_list; do
 	for arch in $arch_list; do
@@ -95,6 +148,7 @@ for os in $os_list; do
 		GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -ldflags "$ldflags" -o "$res/$name" ./apps/masir
 		cp build/geo/geoip.dat build/geo/geosite.dat "$res/"
 		(cd apps/masir-gui && go tool mygo build -platform "$os/$arch")
+		name_app "$os" "$arch"
 		built="$built $os/$arch"
 	done
 done

@@ -32,7 +32,9 @@ make gui GUI_OS=windows GUI_ARCHES=arm64   # one build
 `GUI_OS` is `darwin`, `linux` and/or `windows`; `GUI_ARCHES` is `amd64` and/or `arm64`.
 Space or comma separated; the default is all six builds. Each goes to
 `apps/masir-gui/dist/<os>-<arch>`, with the `masir` executable and the geo data in the
-`bin` folder of the resources it ships.
+`bin` folder of the resources it ships. The download itself is named
+`masir-desktop-<os>-<version>-<arch>.<ext>` (`.dmg`, `.deb`, `.tar.gz`, and the `.zip` the
+release workflow packs on Windows), like the `masir-cli-<os>-<version>-<arch>` archives.
 
 The build applies the patches in `patches/` to MyGo for its duration. Windows stretched a
 frame drawn for one client height into a window that has changed height, which made the
@@ -57,8 +59,8 @@ choose Open.
 
 The Windows build is `dist/windows-<arch>` with `Masir.exe` and `bin/masir.exe`; the
 installer is made on Windows. The Linux build is `dist/linux-<arch>` with the executable,
-a Debian package, a tarball with `install.sh`, and the desktop entry; the app installs for
-one user, without root.
+a Debian package, a portable tarball, and the desktop entry (`install.sh` is written beside
+them); the app installs for one user, without root.
 
 ## Run from source
 

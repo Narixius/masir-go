@@ -25,6 +25,22 @@ import (
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
+// The release workflow names the archives (.goreleaser.yaml); the updater has to ask for
+// exactly those, so a tag's downloads are found.
+func TestArchiveName(t *testing.T) {
+	for _, c := range []struct{ tag, goos, goarch, want string }{
+		{"v0.3.1", "darwin", "arm64", "masir-cli-darwin-0.3.1-arm64.tar.gz"},
+		{"v0.3.1", "darwin", "amd64", "masir-cli-darwin-0.3.1-amd64.tar.gz"},
+		{"v0.3.1", "linux", "amd64", "masir-cli-linux-0.3.1-amd64.tar.gz"},
+		{"0.4.0", "windows", "arm64", "masir-cli-windows-0.4.0-arm64.zip"},
+		{"v1.0.0-rc1", "linux", "arm64", "masir-cli-linux-1.0.0-rc1-arm64.tar.gz"},
+	} {
+		if got := ArchiveName(c.tag, c.goos, c.goarch); got != c.want {
+			t.Errorf("ArchiveName(%q, %q, %q) = %q, want %q", c.tag, c.goos, c.goarch, got, c.want)
+		}
+	}
+}
+
 // fakeGitHub serves releases and their files. A file served slowly lets tests pause
 // mid-download; ranges counts Range requests, which is how a resume shows.
 type fakeGitHub struct {

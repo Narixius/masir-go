@@ -134,14 +134,15 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	return nil
 }
 
-// ArchiveName is a release archive's file name, e.g. masir_0.2.0_darwin_arm64.tar.gz.
-// The release workflow names them the same way.
+// ArchiveName is a release archive's file name, e.g. masir-cli-darwin-0.2.0-arm64.tar.gz:
+// the system, then the version, then the architecture, as every download is named (see
+// .goreleaser.yaml, and the desktop app in the release workflow).
 func ArchiveName(tag, goos, goarch string) string {
 	ext := ".tar.gz"
 	if goos == "windows" {
 		ext = ".zip"
 	}
-	return fmt.Sprintf("masir_%s_%s_%s%s", strings.TrimPrefix(tag, "v"), goos, goarch, ext)
+	return fmt.Sprintf("masir-cli-%s-%s-%s%s", goos, strings.TrimPrefix(tag, "v"), goarch, ext)
 }
 
 func exe(name string) string {

@@ -64,7 +64,7 @@ jobs:
           # tries again later; it never installs an unsigned one.
           gh release upload "$GITHUB_REF_NAME" checksums.txt.minisig
   gui:
-    # After the release exists, so `gh release upload` has somewhere to put the apps.
+    # After the draft release exists, so `gh release upload` has somewhere to put the apps.
     needs: release
     strategy:
       fail-fast: false
@@ -112,16 +112,18 @@ jobs:
         if: matrix.name == 'darwin'
         shell: bash
         run: |
+          version="${GITHUB_REF_NAME#v}"
           gh release upload "$GITHUB_REF_NAME" \
-            apps/masir-gui/dist/darwin-arm64/*.dmg \
-            apps/masir-gui/dist/darwin-amd64/*.dmg --clobber
+            "apps/masir-gui/dist/darwin-arm64/masir-desktop-darwin-$version-arm64.dmg" \
+            "apps/masir-gui/dist/darwin-amd64/masir-desktop-darwin-$version-amd64.dmg" --clobber
       - name: Upload the Windows app
         if: matrix.name == 'windows'
         shell: pwsh
         run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
           foreach ($arch in @("amd64", "arm64")) {
             $src = "apps/masir-gui/dist/windows-$arch"
-            $out = "Masir-$env:GITHUB_REF_NAME-windows-$arch.zip"
+            $out = "masir-desktop-windows-$version-$arch.zip"
             Compress-Archive -Path "$src/*" -DestinationPath $out
             gh release upload $env:GITHUB_REF_NAME $out --clobber
           }
@@ -129,6 +131,23 @@ jobs:
         if: matrix.name == 'linux'
         shell: bash
         run: |
+          version="${GITHUB_REF_NAME#v}"
           gh release upload "$GITHUB_REF_NAME" \
-            apps/masir-gui/dist/linux-amd64/*.deb apps/masir-gui/dist/linux-amd64/*.tar.gz \
-            apps/masir-gui/dist/linux-arm64/*.deb apps/masir-gui/dist/linux-arm64/*.tar.gz --clobber
+            "apps/masir-gui/dist/linux-amd64/masir-desktop-linux-$version-amd64.deb" \
+            "apps/masir-gui/dist/linux-amd64/masir-desktop-linux-$version-amd64.tar.gz" \
+            "apps/masir-gui/dist/linux-arm64/masir-desktop-linux-$version-arm64.deb" \
+            "apps/masir-gui/dist/linux-arm64/masir-desktop-linux-$version-arm64.tar.gz" --clobber
+  publish:
+    # A release stays a draft until the command line and every system's app are in it.
+    # Failed app builds leave it unpublished instead of shipping a release that is missing
+    # a platform; re-run the failed job, then this one.
+    needs: [release, gui]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
