@@ -22,6 +22,7 @@ app's `bin` folder on the user's `PATH` on Windows).
 ## Build
 
 ```sh
+make gui-local                             # this machine only: the fast build while developing
 make gui                                   # darwin, linux and windows; amd64 and arm64
 make gui GUI_OS=darwin                     # one system, both architectures
 make gui GUI_ARCHES=arm64                  # all systems, one architecture
@@ -74,6 +75,8 @@ frames that take longer than 8 ms.
 ## Tests
 
 ```sh
-cd apps/masir-gui && go test ./...
-MASIR_SNAPSHOTS=/tmp/masir-snaps go test -run Snapshots ./...   # pictures of each page
+cd apps/masir-gui && go test ./...          # the module's tests
+make test                                   # vet and test every module, as CI does
+make test-race                              # the same with the race detector
+make snapshots                              # pictures of each page, in dist/snapshots
 ```
