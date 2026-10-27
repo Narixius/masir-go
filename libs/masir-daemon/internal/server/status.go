@@ -43,6 +43,7 @@ func (s *Server) status() *pb.Status {
 		Version:          Version,
 		XrayVersion:      s.xray.GetVersion(),
 		UptimeSeconds:    int64(time.Since(s.startedAt).Seconds()),
+		StartedAtMs:      s.startedAt.UnixMilli(),
 		Privileged:       s.id.Privileged,
 		ServiceInstalled: service.Installed(),
 		ServedUid:        int64(s.id.UID),

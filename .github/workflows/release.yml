@@ -84,12 +84,21 @@ jobs:
       MASIR_UPDATE_PUBKEY: ${{ vars.MASIR_UPDATE_PUBKEY }}
       MASIR_POSTHOG_KEY: ${{ vars.MASIR_POSTHOG_KEY }}
       MASIR_POSTHOG_HOST: ${{ vars.MASIR_POSTHOG_HOST }}
+      MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.work
           cache-dependency-path: "**/go.sum"
+      - name: Require the app update signing key
+        env:
+          SECRET: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "::error::set the MYGO_UPDATER_PRIVATE_KEY secret (the app update signing key)"
+            exit 1
+          fi
       - name: Set the app's version from the tag
         shell: bash
         run: |
@@ -113,9 +122,13 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          gh release upload "$GITHUB_REF_NAME" \
-            "apps/masir-gui/dist/darwin-arm64/masir-desktop-darwin-$version-arm64.dmg" \
-            "apps/masir-gui/dist/darwin-amd64/masir-desktop-darwin-$version-amd64.dmg" --clobber
+          for arch in arm64 amd64; do
+            dir="apps/masir-gui/dist/darwin-$arch"
+            gh release upload "$GITHUB_REF_NAME" \
+              "$dir/masir-desktop-darwin-$version-$arch.dmg" \
+              "$dir/masir-desktop-darwin-$version-$arch.tar.gz" \
+              "$dir/update-darwin-$arch.json" --clobber
+          done
       - name: Upload the Windows app
         if: matrix.name == 'windows'
         shell: pwsh
@@ -125,18 +138,22 @@ jobs:
             $src = "apps/masir-gui/dist/windows-$arch"
             $out = "masir-desktop-windows-$version-$arch.zip"
             Compress-Archive -Path "$src/*" -DestinationPath $out
-            gh release upload $env:GITHUB_REF_NAME $out --clobber
+            gh release upload $env:GITHUB_REF_NAME $out `
+              "$src/masir-desktop-windows-$version-$arch.tar.gz" `
+              "$src/update-windows-$arch.json" --clobber
           }
       - name: Upload the Linux app
         if: matrix.name == 'linux'
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          gh release upload "$GITHUB_REF_NAME" \
-            "apps/masir-gui/dist/linux-amd64/masir-desktop-linux-$version-amd64.deb" \
-            "apps/masir-gui/dist/linux-amd64/masir-desktop-linux-$version-amd64.tar.gz" \
-            "apps/masir-gui/dist/linux-arm64/masir-desktop-linux-$version-arm64.deb" \
-            "apps/masir-gui/dist/linux-arm64/masir-desktop-linux-$version-arm64.tar.gz" --clobber
+          for arch in amd64 arm64; do
+            dir="apps/masir-gui/dist/linux-$arch"
+            gh release upload "$GITHUB_REF_NAME" \
+              "$dir/masir-desktop-linux-$version-$arch.deb" \
+              "$dir/masir-desktop-linux-$version-$arch.tar.gz" \
+              "$dir/update-linux-$arch.json" --clobber
+          done
   publish:
     # A release stays a draft until the command line and every system's app are in it.
     # Failed app builds leave it unpublished instead of shipping a release that is missing

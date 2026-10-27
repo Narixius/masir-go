@@ -62,8 +62,12 @@ service DaemonService {
   rpc GetActiveConfig(GetActiveConfigRequest) returns (GetActiveConfigResponse);
 
   // Updates run as jobs in the daemon, one per target, so any UI can show progress
-  // and offer pause, resume and stop. CheckUpdate asks GitHub without downloading.
+  // and offer pause, resume and stop. CheckUpdate asks GitHub without downloading,
+  // from a cache two days old at most unless forced.
   rpc CheckUpdate(CheckUpdateRequest) returns (CheckUpdateResponse);
+  // IgnoreUpdate hides this update prompt in the GUI until the next release check or
+  // until the daemon restarts. It does not change whether an update is available.
+  rpc IgnoreUpdate(IgnoreUpdateRequest) returns (IgnoreUpdateResponse);
   rpc StartUpdate(StartUpdateRequest) returns (StartUpdateResponse);
   rpc PauseUpdate(PauseUpdateRequest) returns (PauseUpdateResponse);
   rpc ResumeUpdate(ResumeUpdateRequest) returns (ResumeUpdateResponse);
@@ -115,6 +119,9 @@ message Status {
   // Counts every change the daemon announces. A client that keeps lists (servers,
   // rules) refetches them when it moves, instead of on every status.
   uint64 revision = 25;
+  // When this daemon process started. A new value means it restarted, so a memory-only
+  // choice such as an ignored update prompt is gone.
+  int64 started_at_ms = 26;
 }
 
 message GetStatusRequest {}
@@ -489,6 +496,9 @@ message ReleaseInfo {
   string url = 4;            // the release page
   int64 published_at_ms = 5;
   int64 checked_at_ms = 6;
+  // The version the GUI hid until the next check or daemon restart. Available stays
+  // true, so the CLI and other clients still see the update.
+  string ignored_version = 7;
 }
 
 message UpdateJob {
@@ -510,8 +520,14 @@ message UpdateJob {
   repeated RuleProblem blocked_rules = 11;
 }
 
-message CheckUpdateRequest {}
+message CheckUpdateRequest {
+  // Force asks GitHub now, even when the last check is less than two days old.
+  bool force = 1;
+}
 message CheckUpdateResponse { ReleaseInfo release = 1; }
+
+message IgnoreUpdateRequest { string version = 1; } // empty ignores the latest release
+message IgnoreUpdateResponse { ReleaseInfo release = 1; }
 
 message StartUpdateRequest {
   UpdateTarget target = 1;

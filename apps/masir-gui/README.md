@@ -47,6 +47,13 @@ The patched copy is made in `.mygo-patched` and removed, and `go.mod`/`go.sum` a
 back, after the build. `make gui-dev` uses stock MyGo; if MyGo is updated, the patches may
 need updating.
 
+The app updates itself from MyGo's signed release archives. The public key is
+`updates.publicKey` in `mygo.json`; a release build also needs the matching private key
+in `MYGO_UPDATER_PRIVATE_KEY` (or `.env`). Without it the app builds, but cannot update
+itself. Generate a pair once with `cd apps/masir-gui && go tool mygo keygen`, put the
+public key in `mygo.json`, keep the private key secret, and back it up: installed apps
+accept only updates signed with it.
+
 The macOS build is `dist/darwin-<arch>/Masir.app` (and a `.dmg`); drag it to Applications,
 or:
 

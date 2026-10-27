@@ -432,6 +432,16 @@ func (a *app) systemSection(c *ui.Context, p palette) {
 	cli := a.cliState()
 	titled(c, p, "SYSTEM", nil, func() {
 		cardBox(c, p, func() {
+			cardRow(c, "app", func() {
+				ui.Column(c).Gap(tw(0.5)).Grow(1).Children(func() {
+					label(c, "Masir", sizeSubhead, 18, 500, p.text)
+					mono(c, versionLabel(a.version), sizeMicro, 13, 400, p.muted)
+				})
+				if a.showUpdateControl() {
+					a.updateControl(c, p)
+				}
+			})
+			cardDivider(c, p)
 			ui.Column(c).Padding(tw(2.5), tw(3)).Gap(tw(1.5)).Shrink(0).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 					label(c, "Background Service", sizeSubhead, 18, 500, p.text)

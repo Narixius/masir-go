@@ -752,8 +752,12 @@ func (a *app) pinnedServer(ref string) (flag, name string) {
 func (a *app) footer(c *ui.Context, p palette) {
 	ui.Column(c).Shrink(0).Children(func() {
 		ui.Box(c).Height(1).Background(p.borderSubtle).Shrink(0)
-		ui.Row(c).Padding(tw(2.5), tw(0.5), 0).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-			label(c, "Masir "+versionLabel(a.version), sizeCaption, 15, 400, p.muted).LetterSpacing(0.275)
+		ui.Row(c).Padding(tw(2.5), tw(0.5), 0).MinHeight(tw(6)).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+			if a.showUpdateControl() {
+				a.updateControl(c, p)
+			} else {
+				label(c, "Masir "+versionLabel(a.version), sizeCaption, 15, 400, p.muted).LetterSpacing(0.275)
+			}
 			ui.Row(c).Gap(tw(2)).AlignItems(ui.Center).Children(func() {
 				ui.Row(c).Gap(tw(2)).AlignItems(ui.Center).Children(func() {
 					a.speedLabel(c, p, "down", a.down, "↓")

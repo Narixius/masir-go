@@ -99,6 +99,10 @@ type app struct {
 	cli         cliStatus
 	cliChecked  bool
 
+	// Updates: the daemon's release check, the app's signed update, and the job
+	// downloading either.
+	upd updateState
+
 	trafficCancel context.CancelFunc
 	since         time.Time // when masir last turned on, as far as this app saw
 
@@ -325,6 +329,7 @@ func (a *app) applyStatus(st *pb.Status) {
 		a.lastRev = st.Revision
 		a.refreshLists()
 	}
+	a.observeUpdates(st)
 }
 
 func (a *app) setUnreachable() {

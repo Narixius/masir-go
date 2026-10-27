@@ -60,6 +60,7 @@ const (
 	DaemonService_SelectConfig_FullMethodName            = "/masir.daemon.v1.DaemonService/SelectConfig"
 	DaemonService_GetActiveConfig_FullMethodName         = "/masir.daemon.v1.DaemonService/GetActiveConfig"
 	DaemonService_CheckUpdate_FullMethodName             = "/masir.daemon.v1.DaemonService/CheckUpdate"
+	DaemonService_IgnoreUpdate_FullMethodName            = "/masir.daemon.v1.DaemonService/IgnoreUpdate"
 	DaemonService_StartUpdate_FullMethodName             = "/masir.daemon.v1.DaemonService/StartUpdate"
 	DaemonService_PauseUpdate_FullMethodName             = "/masir.daemon.v1.DaemonService/PauseUpdate"
 	DaemonService_ResumeUpdate_FullMethodName            = "/masir.daemon.v1.DaemonService/ResumeUpdate"
@@ -130,8 +131,12 @@ type DaemonServiceClient interface {
 	SelectConfig(ctx context.Context, in *SelectConfigRequest, opts ...grpc.CallOption) (*SelectConfigResponse, error)
 	GetActiveConfig(ctx context.Context, in *GetActiveConfigRequest, opts ...grpc.CallOption) (*GetActiveConfigResponse, error)
 	// Updates run as jobs in the daemon, one per target, so any UI can show progress
-	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading.
+	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading,
+	// from a cache two days old at most unless forced.
 	CheckUpdate(ctx context.Context, in *CheckUpdateRequest, opts ...grpc.CallOption) (*CheckUpdateResponse, error)
+	// IgnoreUpdate hides this update prompt in the GUI until the next release check or
+	// until the daemon restarts. It does not change whether an update is available.
+	IgnoreUpdate(ctx context.Context, in *IgnoreUpdateRequest, opts ...grpc.CallOption) (*IgnoreUpdateResponse, error)
 	StartUpdate(ctx context.Context, in *StartUpdateRequest, opts ...grpc.CallOption) (*StartUpdateResponse, error)
 	PauseUpdate(ctx context.Context, in *PauseUpdateRequest, opts ...grpc.CallOption) (*PauseUpdateResponse, error)
 	ResumeUpdate(ctx context.Context, in *ResumeUpdateRequest, opts ...grpc.CallOption) (*ResumeUpdateResponse, error)
@@ -597,6 +602,16 @@ func (c *daemonServiceClient) CheckUpdate(ctx context.Context, in *CheckUpdateRe
 	return out, nil
 }
 
+func (c *daemonServiceClient) IgnoreUpdate(ctx context.Context, in *IgnoreUpdateRequest, opts ...grpc.CallOption) (*IgnoreUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IgnoreUpdateResponse)
+	err := c.cc.Invoke(ctx, DaemonService_IgnoreUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *daemonServiceClient) StartUpdate(ctx context.Context, in *StartUpdateRequest, opts ...grpc.CallOption) (*StartUpdateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StartUpdateResponse)
@@ -728,8 +743,12 @@ type DaemonServiceServer interface {
 	SelectConfig(context.Context, *SelectConfigRequest) (*SelectConfigResponse, error)
 	GetActiveConfig(context.Context, *GetActiveConfigRequest) (*GetActiveConfigResponse, error)
 	// Updates run as jobs in the daemon, one per target, so any UI can show progress
-	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading.
+	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading,
+	// from a cache two days old at most unless forced.
 	CheckUpdate(context.Context, *CheckUpdateRequest) (*CheckUpdateResponse, error)
+	// IgnoreUpdate hides this update prompt in the GUI until the next release check or
+	// until the daemon restarts. It does not change whether an update is available.
+	IgnoreUpdate(context.Context, *IgnoreUpdateRequest) (*IgnoreUpdateResponse, error)
 	StartUpdate(context.Context, *StartUpdateRequest) (*StartUpdateResponse, error)
 	PauseUpdate(context.Context, *PauseUpdateRequest) (*PauseUpdateResponse, error)
 	ResumeUpdate(context.Context, *ResumeUpdateRequest) (*ResumeUpdateResponse, error)
@@ -871,6 +890,9 @@ func (UnimplementedDaemonServiceServer) GetActiveConfig(context.Context, *GetAct
 }
 func (UnimplementedDaemonServiceServer) CheckUpdate(context.Context, *CheckUpdateRequest) (*CheckUpdateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckUpdate not implemented")
+}
+func (UnimplementedDaemonServiceServer) IgnoreUpdate(context.Context, *IgnoreUpdateRequest) (*IgnoreUpdateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IgnoreUpdate not implemented")
 }
 func (UnimplementedDaemonServiceServer) StartUpdate(context.Context, *StartUpdateRequest) (*StartUpdateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartUpdate not implemented")
@@ -1621,6 +1643,24 @@ func _DaemonService_CheckUpdate_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DaemonService_IgnoreUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IgnoreUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).IgnoreUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_IgnoreUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).IgnoreUpdate(ctx, req.(*IgnoreUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DaemonService_StartUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartUpdateRequest)
 	if err := dec(in); err != nil {
@@ -1876,6 +1916,10 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckUpdate",
 			Handler:    _DaemonService_CheckUpdate_Handler,
+		},
+		{
+			MethodName: "IgnoreUpdate",
+			Handler:    _DaemonService_IgnoreUpdate_Handler,
 		},
 		{
 			MethodName: "StartUpdate",

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
 // TestSnapshots writes what the panel looks like to PNG files when MASIR_SNAPSHOTS names
@@ -33,6 +35,28 @@ func TestSnapshots(t *testing.T) {
 		{"servers-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click(ltr("United Kingdom")) }},
 		{"rules-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click("RULES") }},
 		{"settings-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click("Settings") }},
+		{"update-available", true, func(a *app, tt *ui.Tester) {
+			a.upd.rel = &pb.ReleaseInfo{CurrentVersion: "0.1.0", LatestVersion: "v0.2.0", Available: true, CheckedAtMs: time.Now().UnixMilli()}
+			a.upd.phase = updateAvailable
+		}},
+		{"update-downloading", true, func(a *app, tt *ui.Tester) {
+			a.upd.rel = &pb.ReleaseInfo{CurrentVersion: "0.1.0", LatestVersion: "v0.2.0", Available: true, CheckedAtMs: time.Now().UnixMilli()}
+			a.upd.job = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_DOWNLOADING, BytesDone: 42, BytesTotal: 100}
+			a.upd.phase = updateDownloading
+		}},
+		{"update-paused", true, func(a *app, tt *ui.Tester) {
+			a.upd.rel = &pb.ReleaseInfo{CurrentVersion: "0.1.0", LatestVersion: "v0.2.0", Available: true, CheckedAtMs: time.Now().UnixMilli()}
+			a.upd.job = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_PAUSED, BytesDone: 42, BytesTotal: 100}
+			a.upd.phase = updatePaused
+		}},
+		{"settings-update", true, func(a *app, tt *ui.Tester) {
+			_ = tt.Click("Settings")
+			tt.Advance(time.Second)
+			a.upd.rel = &pb.ReleaseInfo{CurrentVersion: "0.1.0", LatestVersion: "v0.2.0", Available: true, CheckedAtMs: time.Now().UnixMilli()}
+			a.upd.phase = updateAvailable
+			tt.Scroll(panelWidth/2, 400, 0, 1200)
+			tt.Advance(time.Second)
+		}},
 		{"system-dark", true, func(a *app, tt *ui.Tester) {
 			_ = tt.Click("Settings")
 			tt.Advance(time.Second)

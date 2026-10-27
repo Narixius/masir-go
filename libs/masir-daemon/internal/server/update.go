@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -29,16 +30,21 @@ import (
 
 const (
 	// checkEvery is how often the daemon asks GitHub for a new masir release. It only
-	// tells UIs; installing waits for StartUpdate.
-	checkEvery = 24 * time.Hour
+	// tells UIs; installing waits for StartUpdate. It is also how long an ignored
+	// prompt lasts when the daemon isn't restarted: a fresh check makes it show again.
+	checkEvery = 48 * time.Hour
 	// geoMaxAge is how old the geo files get before the daemon refreshes them itself.
 	geoMaxAge = 7 * 24 * time.Hour
 )
+
+// latestRelease asks GitHub for the newest release. Tests replace it.
+var latestRelease = update.Latest
 
 // updates holds the daemon's update jobs and what the last release check found.
 type updates struct {
 	masir, geo *update.Runner
 	release    *pb.ReleaseInfo // guarded by Server.mu
+	checkMu    sync.Mutex      // one GitHub check at a time
 }
 
 func (s *Server) initUpdates(dir string) {
@@ -253,8 +259,8 @@ func (s *Server) restartForUpdate() {
 // RestartRequested reports whether the daemon stopped to start a new version.
 func (s *Server) RestartRequested() bool { return s.restart.Load() }
 
-func (s *Server) CheckUpdate(ctx context.Context, _ *pb.CheckUpdateRequest) (*pb.CheckUpdateResponse, error) {
-	info, err := s.checkRelease(ctx)
+func (s *Server) CheckUpdate(ctx context.Context, req *pb.CheckUpdateRequest) (*pb.CheckUpdateResponse, error) {
+	info, err := s.checkRelease(ctx, req.GetForce())
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
@@ -267,8 +273,38 @@ func (s *Server) CheckUpdate(ctx context.Context, _ *pb.CheckUpdateRequest) (*pb
 	return &pb.CheckUpdateResponse{Release: info}, nil
 }
 
-func (s *Server) checkRelease(ctx context.Context) (*pb.ReleaseInfo, error) {
-	rel, err := update.Latest(ctx, s.clients(), update.ReleaseRepo)
+// IgnoreUpdate hides the prompt for version until the next fresh check or a daemon
+// restart. The update stays available for the CLI and for CheckUpdate.
+func (s *Server) IgnoreUpdate(_ context.Context, req *pb.IgnoreUpdateRequest) (*pb.IgnoreUpdateResponse, error) {
+	s.mu.Lock()
+	if s.upd == nil || s.upd.release == nil {
+		s.mu.Unlock()
+		return nil, status.Error(codes.FailedPrecondition, "no update has been checked yet")
+	}
+	version := strings.TrimSpace(req.GetVersion())
+	if version == "" {
+		version = s.upd.release.LatestVersion
+	}
+	s.upd.release.IgnoredVersion = version
+	info := proto.Clone(s.upd.release).(*pb.ReleaseInfo)
+	s.mu.Unlock()
+	s.changes.notify()
+	s.track("update_ignored", map[string]any{"version": version})
+	return &pb.IgnoreUpdateResponse{Release: info}, nil
+}
+
+// checkRelease returns the release GitHub last named, or a fresh one when force is set
+// or the cache is older than checkEvery. A fresh check clears an ignored prompt.
+func (s *Server) checkRelease(ctx context.Context, force bool) (*pb.ReleaseInfo, error) {
+	if info := s.cachedRelease(force); info != nil {
+		return info, nil
+	}
+	s.upd.checkMu.Lock()
+	defer s.upd.checkMu.Unlock()
+	if info := s.cachedRelease(force); info != nil {
+		return info, nil
+	}
+	rel, err := latestRelease(ctx, s.clients(), update.ReleaseRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -285,6 +321,22 @@ func (s *Server) checkRelease(ctx context.Context) (*pb.ReleaseInfo, error) {
 	s.mu.Unlock()
 	s.changes.notify()
 	return proto.Clone(info).(*pb.ReleaseInfo), nil
+}
+
+// cachedRelease is the last check when it is still fresh, and force is not set.
+func (s *Server) cachedRelease(force bool) *pb.ReleaseInfo {
+	if force {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.upd == nil || s.upd.release == nil {
+		return nil
+	}
+	if time.Since(time.UnixMilli(s.upd.release.CheckedAtMs)) >= checkEvery {
+		return nil
+	}
+	return proto.Clone(s.upd.release).(*pb.ReleaseInfo)
 }
 
 func (s *Server) StartUpdate(_ context.Context, req *pb.StartUpdateRequest) (*pb.StartUpdateResponse, error) {
@@ -389,22 +441,26 @@ func (s *Server) maintainUpdates(ctx context.Context) {
 	}
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
-	var lastCheck time.Time
+	var lastAttempt time.Time
 	for {
-		if time.Since(lastCheck) >= checkEvery {
+		stale := true
+		s.mu.Lock()
+		if s.upd != nil && s.upd.release != nil {
+			stale = time.Since(time.UnixMilli(s.upd.release.CheckedAtMs)) >= checkEvery
+		}
+		s.mu.Unlock()
+		if stale && (lastAttempt.IsZero() || time.Since(lastAttempt) >= checkEvery) {
+			lastAttempt = time.Now()
 			cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			if info, err := s.checkRelease(cctx); err != nil {
+			if info, err := s.checkRelease(cctx, true); err != nil {
 				s.Log("warn", "update check: "+err.Error())
-			} else {
-				lastCheck = time.Now()
-				if info.Available {
-					s.track("update_checked", map[string]any{
-						"trigger":         "daily",
-						"available":       true,
-						"current_version": info.CurrentVersion,
-						"latest_version":  info.LatestVersion,
-					})
-				}
+			} else if info.Available {
+				s.track("update_checked", map[string]any{
+					"trigger":         "background",
+					"available":       true,
+					"current_version": info.CurrentVersion,
+					"latest_version":  info.LatestVersion,
+				})
 			}
 			cancel()
 		}

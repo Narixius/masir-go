@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"io"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
@@ -24,6 +27,10 @@ type fakeDaemon struct {
 	calls                                []string
 	failPow                              error
 	failFallback, failRemove, failEnable error
+	release                              *pb.ReleaseInfo
+	releaseErr                           error
+	updateJob                            *pb.UpdateJob
+	updateStream                         *fakeUpdateStream
 }
 
 func (f *fakeDaemon) log(s string) {
@@ -88,6 +95,72 @@ func (f *fakeDaemon) RemoveRouting(_ context.Context, r *pb.RemoveRoutingRequest
 	return &pb.RemoveRoutingResponse{}, f.failRemove
 }
 
+func (f *fakeDaemon) CheckUpdate(context.Context, *pb.CheckUpdateRequest, ...grpc.CallOption) (*pb.CheckUpdateResponse, error) {
+	f.log("check update")
+	return &pb.CheckUpdateResponse{Release: f.release}, f.releaseErr
+}
+
+func (f *fakeDaemon) IgnoreUpdate(_ context.Context, r *pb.IgnoreUpdateRequest, _ ...grpc.CallOption) (*pb.IgnoreUpdateResponse, error) {
+	f.log("ignore " + r.Version)
+	if f.release == nil {
+		return nil, nil
+	}
+	rel := proto.Clone(f.release).(*pb.ReleaseInfo)
+	rel.IgnoredVersion = r.Version
+	f.release = rel
+	return &pb.IgnoreUpdateResponse{Release: f.release}, nil
+}
+
+func (f *fakeDaemon) StartUpdate(context.Context, *pb.StartUpdateRequest, ...grpc.CallOption) (*pb.StartUpdateResponse, error) {
+	f.log("start update")
+	return &pb.StartUpdateResponse{Job: f.updateJob}, f.releaseErr
+}
+
+func (f *fakeDaemon) WatchUpdate(context.Context, *pb.WatchUpdateRequest, ...grpc.CallOption) (grpc.ServerStreamingClient[pb.WatchUpdateResponse], error) {
+	f.log("watch update")
+	return f.updateStream, nil
+}
+
+func (f *fakeDaemon) PauseUpdate(context.Context, *pb.PauseUpdateRequest, ...grpc.CallOption) (*pb.PauseUpdateResponse, error) {
+	f.log("pause update")
+	return &pb.PauseUpdateResponse{Job: f.updateJob}, nil
+}
+
+func (f *fakeDaemon) ResumeUpdate(context.Context, *pb.ResumeUpdateRequest, ...grpc.CallOption) (*pb.ResumeUpdateResponse, error) {
+	f.log("resume update")
+	return &pb.ResumeUpdateResponse{Job: f.updateJob}, nil
+}
+
+func (f *fakeDaemon) StopUpdate(context.Context, *pb.StopUpdateRequest, ...grpc.CallOption) (*pb.StopUpdateResponse, error) {
+	f.log("stop update")
+	return &pb.StopUpdateResponse{Job: f.updateJob}, nil
+}
+
+// fakeUpdateStream is a WatchUpdate stream that sends its jobs and then ends.
+type fakeUpdateStream struct {
+	jobs []*pb.UpdateJob
+	at   int
+	err  error
+}
+
+func (s *fakeUpdateStream) Recv() (*pb.WatchUpdateResponse, error) {
+	if s.at >= len(s.jobs) {
+		if s.err != nil {
+			return nil, s.err
+		}
+		return nil, io.EOF
+	}
+	job := s.jobs[s.at]
+	s.at++
+	return &pb.WatchUpdateResponse{Job: job}, nil
+}
+func (s *fakeUpdateStream) Header() (metadata.MD, error) { return nil, nil }
+func (s *fakeUpdateStream) Trailer() metadata.MD         { return nil }
+func (s *fakeUpdateStream) CloseSend() error             { return nil }
+func (s *fakeUpdateStream) Context() context.Context     { return context.Background() }
+func (s *fakeUpdateStream) SendMsg(any) error            { return nil }
+func (s *fakeUpdateStream) RecvMsg(any) error            { return nil }
+
 func ukServers() *fakeDaemon {
 	return &fakeDaemon{
 		status: &pb.Status{
@@ -105,6 +178,7 @@ func ukServers() *fakeDaemon {
 			{RuleTag: "r2", RuleJson: `{"domain":["full:bank.test"]}`, Target: "direct", Disabled: true},
 			{RuleTag: "r3", RuleJson: `{"process":["/Applications/Spotify.app/"]}`, Target: "proxy"},
 		},
+		updateStream: &fakeUpdateStream{},
 	}
 }
 

@@ -97,6 +97,11 @@ subscriptions while smoke-testing unless that is the change under test.
   apply and run `make gui-local`.
 - **Flags are 1:1** in tiles (`Fit(ui.Cover)`, rounded corners). Use `iconTile` for flags
   and app icons so both stay centered; `TestIconTileCentersWhatItHolds` guards it.
+- **Desktop updates are signed.** The public key is in `apps/masir-gui/mygo.json`; the
+  matching private key is `MYGO_UPDATER_PRIVATE_KEY`, kept in `.env` or the GitHub secret.
+  Generate it with `cd apps/masir-gui && go tool mygo keygen`; never commit the private
+  key, and back it up. `make gui`/`gui-local` produce `update-*.json` and the signed
+  `masir-desktop-<os>-<version>-<arch>.tar.gz`; the release workflow needs both.
 - **Strict list keys.** MyGo panics in tests when two rows under one parent share a key.
   When adding fixtures to the existing `c1`/`c2` configs, use distinct IDs such as `x%d`.
 

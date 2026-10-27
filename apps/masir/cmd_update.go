@@ -24,7 +24,7 @@ import (
 func cmdUpdate(a args) error {
 	sp := ui.Spin("Checking for updates")
 	res, err := call(func(ctx context.Context, c pb.DaemonServiceClient) (*pb.CheckUpdateResponse, error) {
-		return c.CheckUpdate(ctx, &pb.CheckUpdateRequest{})
+		return c.CheckUpdate(ctx, &pb.CheckUpdateRequest{Force: true})
 	})
 	if err != nil {
 		failWith(sp, "Couldn't check for updates: ", err)

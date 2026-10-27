@@ -133,6 +133,23 @@ name_app() {
 		rm -f "$app_dir/install.sh.bak"
 		;;
 	esac
+
+	# MyGo's update archive and manifest still use MyGo's own name. Rename the archive
+	# to the one every download uses and point the manifest at it; MyGo's updater reads
+	# the URL from the manifest, so the name is ours to choose.
+	platform="$app_os-$app_arch"
+	old_archive="$app_dir/masir-desktop-$version-$platform.tar.gz"
+	new_archive="$app_dir/masir-desktop-$app_os-$version-$app_arch.tar.gz"
+	manifest="$app_dir/update-$platform.json"
+	if [ -f "$manifest" ]; then
+		if [ -f "$old_archive" ]; then
+			mv -f "$old_archive" "$new_archive"
+		else
+			expected "$new_archive" # Linux: the portable tarball was renamed above
+		fi
+		sed -i.bak "s|$(basename -- "$old_archive")|$(basename -- "$new_archive")|g" "$manifest"
+		rm -f "$manifest.bak"
+	fi
 }
 
 built=
