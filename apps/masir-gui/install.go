@@ -3,14 +3,25 @@ package main
 // Installing what the app can give the system: the daemon as a background service, and
 // masir as a command-line tool. Both run off the main thread and report by toast.
 
-// cliState is the command-line tool as Settings shows it: read once, and again after an
-// install or a removal.
+// cliState is the command-line tool as Settings shows it: the last check, refreshed in the
+// background, never with a shell or registry read in the frame that opens Settings.
 func (a *app) cliState() cliStatus {
 	if !a.cliChecked {
-		a.cliChecked = true
-		a.cli = cliStatusNow(a.cliBinary())
+		a.refreshCLIState()
 	}
 	return a.cli
+}
+
+// refreshCLIState checks where the command-line tool is, off the main thread.
+func (a *app) refreshCLIState() {
+	a.cliChecked = true
+	bin := a.cliBinary()
+	a.async(func() {
+		st := cliStatusNow(bin)
+		a.post(func() {
+			a.cli, a.cliChecked = st, true
+		})
+	})
 }
 
 // cliBinary is the masir to install: the one the app ships with, even when another is on

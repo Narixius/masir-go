@@ -234,14 +234,49 @@ func (a *app) subscriptionCard(c *ui.Context, p palette, s *pb.Subscription) {
 			})
 		})
 		cardDivider(c, p)
-		ui.Scroll(c.Key("sub-list-"+s.Id)).MaxHeight(160).Padding(tw(1), tw(1.5), tw(1), tw(1)).Gap(2).Shrink(0).Children(func() {
-			for _, srv := range a.servers {
-				if srv.key.sub == s.Id {
-					a.serverItem(c, p, srv)
-				}
-			}
-		})
+		servers := a.serversOf(s.Id)
+		a.subItems[s.Id] = servers
+		ui.List(c, a.subList(s.Id), len(servers), func(i int) {
+			a.serverItem(c, p, servers[i])
+		}).MaxHeight(160).Padding(tw(1), tw(1.5), tw(1), tw(1)).Gap(2).Shrink(0)
 	})
+}
+
+// serversOf returns the servers of one subscription, in the order the list has them.
+func (a *app) serversOf(id string) []server {
+	var out []server
+	for _, s := range a.servers {
+		if s.key.sub == id {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// subList is the list of a subscription's servers in settings, kept so its scroll and rows
+// survive the frames.
+func (a *app) subList(id string) *ui.ListState {
+	s := a.subLists[id]
+	if s == nil {
+		s = &ui.ListState{}
+		s.Key = func(i int) any {
+			items := a.subItems[id]
+			if i < 0 || i >= len(items) {
+				return nil
+			}
+			return items[i].key
+		}
+		s.Label = func(i int) string {
+			items := a.subItems[id]
+			if i < 0 || i >= len(items) {
+				return ""
+			}
+			_, title, _ := serverTitle(items[i].cfg.GetName())
+			return title
+		}
+		a.subLists[id] = s
+	}
+	return s
 }
 
 // holdToDelete is the trash button that deletes only when held for a while, filling red

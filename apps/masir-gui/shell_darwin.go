@@ -52,7 +52,7 @@ func (s *shell) beforeTrayMenu() {
 // platformReady closes the popover when the app is no longer active, as the popovers of
 // menu bar apps do.
 func (s *shell) platformReady() {
-	s.frameSize = false // the popover's own resize animation keeps this smooth
+	s.frameSize = true // the popover follows the springs, as a window of its own does
 	mygo.App.OnDidResignActive(func() {
 		if s.win != nil {
 			s.win.Close()

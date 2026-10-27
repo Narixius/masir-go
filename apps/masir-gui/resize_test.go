@@ -120,7 +120,7 @@ func TestListGivesItsHeightBackAtOnce(t *testing.T) {
 	}
 }
 
-// TestWindowHeightFollowsThePage checks that a window of its own (Windows, Linux) takes the
+// TestWindowHeightFollowsThePage checks that a window that follows the springs takes the
 // page's height a frame at a time, so the window grows and shrinks with the pages instead
 // of jumping to the end and stretching the old frame.
 func TestWindowHeightFollowsThePage(t *testing.T) {
@@ -221,6 +221,10 @@ func TestSpringsFollowTheFrameClock(t *testing.T) {
 	}
 	if err := tt.Click("Settings"); err != nil {
 		t.Fatal(err)
+	}
+	tt.Advance(20 * time.Millisecond)
+	if a.motion.page.x != 0 || !a.warmPage {
+		t.Fatalf("the page started at %v before it was built unseen", a.motion.page.x)
 	}
 	tt.Advance(20 * time.Millisecond)
 	first := a.motion.page.x

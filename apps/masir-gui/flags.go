@@ -72,7 +72,9 @@ func flagDrawing(code string) *ui.SVG {
 // the emoji itself is drawn, and the system's fonts do what they can with it.
 func flagElement(c *ui.Context, flag string, w, h float32) ui.Element {
 	if svg := flagDrawing(flagCode(flag)); svg != nil {
-		return ui.Image(c, svg).Size(w, h)
+		// Its corners curve like its tile's, so it sits in the tile as a picture in a
+		// frame rather than a sharp rectangle in a rounded one.
+		return ui.Image(c, svg).Size(w, h).Radius(h * 0.3)
 	}
 	return ui.Text(c, flag).FontSize(h).FixedLineHeight(h)
 }

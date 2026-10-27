@@ -33,12 +33,16 @@ Space or comma separated; the default is all six builds. Each goes to
 `apps/masir-gui/dist/<os>-<arch>`, with the `masir` executable and the geo data in the
 `bin` folder of the resources it ships.
 
-The build applies `patches/mygo-dxgi-no-stretch.patch` to MyGo for its duration. Windows
-stretches a frame drawn for one client height into a window that has changed height, which
-made the content magnify during the animated height changes; the patch makes the swap chain
-show the stale frame unscaled and fills the rest with the window's background. The patched
-copy is made in `.mygo-patched` and removed, and `go.mod`/`go.sum` are put back, after the
-build. `make gui-dev` uses stock MyGo; if MyGo is updated, the patch may need updating.
+The build applies the patches in `patches/` to MyGo for its duration. Windows stretched a
+frame drawn for one client height into a window that has changed height, which made the
+content magnify during the animated height changes; `mygo-dxgi-no-stretch.patch` makes the
+swap chain show the stale frame unscaled and fills the rest with the window's background.
+The macOS popover animated a content size change on AppKit's own schedule, so the panel's
+height ran ahead of the lists it holds; `mygo-darwin-popover-resize.patch` turns that
+animation off so the shell can follow the springs every frame, as the other platforms do.
+The patched copy is made in `.mygo-patched` and removed, and `go.mod`/`go.sum` are put
+back, after the build. `make gui-dev` uses stock MyGo; if MyGo is updated, the patches may
+need updating.
 
 The macOS build is `dist/darwin-<arch>/Masir.app` (and a `.dmg`); drag it to Applications,
 or:

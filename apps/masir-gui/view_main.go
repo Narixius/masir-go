@@ -31,20 +31,30 @@ func (a *app) view(c *ui.Context) {
 		}
 	}
 	root.Children(func() {
-		// The pages slide: the main page leaves to the left as the other arrives from the right.
+		// The pages slide: the main page leaves to the left as the other arrives from the
+		// right, each fading with the move. A page opening is built once before it shows,
+		// so its first layout and paint are not a cold frame in the middle of the slide.
 		a.aimMotion(c)
 		page := a.motion.page.x
 		if page < 1 {
-			a.mainLayer(c, p, -page*panelWidth)
+			opacity := float32(1 - page)
+			if a.warmPage { // the page opening is still under the main one
+				opacity = 1
+			}
+			a.mainLayer(c, p, -page*panelWidth).Opacity(opacity)
 		}
-		if page > 0 {
-			a.subLayer(c, p, (1-page)*panelWidth)
+		if page > 0 || a.warmPage {
+			opacity, x := page, (1-page)*panelWidth
+			if a.warmPage {
+				opacity, x = 0.002, 0 // paint it, all but unseen, to shape its glyphs too
+			}
+			a.subLayer(c, p, x).Opacity(opacity)
 		}
 		a.contextMenu(c, p)
 	})
 }
 
-func (a *app) mainLayer(c *ui.Context, p palette, x float32) {
+func (a *app) mainLayer(c *ui.Context, p palette, x float32) ui.Element {
 	layer := ui.Box(c.Key("main-layer")).Absolute().Top(0).Left(0).Width(panelWidth).Translate(x, 0)
 	layer.Children(func() {
 		col := ui.Column(c.Key("main-col")).Padding(16, 16, 12).Gap(tw(2.5)).Shrink(0)
@@ -66,9 +76,10 @@ func (a *app) mainLayer(c *ui.Context, p palette, x float32) {
 			}
 		}
 	})
+	return layer
 }
 
-func (a *app) subLayer(c *ui.Context, p palette, x float32) {
+func (a *app) subLayer(c *ui.Context, p palette, x float32) ui.Element {
 	if a.screen != screenMain {
 		a.lastSub = a.screen
 	}
@@ -81,6 +92,7 @@ func (a *app) subLayer(c *ui.Context, p palette, x float32) {
 			a.settingsScreen(c, p)
 		}
 	})
+	return layer
 }
 
 func (a *app) subHeight() float32 {
@@ -336,25 +348,36 @@ func (a *app) serverPicker(c *ui.Context, p palette) {
 		return
 	}
 	groups := orderedGroups(servers)
-	ui.Scroll(c.Key("server-scroll")).MaxHeight(300).Padding(0, tw(1.5), 0, tw(1)).Gap(2).Shrink(0).Children(func() {
-		for _, g := range groups {
-			ui.Column(c.Key("group-" + g.name)).Gap(2).Shrink(0).Children(func() {
-				if len(groups) > 1 {
-					a.groupHeader(c, p, g)
-				}
-				ui.Column(c).Gap(tw(1)).Margin(tw(1), 0, 0).Shrink(0).Children(func() {
-					for _, s := range g.servers {
-						a.serverItem(c, p, s)
-					}
-				})
-			})
+	items := make([]serverListItem, 0, len(servers)+len(groups))
+	for i := range groups {
+		g := &groups[i]
+		if len(groups) > 1 {
+			items = append(items, serverListItem{group: g})
 		}
-	})
+		for _, s := range g.servers {
+			items = append(items, serverListItem{srv: s})
+		}
+	}
+	a.serverItems = items
+	ui.List(c, &a.serversList, len(items), func(i int) {
+		it := a.serverItems[i]
+		if it.group != nil {
+			a.groupHeader(c, p, *it.group)
+			return
+		}
+		a.serverItem(c, p, it.srv)
+	}).MaxHeight(300).Padding(0, tw(1.5), 0, tw(1)).Gap(2).Shrink(0)
 }
 
 type serverGroup struct {
 	name    string
 	servers []server
+}
+
+// serverListItem is one row of the server picker: a subscription's header, or a server.
+type serverListItem struct {
+	group *serverGroup
+	srv   server
 }
 
 // orderedGroups gathers servers by subscription, in the order the subscriptions come.
@@ -409,9 +432,7 @@ func (a *app) serverItem(c *ui.Context, p palette, s server) {
 	row.Children(func() {
 		flag, title, detail := serverTitle(s.cfg.Name)
 		ui.Row(c).Gap(tw(2.5)).AlignItems(ui.Center).Grow(1).Basis(0).MinWidth(0).MarginEnd(tw(2)).Children(func() {
-			ui.Box(c).Size(tw(7), tw(7)).Radius(7).Background(p.cardHover).Border(1, p.borderDefault).Center().Shrink(0).Children(func() {
-				flagElement(c, flag, 18, 13.5)
-			})
+			iconTile(c, p, func() { flagElement(c, flag, 18, 13.5) })
 			ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
 				ltrLabel(c, title, sizeBody, 16, 600, p.text)
 				if detail != "" {
@@ -434,6 +455,7 @@ func (a *app) serverItem(c *ui.Context, p palette, s server) {
 
 func (a *app) rulesHeader(c *ui.Context, p palette) {
 	enabled := a.rulesOn()
+	count := len(a.ruleList())
 	row := ui.ButtonBase(c.Key("rules-row")).Padding(0, tw(3)).MinHeight(32).Cursor(ui.CursorPointer).
 		AlignItems(ui.Center).Justify(ui.SpaceBetween).Shrink(0)
 	bg := ui.Color{}
@@ -450,11 +472,11 @@ func (a *app) rulesHeader(c *ui.Context, p palette) {
 		})
 		ui.Row(c).Gap(tw(2)).AlignItems(ui.Center).Children(func() {
 			noun := "rules"
-			if len(a.ruleList()) == 1 {
+			if count == 1 {
 				noun = "rule"
 			}
 			ui.Row(c).Gap(tw(1)).AlignItems(ui.Center).Children(func() {
-				rollingNumber(c, "rules-count", float64(len(a.ruleList())), fmt.Sprint(len(a.ruleList())), sizeCaption, 15, 400, p.muted, false)
+				rollingNumber(c, "rules-count", float64(count), fmt.Sprint(count), sizeCaption, 15, 400, p.muted, false)
 				label(c, noun, sizeCaption, 15, 400, p.muted)
 			})
 			ui.Row(c).Margin(0, 0, 0, tw(1.5)).Children(func() {
@@ -471,43 +493,63 @@ func (a *app) rulesHeader(c *ui.Context, p palette) {
 
 func (a *app) rulesPanel(c *ui.Context, p palette) {
 	enabled := a.rulesOn()
+	count := len(a.ruleList())
 	panelBar(c, p, func() { searchInput(c, "rule-search", &a.ruleQuery, "Search rules...", p) }, func() {
 		if iconButton(c, "rule-add", iconPlus, "Add rule", p, iconMD, variantSubtle, 12) {
 			a.notify("Adding rules from the panel isn't available yet")
 		}
 	})
-	sections := groupRules(a.filteredRules())
-	list := ui.Scroll(c.Key("rules-scroll")).TrackScroll(&a.rulesScroll).MaxHeight(212-(2*tw(2)+tw(7)+1)).Padding(tw(1), tw(1.5), tw(1), tw(1)).Gap(tw(1.5) + tw(1)).Shrink(0)
-	if !enabled {
-		list.Opacity(0.5)
-	}
-	if a.rulesScroll.Y != a.lastScrollY { // scrolling the list closes the open row and the menu
-		a.lastScrollY = a.rulesScroll.Y
+	// The list builds only the rows it shows. Scrolling it closes an open row and menu.
+	first, last := a.rulesList.Visible()
+	if a.lastRuleTop >= 0 && (first != a.lastRuleTop || last != a.lastRuleEnd) {
 		a.menu.open = false
 		if sw := a.swipes[a.openSwipe]; sw != nil {
 			sw.close(c.Now())
 		}
 	}
-	list.Children(func() {
-		if len(sections) == 0 {
-			msg := "No rules configured."
-			if len(a.ruleList()) > 0 {
-				msg = "No matching rules found."
-			}
-			label(c, msg, sizeSubhead, 18, 400, p.muted).TextAlign(ui.Center).Padding(10, 0)
+	a.lastRuleTop, a.lastRuleEnd = first, last
+
+	a.ruleItems = a.ruleListItems(a.filteredRules())
+	if len(a.ruleItems) == 0 {
+		msg := "No rules configured."
+		if count > 0 {
+			msg = "No matching rules found."
+		}
+		label(c, msg, sizeSubhead, 18, 400, p.muted).TextAlign(ui.Center).Padding(10, 0)
+		return
+	}
+	list := ui.List(c, &a.rulesList, len(a.ruleItems), func(i int) {
+		it := a.ruleItems[i]
+		if it.rule == nil {
+			a.ruleSectionRow(c, p, it.title, it.count)
 			return
 		}
-		for _, s := range sections {
-			ui.Column(c.Key("sec-" + s.title)).Gap(tw(1)).Shrink(0).Children(func() {
-				label(c, fmt.Sprintf("%s (%d)", strings.ToUpper(s.title), len(s.rules)), sizeMicro, 18, 600, p.muted).
-					LetterSpacing(0.5).Padding(tw(1.5), tw(2), tw(0.5))
-				ui.Column(c).Gap(tw(1)).Shrink(0).Children(func() {
-					for _, r := range s.rules {
-						a.ruleRow(c, p, r)
-					}
-				})
-			})
+		a.ruleRow(c, p, it.rule)
+	}).MaxHeight(212-(2*tw(2)+tw(7)+1)).Padding(tw(1), tw(1.5), tw(1), tw(1)).Gap(tw(1.5)).Shrink(0)
+	if !enabled {
+		list.Opacity(0.5)
+	}
+}
+
+// ruleListItems turns the grouped rules into the flat rows the list builds: a header for
+// each section, then its rules.
+func (a *app) ruleListItems(rules []*pb.RoutingRule) []ruleListItem {
+	sections := a.groupRules(rules)
+	items := make([]ruleListItem, 0, len(rules)+len(sections))
+	for _, s := range sections {
+		items = append(items, ruleListItem{title: s.title, count: len(s.rules)})
+		for _, r := range s.rules {
+			items = append(items, ruleListItem{rule: r})
 		}
+	}
+	return items
+}
+
+// ruleSectionRow is a section's title in the rules list; the list keeps it at the top
+// while its rows scroll under it.
+func (a *app) ruleSectionRow(c *ui.Context, p palette, title string, count int) {
+	ui.Row(c).Padding(tw(1.5), tw(2), tw(0.5)).Background(p.subdued).Children(func() {
+		label(c, fmt.Sprintf("%s (%d)", strings.ToUpper(title), count), sizeMicro, 18, 600, p.muted).LetterSpacing(0.5)
 	})
 }
 
@@ -585,19 +627,28 @@ func (a *app) ruleRow(c *ui.Context, p palette, r *pb.RoutingRule) {
 	})
 }
 
+// iconTile is the rounded square that holds an app's icon, a flag or a rule's icon. Its
+// drawing fills a box of the tile's own content, so it sits in the middle whatever kind of
+// drawing it is, and the border and corners stay clear of it.
+func iconTile(c *ui.Context, p palette, draw func()) {
+	ui.Box(c).Size(tw(7), tw(7)).Radius(7).Background(p.cardHover).Border(1, p.borderDefault).Shrink(0).Clip().Children(func() {
+		ui.Box(c).Fill().Center().Children(draw)
+	})
+}
+
 // ruleContent is what a rule's row shows: the tile, the title, and where it goes.
 func (a *app) ruleContent(c *ui.Context, p palette, r *pb.RoutingRule) {
-	info := ruleInfo(r)
+	info := a.metaFor(r).info
 	var icon *ui.Bitmap
 	if info.appPath != "" {
 		meta := a.apps.lookup(info.appPath, a.async, func() { a.post(func() {}) })
 		info.title, icon = a.apps.read(meta)
 	}
 	ui.Row(c).Gap(tw(2.5)).AlignItems(ui.Center).Grow(1).Basis(0).MinWidth(0).MarginEnd(tw(1.5)).Children(func() {
-		ui.Box(c).Size(tw(7), tw(7)).Radius(7).Background(p.cardHover).Border(1, p.borderDefault).Center().Shrink(0).Clip().Children(func() {
+		iconTile(c, p, func() {
 			switch {
 			case icon != nil:
-				ui.Image(c, icon).Size(24, 24).Radius(5)
+				ui.Image(c, icon).Size(18, 18).Radius(4)
 			case info.flag != "":
 				flagElement(c, info.flag, 18, 13.5)
 			default:

@@ -102,12 +102,28 @@ func flagFor(code string) string {
 	return string([]rune{rune(code[0]-'A') + 0x1F1E6, rune(code[1]-'A') + 0x1F1E6})
 }
 
+// ruleMeta is what a rule shows, parsed once per rule instead of on every frame: the
+// info its row draws, the section it groups into, and the lowercased text the search
+// matches. json remembers the rule it was made from.
+type ruleMeta struct {
+	json   string
+	info   info
+	search string
+}
+
+// ruleListItem is one row of the rules list: a section header, or a rule.
+type ruleListItem struct {
+	title string // the section, when the row is a header
+	count int
+	rule  *pb.RoutingRule
+}
+
 // groupRules gathers rules into the sections the list shows, in a fixed order.
-func groupRules(rules []*pb.RoutingRule) []ruleSection {
+func (a *app) groupRules(rules []*pb.RoutingRule) []ruleSection {
 	order := []string{"Applications", "Website Categories", "Domains", "IP Ranges & Ports"}
 	by := map[string][]*pb.RoutingRule{}
 	for _, r := range rules {
-		s := ruleInfo(r).section
+		s := a.metaFor(r).info.section
 		by[s] = append(by[s], r)
 	}
 	var out []ruleSection

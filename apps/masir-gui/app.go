@@ -109,12 +109,14 @@ type app struct {
 	trayOn bool // the tray shows the connected icon
 
 	// Transitions and the window's height. The springs say how far each part is open; the
-	// view steps them from the frame's clock. A macOS popover is resized once per change,
-	// a window of its own every frame, following the springs.
+	// view steps them from the frame's clock, and the window is resized every frame while
+	// it moves, following them as a window of its own does.
 	motion       motion
 	lastMotion   time.Time          // the frame the springs last stepped on
 	lastSize     time.Time          // when a window that follows the springs last asked for its height
 	frameSize    bool               // the window can follow the springs every frame
+	warmPage     bool               // the page opening is built this frame, before it shows
+	warmed       map[screen]bool    // and the pages that were built that way
 	lastSub      screen             // the page that slides over the main one, kept while it slides out
 	mainHeight   float32            // the main page's height as last measured
 	measuredOpen section            // the section that was open when mainHeight was measured
@@ -128,8 +130,15 @@ type app struct {
 	openSwipe   string
 	menu        ruleMenu
 	apps        *appInfos
-	rulesScroll ui.ScrollState
-	lastScrollY float32
+	rulesMetas  map[string]ruleMeta
+	rulesList   ui.ListState
+	ruleItems   []ruleListItem
+	lastRuleTop int
+	lastRuleEnd int
+	subLists    map[string]*ui.ListState
+	subItems    map[string][]server
+	serversList ui.ListState
+	serverItems []serverListItem
 	onHeight    func(float32) // tells the window how tall the content is at rest
 
 	version string
@@ -137,18 +146,105 @@ type app struct {
 }
 
 func newApp(d pb.DaemonServiceClient, binary string) *app {
-	return &app{
-		d:       d,
-		binary:  binary,
-		post:    func(fn func()) { fn() },
-		async:   func(fn func()) { go fn() },
-		natural: map[string]float32{},
-		pend:    newPending(),
-		swipes:  map[string]*swipe{},
-		apps:    newAppInfos(),
-		latency: map[serverKey]int64{},
-		testing: map[serverKey]bool{},
-		version: version,
+	a := &app{
+		d:           d,
+		binary:      binary,
+		post:        func(fn func()) { fn() },
+		async:       func(fn func()) { go fn() },
+		natural:     map[string]float32{},
+		pend:        newPending(),
+		swipes:      map[string]*swipe{},
+		apps:        newAppInfos(),
+		latency:     map[serverKey]int64{},
+		testing:     map[serverKey]bool{},
+		rulesMetas:  map[string]ruleMeta{},
+		subLists:    map[string]*ui.ListState{},
+		subItems:    map[string][]server{},
+		warmed:      map[screen]bool{},
+		lastRuleTop: -1,
+		lastRuleEnd: -1,
+		version:     version,
+	}
+	a.rulesList.Key = func(i int) any {
+		if i < 0 || i >= len(a.ruleItems) {
+			return nil
+		}
+		it := a.ruleItems[i]
+		if it.rule == nil {
+			return "h:" + it.title
+		}
+		return it.rule.RuleTag
+	}
+	a.rulesList.Header = func(i int) bool {
+		return i >= 0 && i < len(a.ruleItems) && a.ruleItems[i].rule == nil
+	}
+	a.rulesList.Label = func(i int) string {
+		if i < 0 || i >= len(a.ruleItems) {
+			return ""
+		}
+		it := a.ruleItems[i]
+		if it.rule == nil {
+			return it.title
+		}
+		return a.metaFor(it.rule).info.title
+	}
+	a.serversList.Key = func(i int) any {
+		if i < 0 || i >= len(a.serverItems) {
+			return nil
+		}
+		it := a.serverItems[i]
+		if it.group != nil {
+			return "g:" + it.group.name
+		}
+		return it.srv.key
+	}
+	a.serversList.Header = func(i int) bool {
+		return i >= 0 && i < len(a.serverItems) && a.serverItems[i].group != nil
+	}
+	a.serversList.Label = func(i int) string {
+		if i < 0 || i >= len(a.serverItems) {
+			return ""
+		}
+		it := a.serverItems[i]
+		if it.group != nil {
+			return it.group.name
+		}
+		_, title, _ := serverTitle(it.srv.cfg.GetName())
+		return title
+	}
+	return a
+}
+
+// metaFor returns what a rule shows, parsing its JSON once for as long as the rule is the
+// same. The rules list calls it for every rule in a frame; parsing there was the cost of
+// the first open.
+func (a *app) metaFor(r *pb.RoutingRule) ruleMeta {
+	if m, ok := a.rulesMetas[r.RuleTag]; ok && m.json == r.RuleJson {
+		return m
+	}
+	m := ruleMeta{
+		json:   r.RuleJson,
+		info:   ruleInfo(r),
+		search: strings.ToLower(r.RuleTag + " " + r.Target + " " + r.RuleJson),
+	}
+	a.rulesMetas[r.RuleTag] = m
+	return m
+}
+
+// indexRules parses every rule now, off the frames that show the list.
+func (a *app) indexRules() {
+	for _, r := range a.rules {
+		a.metaFor(r)
+	}
+}
+
+// prefetchAppIcons reads the icons of application rules in the background, before the
+// rules list is opened, one at a time.
+func (a *app) prefetchAppIcons() {
+	for _, r := range a.rules {
+		if p := a.metaFor(r).info.appPath; p != "" {
+			a.apps.lookup(p, a.async, func() { a.post(func() {}) })
+		}
 	}
 }
 
@@ -166,8 +262,8 @@ func (a *app) openScreen(s screen) {
 	from := a.screen
 	a.lastSub, a.screen = s, s
 	if s == screenSettings {
-		a.cliChecked = false  // look for the command-line tool again
-		a.refreshLoginState() // and for the login item, in the background
+		a.refreshCLIState()   // check the command-line tool in the background
+		a.refreshLoginState() // and the login item
 	}
 	// The back arrow returns to the page this one opened over: the settings page can open
 	// its own add-subscription form, which then returns to it.
@@ -266,6 +362,8 @@ func (a *app) refreshLists() {
 			}
 			if rerr == nil {
 				a.rules = rulesRes.GetRules()
+				a.indexRules()
+				a.prefetchAppIcons()
 			}
 		})
 	})
@@ -320,7 +418,7 @@ func (a *app) filteredRules() []*pb.RoutingRule {
 	}
 	var out []*pb.RoutingRule
 	for _, r := range rules {
-		if strings.Contains(strings.ToLower(r.RuleTag+" "+r.Target+" "+r.RuleJson), q) {
+		if strings.Contains(a.metaFor(r).search, q) {
 			out = append(out, r)
 		}
 	}
@@ -599,8 +697,23 @@ func b2f(b bool) float32 {
 // can be seen. A frame may build the view more than once; only its first pass steps the
 // springs.
 func (a *app) aimMotion(c *ui.Context) {
-	changed := a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
+	pageTarget := b2f(a.screen != screenMain)
+	changed := a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), pageTarget)
 	now := c.Now()
+	first := a.lastMotion.IsZero() || now.After(a.lastMotion)
+	if first {
+		// A page opening shows for the first time: hold its spring for this frame and build
+		// it unseen instead, so its first layout and paint are not the frame that starts
+		// the slide.
+		if !a.motion.instant && pageTarget == 1 && a.motion.page.x == 0 && !a.warmed[a.screen] {
+			a.warmed[a.screen] = true
+			a.warmPage = true
+			a.lastMotion = now
+			c.AnimationFrame()
+			return
+		}
+		a.warmPage = false
+	}
 	moving := !a.motion.settled()
 	switch {
 	case a.lastMotion.IsZero():
@@ -611,10 +724,10 @@ func (a *app) aimMotion(c *ui.Context) {
 		a.motion.step(dt)
 		switch {
 		case a.frameSize && !a.motion.settled():
-			// A window of its own follows the springs as they move: the height grows and
-			// shrinks with the page or list instead of jumping to the end. Resizing the
-			// window makes MyGo draw a frame at once, which builds the view again; ask for
-			// a height at most every 12 ms, so those draws don't chase each other.
+			// The window follows the springs as they move: the height grows and shrinks
+			// with the page or list instead of jumping to the end. Resizing the window makes
+			// MyGo draw a frame at once, which builds the view again; ask for a height at
+			// most every 12 ms, so those draws don't chase each other.
 			if a.onHeight != nil && (a.lastSize.IsZero() || now.Sub(a.lastSize) >= 12*time.Millisecond) {
 				a.lastSize = now
 				a.onHeight(a.windowHeight())
@@ -635,9 +748,8 @@ func (a *app) aimMotion(c *ui.Context) {
 }
 
 // requestHeight tells the window how tall the content will be once at rest. On a window
-// that can follow the springs (Windows, Linux), a transition is sized frame by frame
-// instead, so the window and the content move together; only a change with no movement is
-// asked for here.
+// that follows the springs, a transition is sized frame by frame instead, so the window and
+// the content move together; only a change with no movement is asked for here.
 func (a *app) requestHeight() {
 	if a.onHeight == nil {
 		return

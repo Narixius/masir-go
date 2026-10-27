@@ -40,10 +40,11 @@ add github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.host "${MA
 add github.com/narixius/masir-go/libs/masir-daemon/internal/update.publicKeys "${MASIR_UPDATE_PUBKEY:-}"
 ldflags="$ldflags -X main.version=$version"
 
-# MyGo's Windows swap chain stretches a frame drawn for one client height into a window
-# that has changed height, which magnifies the content for a moment on every resize. The
-# patch in patches/ makes it show the stale frame unscaled and fill the rest with the
-# window's background. Build against a patched copy, and put the module files back after.
+# MyGo has two platform fixes the app needs, each a patch in patches/: its Windows swap
+# chain stretched a frame drawn for one client height into a window that changed height,
+# magnifying the content for a moment on every resize, and its macOS popover animates a
+# content size change on AppKit's own schedule, so the panel's height ran ahead of the
+# lists it holds. Build against a patched copy, and put the module files back after.
 work="$root/.mygo-patched"
 go_mod="$root/apps/masir-gui/go.mod"
 go_sum="$root/apps/masir-gui/go.sum"
@@ -70,11 +71,13 @@ fi
 rm -rf "$work"
 cp -R "$mygo_dir" "$work"
 chmod -R u+w "$work"
-printf 'Patching MyGo for the Windows resize...\n'
-if ! git apply -p1 --directory=.mygo-patched --whitespace=nowarn "$root/patches/mygo-dxgi-no-stretch.patch"; then
-	echo "build-gui: patches/mygo-dxgi-no-stretch.patch does not apply to mygo $(cd apps/masir-gui && go list -m -f '{{.Version}}' github.com/egoist/mygo)" >&2
-	exit 1
-fi
+printf 'Patching MyGo for the resizes...\n'
+for patch in "$root"/patches/mygo-*.patch; do
+	if ! git apply -p1 --directory=.mygo-patched --whitespace=nowarn "$patch"; then
+		echo "build-gui: $(basename "$patch") does not apply to mygo $(cd apps/masir-gui && go list -m -f '{{.Version}}' github.com/egoist/mygo)" >&2
+		exit 1
+	fi
+done
 cp "$go_mod" "$go_mod_orig"
 cp "$go_sum" "$go_sum_orig"
 (cd apps/masir-gui && go mod edit -replace github.com/egoist/mygo=../../.mygo-patched)
