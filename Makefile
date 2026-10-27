@@ -1,4 +1,4 @@
-.PHONY: proto proto-lint build snapshot test test-race gui gui-local gui-dev snapshots
+.PHONY: proto proto-lint build snapshot test test-race gui gui-local gui-dev screenshots
 
 # The Go modules of go.work, in the order CI checks them.
 MODULES := apps/masir apps/masir-gui libs/masir-daemon libs/masir-core libs/masir-proto
@@ -37,12 +37,13 @@ test-race:
 		(cd $$m && go vet ./... && go test -race ./...) || exit 1; \
 	done
 
-# Pictures of the desktop app's pages, for looking at them without launching it.
+# Pictures of the desktop app's pages, for looking at them without launching it. This is
+# one headless test on this machine, not the all-platform release build `make snapshot`.
 SNAPSHOT_DIR ?= $(CURDIR)/dist/snapshots
-snapshots:
+screenshots:
 	@mkdir -p "$(SNAPSHOT_DIR)"
 	cd $(GUI_DIR) && MASIR_SNAPSHOTS="$(SNAPSHOT_DIR)" go test -count=1 -run TestSnapshots -v
-	@echo "Snapshots in $(SNAPSHOT_DIR)"
+	@echo "Screenshots in $(SNAPSHOT_DIR)"
 
 # The desktop app, with the masir it ships, for the systems and architectures chosen.
 # By default it builds all three systems and both architectures. Narrow it with either

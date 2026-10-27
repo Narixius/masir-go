@@ -23,7 +23,7 @@ a release.
 cd apps/masir-gui && go test ./...                 # the module, cached
 cd apps/masir-gui && go test -run TestName -v ./... # one test
 make gui-local                                     # one app for this machine
-make snapshots                                     # PNGs of each page in dist/snapshots
+make screenshots                                   # PNGs of each page in dist/snapshots
 make test                                          # vet + tests for every module
 make test-race                                     # the same with -race
 ```
@@ -31,6 +31,9 @@ make test-race                                     # the same with -race
 - `make gui-local` builds only `go env GOOS`/`GOARCH`. Use it constantly.
 - `make gui` builds all six targets and is slow; use it when touching build scripts,
   patches, platform code, or before a release.
+- `make screenshots` is one headless test on this machine. `make snapshot` (singular) is
+  the GoReleaser all-platform archive build and is slow; do not reach for it to check UI
+  layout.
 - `make gui-dev` uses **stock** MyGo, so it does not include the patches in `patches/`.
   Test behavior that depends on a patch with `make gui-local`, not `make gui-dev`.
 - Cross-compile cheaply inside the module:
@@ -40,11 +43,14 @@ make test-race                                     # the same with -race
 ## Looking at the UI without clicking
 
 ```sh
-make snapshots
+make screenshots
 # or
 cd apps/masir-gui
 MASIR_SNAPSHOTS=/tmp/masir-snaps go test -count=1 -run TestSnapshots -v
 ```
+
+This runs the headless UI test on the host only; there is no cross-platform build. Do not
+confuse it with `make snapshot`, which runs GoReleaser for every release target.
 
 `TestSnapshots` only writes images; it asserts nothing. Read the PNGs to check spacing,
 centering, opacity, and theme colors. Snapshot images are also the fastest way to review a

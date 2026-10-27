@@ -78,5 +78,5 @@ frames that take longer than 8 ms.
 cd apps/masir-gui && go test ./...          # the module's tests
 make test                                   # vet and test every module, as CI does
 make test-race                              # the same with the race detector
-make snapshots                              # pictures of each page, in dist/snapshots
+make screenshots                            # pictures of each page, in dist/snapshots
 ```
