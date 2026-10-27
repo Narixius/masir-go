@@ -45,13 +45,13 @@ func TestResizeOnlyAtRest(t *testing.T) {
 	}
 	for i := 0; i < 40; i++ {
 		tt.Advance(8 * time.Millisecond)
-		if p := a.motion.page.x; p > 0 && p < 1 && len(asked) > 0 {
-			t.Fatalf("resized while the page moved back at %v: %v", p, asked)
+		if p := a.motion.page.x; p > 0.05 && len(asked) > 0 {
+			t.Fatalf("resized while the page was still on screen at %v: %v", p, asked)
 		}
 	}
 	tt.Advance(time.Second)
-	if len(asked) != 1 || asked[0] >= a.subHeight() {
-		t.Fatalf("coming back asked for %v, want one request of the main page's height", asked)
+	if len(asked) < 1 || len(asked) > 2 || asked[0] >= a.subHeight() {
+		t.Fatalf("coming back asked for %v, want the main page's height once it was nearly gone", asked)
 	}
 }
 
@@ -84,6 +84,39 @@ func TestListResizeOnlyAtRest(t *testing.T) {
 	// The panel ends at the height the content measured, not the estimate it grew to.
 	if last := asked[len(asked)-1]; last <= a.baseHeight {
 		t.Fatalf("the list's height came to %v, no taller than the closed page %v", last, a.baseHeight)
+	}
+}
+
+// TestListGivesItsHeightBackAtOnce checks that a folding list asks for the closed height
+// as it starts, so the window shrinks with the list rather than a moment after it.
+func TestListGivesItsHeightBackAtOnce(t *testing.T) {
+	a := newTestApp(ukServers())
+	a.motion.instant = false
+	var asked []float32
+	a.onHeight = func(h float32) { asked = append(asked, h) }
+	tt := ui.NewTester(a.view, panelWidth, 900)
+	tt.Frame()
+	a.toggle(sectionServers)
+	tt.Frame()
+	tt.Advance(time.Second)
+	asked = nil
+
+	a.toggle(sectionServers) // close
+	if len(asked) != 1 || asked[0] > a.baseHeight+0.5 {
+		t.Fatalf("closing the list asked for %v at once, want the closed height %v", asked, a.baseHeight)
+	}
+	tt.Frame() // the frame that aims the springs at rest
+	for i := 0; i < 40; i++ {
+		tt.Advance(8 * time.Millisecond)
+		for _, h := range asked {
+			if h > a.baseHeight+0.5 {
+				t.Fatalf("the window grew back while the list folded: %v", asked)
+			}
+		}
+	}
+	tt.Advance(time.Second)
+	if len(asked) > 2 {
+		t.Fatalf("closing the list asked for the height %d times: %v", len(asked), asked)
 	}
 }
 

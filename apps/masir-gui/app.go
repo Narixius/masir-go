@@ -113,6 +113,7 @@ type app struct {
 	// never frame by frame.
 	motion       motion
 	lastMotion   time.Time          // the frame the springs last stepped on
+	nearTarget   bool               // the window was already sized for a closing part
 	lastSub      screen             // the page that slides over the main one, kept while it slides out
 	mainHeight   float32            // the main page's height as last measured
 	measuredOpen section            // the section that was open when mainHeight was measured
@@ -599,7 +600,10 @@ func b2f(b bool) float32 {
 // can be seen. A frame may build the view more than once; only its first pass steps the
 // springs.
 func (a *app) aimMotion(c *ui.Context) {
-	a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
+	changed := a.motion.aim(b2f(a.open == sectionServers), b2f(a.open == sectionRules), b2f(a.screen != screenMain))
+	if changed {
+		a.nearTarget = false
+	}
 	now := c.Now()
 	moving := !a.motion.settled()
 	switch {
@@ -609,6 +613,14 @@ func (a *app) aimMotion(c *ui.Context) {
 		dt := float32(min(now.Sub(a.lastMotion).Seconds(), 0.05))
 		a.lastMotion = now
 		a.motion.step(dt)
+		// The page over the main one gives the window its height back as soon as it is
+		// nearly gone, instead of after the spring's last invisible millimetres: the
+		// window would otherwise shrink a moment after the movement the person saw. A
+		// folding list is sized as it starts (see toggle), so it needs no wait.
+		if a.motion.pageClosing() && !a.nearTarget && abs32(a.motion.page.x) <= 0.05 {
+			a.nearTarget = true
+			a.requestHeight()
+		}
 		if moving && a.motion.settled() {
 			// The content has come to rest: its exact height may differ from the estimate
 			// it grew to, so settle the window on it once, now that nothing moves.
@@ -651,7 +663,7 @@ func (a *app) restHeight() float32 {
 	if a.screen != screenMain {
 		return a.subHeight()
 	}
-	if a.mainHeight > 0 && a.open == a.measuredOpen {
+	if a.mainHeight > 0 && a.open == a.measuredOpen && a.motion.listsSettled() {
 		return a.mainHeight // the content itself says how tall it is
 	}
 	base := a.baseHeight

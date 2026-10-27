@@ -48,6 +48,7 @@ func (s *shell) start() {
 	s.a.screen, s.a.open, s.a.lastSub = screenMain, sectionNone, screenMain
 	s.a.motion = motion{instant: s.a.motion.instant} // a new panel starts at rest
 	s.a.lastMotion = time.Time{}
+	s.a.nearTarget = false
 	s.a.onHeight = s.setHeight
 	s.a.watchTraffic()
 }

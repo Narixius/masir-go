@@ -300,17 +300,14 @@ func (a *app) serverRow(c *ui.Context, p palette) {
 }
 
 func (a *app) toggle(s section) {
-	opening := a.open != s
-	if opening {
-		a.open = s
-	} else {
+	if a.open == s {
 		a.open = sectionNone
+	} else {
+		a.open = s
 	}
-	// A list takes the window's height before it unfolds. Closing leaves the window as it
-	// is until the list has folded, and aimMotion shrinks it then.
-	if opening {
-		a.requestHeight()
-	}
+	// The window takes the list's height as it unfolds, and gives it back as it folds: it
+	// is one resize with the list's movement, not one after it.
+	a.requestHeight()
 }
 
 // panelBar is the search row at the top of the open panels: the field and a button.
@@ -736,14 +733,17 @@ func (a *app) measure() float32 {
 	onHeight, notices := a.onHeight, a.notices
 	a.onHeight, a.notices = nil, nil
 	wasScreen, wasOpen, wasSub, wasMotion, wasLast := a.screen, a.open, a.lastSub, a.motion, a.lastMotion
+	wasNear := a.nearTarget
 	a.screen, a.open = screenMain, sectionNone
 	a.motion = motion{instant: a.motion.instant}
 	a.lastMotion = time.Time{}
+	a.nearTarget = false
 	tt := ui.NewTester(a.view, panelWidth, 900) // tall enough that nothing is cut off
 	tt.Frame()
 	tt.Frame() // an element knows its size from the frame before
 	h := a.restHeight()
 	a.screen, a.open, a.lastSub, a.motion, a.lastMotion = wasScreen, wasOpen, wasSub, wasMotion, wasLast
+	a.nearTarget = wasNear
 	a.onHeight, a.notices = onHeight, notices
 	return h
 }
