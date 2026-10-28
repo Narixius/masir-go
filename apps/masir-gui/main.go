@@ -153,7 +153,7 @@ func daemonBinary() string {
 	// A service has its own copy of masir and its own geo data. Start that when a
 	// service is installed, even if it isn't running: the app should not bring up a
 	// second daemon from the bundle with different data.
-	if service.Installed() {
+	if serviceDefined() {
 		if p := service.BinaryPath(); fileExists(p) {
 			return p
 		}

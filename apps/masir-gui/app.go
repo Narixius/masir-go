@@ -538,7 +538,7 @@ func (a *app) connected() bool {
 func (a *app) wantsOn() bool { return a.status != nil && a.status.Settings.GetPower() }
 
 func (a *app) setPower(on bool) {
-	if a.busy != "" {
+	if a.busy != "" || a.serviceBusy {
 		return
 	}
 	a.busy = map[bool]string{true: "Connecting…", false: "Disconnecting…"}[on]
@@ -553,9 +553,17 @@ func (a *app) setPower(on bool) {
 	})
 }
 
+// The socket check and the permission-prompting commands, replaceable in tests so they
+// never touch the machine they run on.
+var (
+	daemonAlive     = client.Alive
+	startRootDaemon = elevateDaemon
+	startServiceNow = startService
+)
+
 func (a *app) power(on bool) error {
-	if on && !a.privileged() {
-		if err := a.becomePrivileged(); err != nil {
+	if on && !a.connectable() {
+		if err := a.startDaemon(); err != nil {
 			return err
 		}
 	}
@@ -572,18 +580,66 @@ func (a *app) power(on bool) error {
 
 func (a *app) privileged() bool { return a.status != nil && a.status.Privileged }
 
+// connectable reports whether a privileged daemon answers right now. The socket check
+// catches a daemon that stopped since the last status; the status itself is main-thread
+// only, hence the hop.
+func (a *app) connectable() bool {
+	if !daemonAlive() {
+		return false
+	}
+	var ok bool
+	a.post(func() { ok = a.privileged() })
+	return ok
+}
+
+// startDaemon brings up a privileged daemon to connect through. An installed service is
+// the supervisor, so it is started (asking for permission) instead of a second,
+// unsupervised daemon. Without a service, this session gets a root daemon that takes over
+// from the one running as the user.
+func (a *app) startDaemon() error {
+	if readService().Installed {
+		// Ask the service manager rather than trust its cached state: the service may
+		// have stopped a moment ago, and a kickstart is harmless when it is up.
+		if !daemonAlive() {
+			if err := a.runServiceAction(); err != nil {
+				return err
+			}
+		}
+		return a.waitForRoot("the background service didn't start with root permission")
+	}
+	return a.becomePrivileged()
+}
+
+// runServiceAction starts the installed service, keeping the daemon watch from starting
+// one of its own while the service comes up.
+func (a *app) runServiceAction() error {
+	a.post(func() { a.serviceBusy = true })
+	err := startServiceNow(a.daemonPath())
+	a.post(func() {
+		a.serviceBusy = false
+		a.serviceChecked = time.Time{}
+		a.refreshServiceState()
+	})
+	return err
+}
+
 // becomePrivileged restarts the daemon as root for this session (see elevate), and waits
 // for it to take over.
 func (a *app) becomePrivileged() error {
-	if err := elevateDaemon(a.binary); err != nil {
+	if err := startRootDaemon(a.daemonPath()); err != nil {
 		return err
 	}
+	return a.waitForRoot("the daemon didn't start with root permission")
+}
+
+// waitForRoot waits until the daemon answers and reports that it runs as root.
+func (a *app) waitForRoot(failure string) error {
 	return client.WaitFor(context.Background(), func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		res, err := a.d.GetStatus(ctx, &pb.GetStatusRequest{}, grpc.WaitForReady(true))
 		return err == nil && res.Status.Privileged
-	}, 30*time.Second, "the daemon didn't start with root permission")
+	}, 30*time.Second, failure)
 }
 
 func (a *app) updateSettings(req *pb.UpdateSettingsRequest) {
@@ -702,6 +758,35 @@ func (a *app) testServers(only ...server) {
 
 // ---- the daemon's lifecycle ----
 
+// daemonStep is what the daemon watch does when nothing answers.
+type daemonStep int
+
+const (
+	// daemonWait: an update or a service action is in flight. Its daemon is expected to
+	// be down for a moment, and starting another would race it for the socket.
+	daemonWait daemonStep = iota
+	// daemonLeaveToService: a service definition exists. It is the supervisor, not this
+	// app, so the daemon is left to it; connecting starts a stopped service.
+	daemonLeaveToService
+	// daemonStart: no service and no daemon, so the app starts one.
+	daemonStart
+)
+
+// daemonStep answers the watch from another goroutine. The update and service state is
+// main-thread only, so the question is asked there and the answer carried back; the
+// service definition is read where it stands, so no OS query runs in a frame.
+func (a *app) daemonStep() daemonStep {
+	var busy bool
+	a.post(func() { busy = a.busyUpdate() || a.upd.restarting || a.serviceBusy })
+	switch {
+	case busy:
+		return daemonWait
+	case serviceDefined():
+		return daemonLeaveToService
+	}
+	return daemonStart
+}
+
 // watch keeps a status stream open for as long as ctx lives: it starts the daemon when
 // none answers, and dials again when the daemon goes away or is replaced (an update, or
 // a root daemon taking over).
@@ -713,17 +798,16 @@ func (a *app) watch(ctx context.Context) {
 	for ctx.Err() == nil {
 		if !client.Alive() {
 			a.post(a.setUnreachable)
-			if a.updateInFlight() {
-				// An update is restarting the daemon. Starting another one here would
-				// race the new version for the socket, and an idle start would look
-				// like the person turned masir off.
+			switch a.daemonStep() {
+			case daemonWait:
+				// An update or a service action is restarting the daemon. Starting
+				// another one here would race it for the socket, and an idle start
+				// would look like the person turned masir off.
 				sleep(ctx, time.Second)
 				continue
-			}
-			if a.servicePresent() {
+			case daemonLeaveToService:
 				// A service exists: it is the supervisor, not this app. Starting a
 				// second, unsupervised daemon would fight it for the socket.
-				warn("The background service isn't running; start it in Settings")
 				sleep(ctx, 3*time.Second)
 				continue
 			}

@@ -21,6 +21,12 @@ import (
 // machine they run on.
 var readService = func() service.Info { return service.Status() }
 
+// serviceDefined asks whether a service definition exists. It is the authority the daemon
+// watch trusts: a status from a daemon that is being removed still says a service exists,
+// and trusting it would start no daemon and warn about a service that is already gone.
+// Tests replace it for the same reason as readService.
+var serviceDefined = service.Installed
+
 // refreshServiceState keeps the service badge honest when no daemon is running to report
 // it. It runs off the main thread and at most every few seconds.
 func (a *app) refreshServiceState() {

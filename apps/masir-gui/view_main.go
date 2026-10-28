@@ -112,6 +112,13 @@ func (a *app) subHeight() float32 {
 func (a *app) statusText() (title, subtitle string, color ui.Color, pulse bool) {
 	p := a.palette
 	switch {
+	case !a.reachable && a.status.GetServiceInstalled() && !a.status.GetServiceRunning():
+		// A stopped service is the supervisor: nothing will answer until it is started,
+		// and the connect switch is the way to start it.
+		if a.busy != "" {
+			return a.busy, "Starting the background service", p.degraded, true
+		}
+		return "Disconnected", "The background service is stopped", p.neutral, false
 	case !a.reachable:
 		return "Starting…", "Waiting for the masir daemon", p.degraded, true
 	case a.busy != "":
@@ -159,7 +166,10 @@ func (a *app) header(c *ui.Context, p palette) {
 		})
 		ui.Row(c).AlignItems(ui.Center).Gap(tw(2.5)).Children(func() {
 			on := a.wantsOn() && a.connected() || a.busy == "Connecting…"
-			disabled := a.busy != "" || !a.reachable || len(a.servers) == 0
+			// With the daemon down the server list is unknown, but connect can bring it
+			// up (starting a stopped service, or a root daemon when none is installed);
+			// only an empty list while the daemon answers keeps the switch off.
+			disabled := a.busy != "" || a.serviceBusy || (a.reachable && len(a.servers) == 0)
 			if next, changed := nativeSwitch(c, "power", "Connect", on, switchDefault, disabled, a.busy != "", p); changed {
 				a.setPower(next)
 			}

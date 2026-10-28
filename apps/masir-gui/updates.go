@@ -414,25 +414,6 @@ func (a *app) updatePartCount() int {
 	return 1
 }
 
-// updateInFlight answers the daemon watch from another goroutine. The update state is
-// main-thread only, so the question is asked there and the answer carried back.
-func (a *app) updateInFlight() bool {
-	var busy bool
-	a.post(func() { busy = a.busyUpdate() || a.upd.restarting })
-	return busy
-}
-
-// servicePresent answers whether a service is installed, from the main thread. It also
-// asks the filesystem, so a status that hasn't arrived yet can't make the app start a
-// second daemon beside a service.
-func (a *app) servicePresent() bool {
-	var present bool
-	a.post(func() {
-		present = (a.status != nil && a.status.GetServiceInstalled()) || service.Installed()
-	})
-	return present
-}
-
 // daemonPath is a.binary, read on the main thread.
 func (a *app) daemonPath() string {
 	var p string

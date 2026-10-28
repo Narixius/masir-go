@@ -289,6 +289,10 @@ func newTestApp(f *fakeDaemon) *app {
 	quit = func() {}
 	readClipboard = func() string { return "" }
 	readService = func() service.Info { return service.Info{} }
+	serviceDefined = func() bool { return false }
+	daemonAlive = func() bool { return true }           // the fake daemon answers
+	startRootDaemon = func(string) error { return nil } // no password dialog in a test
+	startServiceNow = func(string) error { return nil }
 	markNoticeShown = func() {} // the test must not write the user's real config directory
 	a := newApp(f, "")
 	a.motion.instant = true // no waiting for animations
