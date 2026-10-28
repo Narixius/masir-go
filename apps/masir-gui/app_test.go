@@ -98,8 +98,12 @@ func (f *fakeDaemon) RemoveRouting(_ context.Context, r *pb.RemoveRoutingRequest
 	return &pb.RemoveRoutingResponse{}, f.failRemove
 }
 
-func (f *fakeDaemon) CheckUpdate(context.Context, *pb.CheckUpdateRequest, ...grpc.CallOption) (*pb.CheckUpdateResponse, error) {
-	f.log("check update")
+func (f *fakeDaemon) CheckUpdate(_ context.Context, r *pb.CheckUpdateRequest, _ ...grpc.CallOption) (*pb.CheckUpdateResponse, error) {
+	if r.GetForce() {
+		f.log("check update force")
+	} else {
+		f.log("check update")
+	}
 	return &pb.CheckUpdateResponse{Release: f.release}, f.releaseErr
 }
 

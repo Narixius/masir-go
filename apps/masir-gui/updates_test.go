@@ -203,8 +203,10 @@ func TestDaemonStartForgetsAnIgnoredPrompt(t *testing.T) {
 	}
 }
 
-// A version gap asks for a fresh release instead of installing either half on its own.
-func TestAVersionGapAsksForAFreshRelease(t *testing.T) {
+// A version gap must force a fresh daemon check: the daemon's one-day cache can still
+// claim the old version is current. When the app is already past the daemon, finish the
+// app-only update by updating the service too.
+func TestAVersionGapCatchesTheDaemonUp(t *testing.T) {
 	f := ukServers()
 	a := newTestApp(f)
 	f.status.Version = "0.4.0"
@@ -212,11 +214,14 @@ func TestAVersionGapAsksForAFreshRelease(t *testing.T) {
 	a.version = "0.4.1"
 	calls := len(f.calls)
 	a.applyStatus(f.status)
+	if !f.called("check update force") {
+		t.Fatalf("the cached release was used instead of a forced check: %v", f.calls)
+	}
+	if !f.called("start update") {
+		t.Fatalf("the daemon behind the app was not updated: %v", f.calls)
+	}
 	if len(f.calls) == calls {
 		t.Fatal("a version gap did not ask for a fresh release")
-	}
-	if f.called("start update") {
-		t.Fatalf("the gap installed something on its own: %v", f.calls)
 	}
 	// The same gap is not asked for again on every status.
 	calls = len(f.calls)

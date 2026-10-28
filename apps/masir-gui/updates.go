@@ -150,9 +150,10 @@ func (a *app) applyRelease(rel *pb.ReleaseInfo) {
 }
 
 // noteVersionGap notices that the app and the daemon run different releases. The
-// source of truth is the release, not a forced install: ask for a fresh check so the
-// control can offer the right side (the app when the daemon is bundled, the service
-// update when the service is behind). A gap that is still there is not checked again.
+// daemon's release check is cached for a day, so it can still say "up to date" for the
+// old version; ask GitHub through it with Force. When the app is already past the
+// daemon (an app-only update), finish the same transaction by updating the service
+// automatically. A gap that is still there is not checked again.
 func (a *app) noteVersionGap(st *pb.Status) {
 	if a.busyUpdate() || a.upd.checking || a.upd.restarting {
 		return
@@ -169,12 +170,23 @@ func (a *app) noteVersionGap(st *pb.Status) {
 		return
 	}
 	a.upd.gapSeen = gap
-	// Drop the cached release so the next check asks the daemon for fresh data; the
-	// app feed is asked again in the same cycle.
-	a.upd.rel = nil
-	a.upd.appChecked = false
-	a.upd.lastAttempt = time.Time{}
-	a.maybeCheckUpdates()
+	a.upd.checking = true
+	a.async(func() {
+		ctx, cancel := rpc()
+		res, err := a.d.CheckUpdate(ctx, &pb.CheckUpdateRequest{Force: true})
+		cancel()
+		a.post(func() {
+			a.upd.checking = false
+			if err == nil && res.GetRelease() != nil {
+				a.applyRelease(res.GetRelease())
+				if a.daemonUpdateAvailable() && !a.busyUpdate() {
+					a.startDaemonUpdate()
+					return
+				}
+			}
+			a.maybeCheckUpdates()
+		})
+	})
 }
 
 // maybeCheckUpdates asks the daemon for a release when its cached one is missing or old,
