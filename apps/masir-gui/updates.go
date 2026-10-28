@@ -72,6 +72,10 @@ type updateState struct {
 	lastAttempt    time.Time
 	lastForeground time.Time
 	lastStart      int64
+	// parts is how many downloads this update has: the daemon and command line, then
+	// the app. One part when only one of them is updated, so a single download is not
+	// labelled "2/2".
+	parts int
 	// download progress for the app update; the daemon job has its own bytes.
 	progress, total int64
 	appPaused       bool
@@ -190,6 +194,8 @@ func (a *app) noteVersionGap(st *pb.Status) {
 			if err == nil && res.GetRelease() != nil {
 				a.applyRelease(res.GetRelease())
 				if a.daemonUpdateAvailable() && !a.busyUpdate() {
+					// The app is already the new one; only the daemon is left.
+					a.upd.parts = 1
 					a.startDaemonUpdate()
 					return
 				}
@@ -398,6 +404,16 @@ func (a *app) hasUpdate() bool {
 	return a.appUpdateCoversDaemon() && a.daemonReleaseAvailable() && !a.appFeedAnswered()
 }
 
+// updatePartCount is how many downloads this update will make: the daemon and command
+// line first, then the app. A daemon running from the app's bundle is updated by the app
+// alone, and an app that is already current leaves only the daemon, so those are one.
+func (a *app) updatePartCount() int {
+	if a.daemonUpdateAvailable() && a.appUpdateAvailable() {
+		return 2
+	}
+	return 1
+}
+
 // updateInFlight answers the daemon watch from another goroutine. The update state is
 // main-thread only, so the question is asked there and the answer carried back.
 func (a *app) updateInFlight() bool {
@@ -450,6 +466,7 @@ func (a *app) startUpdate() {
 		return
 	}
 	a.upd.err = ""
+	a.upd.parts = a.updatePartCount()
 	if a.daemonUpdateAvailable() {
 		a.startDaemonUpdate()
 		return
@@ -917,6 +934,38 @@ func (a *app) updatePercent() int {
 	return int(max(0, min(100, done*100/total)))
 }
 
+// downloadLabel is the control's text while a download runs: which part of the update,
+// when there are two, and how far along. The control is 42 tw wide and the footer has no
+// room to grow it, so the part is a short marker, never a word.
+func (a *app) downloadLabel(part int) string {
+	if a.upd.parts < 2 {
+		return fmt.Sprintf("Downloading %d%%", a.updatePercent())
+	}
+	return fmt.Sprintf("Part %d/%d · %d%%", part, a.upd.parts, a.updatePercent())
+}
+
+// pausedLabel is downloadLabel while the download is paused.
+func (a *app) pausedLabel(part int) string {
+	if a.upd.parts < 2 {
+		return fmt.Sprintf("Paused %d%%", a.updatePercent())
+	}
+	return fmt.Sprintf("Paused %d/%d · %d%%", part, a.upd.parts, a.updatePercent())
+}
+
+// updateTooltip says what the numbered label cannot: what each part is fetching.
+func (a *app) updateTooltip() string {
+	if a.upd.parts < 2 {
+		return ""
+	}
+	switch a.upd.phase {
+	case updateDownloading, updatePaused:
+		return "Part 1 of 2: the daemon and the masir command"
+	case updateAppDownloading, updateAppPaused:
+		return "Part 2 of 2: the Masir app"
+	}
+	return ""
+}
+
 // updateLabel is the text inside the control.
 func (a *app) updateLabel() string {
 	switch a.upd.phase {
@@ -925,9 +974,9 @@ func (a *app) updateLabel() string {
 	case updateStarting:
 		return "Starting update"
 	case updateDownloading:
-		return fmt.Sprintf("Downloading %d%%", a.updatePercent())
+		return a.downloadLabel(1)
 	case updatePaused:
-		return fmt.Sprintf("Paused %d%%", a.updatePercent())
+		return a.pausedLabel(1)
 	case updateVerifying:
 		return "Verifying update"
 	case updateInstalling:
@@ -935,9 +984,9 @@ func (a *app) updateLabel() string {
 	case updateRestarting:
 		return "Restarting masir"
 	case updateAppDownloading:
-		return fmt.Sprintf("Downloading %d%%", a.updatePercent())
+		return a.downloadLabel(2)
 	case updateAppPaused:
-		return fmt.Sprintf("Paused %d%%", a.updatePercent())
+		return a.pausedLabel(2)
 	case updateAppInstalling:
 		return "Installing Masir"
 	case updateFailed:

@@ -42,12 +42,17 @@ func TestSnapshots(t *testing.T) {
 		{"update-downloading", true, func(a *app, tt *ui.Tester) {
 			a.upd.rel = &pb.ReleaseInfo{CurrentVersion: "0.1.0", LatestVersion: "v0.2.0", Available: true, CheckedAtMs: time.Now().UnixMilli()}
 			a.upd.job = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_DOWNLOADING, BytesDone: 42, BytesTotal: 100}
-			a.upd.phase = updateDownloading
+			a.upd.parts, a.upd.phase = 2, updateDownloading
 		}},
 		{"update-paused", true, func(a *app, tt *ui.Tester) {
 			a.upd.rel = &pb.ReleaseInfo{CurrentVersion: "0.1.0", LatestVersion: "v0.2.0", Available: true, CheckedAtMs: time.Now().UnixMilli()}
 			a.upd.job = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_PAUSED, BytesDone: 42, BytesTotal: 100}
-			a.upd.phase = updatePaused
+			a.upd.parts, a.upd.phase = 2, updatePaused
+		}},
+		{"update-app-downloading", true, func(a *app, tt *ui.Tester) {
+			a.upd.rel = &pb.ReleaseInfo{CurrentVersion: "0.1.0", LatestVersion: "v0.2.0", Available: true, CheckedAtMs: time.Now().UnixMilli()}
+			a.upd.parts, a.upd.phase = 2, updateAppDownloading
+			a.upd.progress, a.upd.total = 74, 100
 		}},
 		{"settings-update", true, func(a *app, tt *ui.Tester) {
 			_ = tt.Click("Settings")

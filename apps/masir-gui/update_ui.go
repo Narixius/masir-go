@@ -22,6 +22,11 @@ func (a *app) updateControl(c *ui.Context, p palette) {
 		Cursor(ui.CursorPointer).Clip().Center()
 	text, icon, bg, fg := a.updateLook(p)
 	main.Background(bg).Label(text)
+	// The label says "Part 1/2"; the tooltip says what that part is, with the room the
+	// footer does not have.
+	if tip := a.updateTooltip(); tip != "" {
+		main.Tooltip(tip)
+	}
 	if fg.A > 0 {
 		main.TextColor(fg)
 	}

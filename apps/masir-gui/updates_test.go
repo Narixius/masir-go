@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo"
 
@@ -61,12 +62,86 @@ func TestUpdatePercentAndLabels(t *testing.T) {
 	if got := a.updatePercent(); got != 42 {
 		t.Fatalf("percent = %d", got)
 	}
+	// One download (a bundled daemon, or an app that is current): no part marker.
 	if got := a.updateLabel(); got != "Downloading 42%" {
 		t.Fatalf("label = %q", got)
 	}
 	a.upd.phase = updatePaused
 	if got := a.updateLabel(); got != "Paused 42%" {
 		t.Fatalf("paused label = %q", got)
+	}
+}
+
+// An update with a service installed downloads twice: the daemon and command line, then
+// the app. The label says which part, since the footer is too narrow for the names.
+func TestTwoPartUpdateLabels(t *testing.T) {
+	f := ukServers()
+	f.release = releaseInfo("0.1.0", "v0.2.0")
+	a := newTestApp(f)
+	a.upd.parts = 2
+	a.upd.phase = updateDownloading
+	a.upd.job = &pb.UpdateJob{State: pb.UpdateState_UPDATE_STATE_DOWNLOADING, BytesDone: 42, BytesTotal: 100}
+	if got := a.updateLabel(); got != "Part 1/2 · 42%" {
+		t.Fatalf("part 1 label = %q", got)
+	}
+	if got := a.updateTooltip(); got != "Part 1 of 2: the daemon and the masir command" {
+		t.Fatalf("part 1 tooltip = %q", got)
+	}
+	a.upd.phase = updatePaused
+	if got := a.updateLabel(); got != "Paused 1/2 · 42%" {
+		t.Fatalf("part 1 paused = %q", got)
+	}
+	// The app's share is its own progress, reported by the app updater.
+	a.upd.phase = updateAppDownloading
+	a.upd.progress, a.upd.total = 74, 100
+	a.upd.job = nil
+	if got := a.updateLabel(); got != "Part 2/2 · 74%" {
+		t.Fatalf("part 2 label = %q", got)
+	}
+	if got := a.updateTooltip(); got != "Part 2 of 2: the Masir app" {
+		t.Fatalf("part 2 tooltip = %q", got)
+	}
+	a.upd.phase = updateAppPaused
+	if got := a.updateLabel(); got != "Paused 2/2 · 74%" {
+		t.Fatalf("part 2 paused = %q", got)
+	}
+	// The other phases name themselves; only the downloads are numbered.
+	for phase, want := range map[updatePhase]string{
+		updateAvailable:     "Update Available",
+		updateVerifying:     "Verifying update",
+		updateInstalling:    "Installing update",
+		updateRestarting:    "Restarting masir",
+		updateAppInstalling: "Installing Masir",
+	} {
+		a.upd.phase = phase
+		if got := a.updateLabel(); got != want {
+			t.Errorf("phase %v label = %q, want %q", phase, got, want)
+		}
+		if tip := a.updateTooltip(); tip != "" {
+			t.Errorf("phase %v has tooltip %q", phase, tip)
+		}
+	}
+}
+
+// The number of downloads decides the label: a daemon running from the app bundle is
+// updated by the app alone, and an app that is current leaves only the daemon.
+func TestTheUpdateCountsItsDownloads(t *testing.T) {
+	f := ukServers()
+	f.release = releaseInfo("0.1.0", "v0.2.0")
+	a := newTestApp(f)
+	a.upd.app = &mygo.Update{Version: "0.2.0"}
+	if got := a.updatePartCount(); got != 2 {
+		t.Fatalf("service daemon and app: %d parts", got)
+	}
+	a.upd.app = nil
+	if got := a.updatePartCount(); got != 1 {
+		t.Fatalf("daemon only: %d parts", got)
+	}
+	// A bundled daemon belongs to the app updater.
+	a.upd.app = &mygo.Update{Version: "0.2.0"}
+	a.binary = "/Applications/Masir.app/Contents/MacOS/Masir"
+	if got := a.updatePartCount(); got != 1 {
+		t.Fatalf("bundled daemon: %d parts", got)
 	}
 }
 
@@ -493,5 +568,31 @@ func TestAnIgnoredUpdateStaysHiddenAcrossChecks(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	if !a.ignored("v0.2.0") || a.upd.phase == updateAvailable {
 		t.Fatalf("a check brought an ignored update back: phase=%v", a.upd.phase)
+	}
+}
+
+// The control is 42 tw wide and the footer has no room to grow it, so a numbered label
+// must stay within what it already draws: "Installing update" is the longest label the
+// shipped control holds, at 100% of a download. The numbers are narrow, the words are
+// not, which is why the part is "1/2" and not "part 1 of 2".
+func TestThePartLabelsFitTheUpdateControl(t *testing.T) {
+	f := ukServers()
+	f.release = releaseInfo("0.1.0", "v0.2.0")
+	a := newTestApp(f)
+	a.upd.parts = 2
+	a.upd.job = &pb.UpdateJob{State: pb.UpdateState_UPDATE_STATE_DOWNLOADING, BytesDone: 100, BytesTotal: 100}
+	room := utf8.RuneCountInString("Installing update")
+	for phase, part := range map[updatePhase]int{
+		updateDownloading: 1, updatePaused: 1, updateAppDownloading: 2, updateAppPaused: 2,
+	} {
+		a.upd.phase = phase
+		a.upd.progress, a.upd.total = 100, 100
+		got := a.updateLabel()
+		if n := utf8.RuneCountInString(got); n > room {
+			t.Errorf("phase %v label %q is %d characters, more than %q (%d)", phase, got, n, "Installing update", room)
+		}
+		if part == 2 && !strings.Contains(got, "2/2") && strings.Contains(got, "/") {
+			t.Errorf("phase %v label %q names the wrong part", phase, got)
+		}
 	}
 }
