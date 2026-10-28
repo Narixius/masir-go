@@ -191,7 +191,12 @@ func TestDaemonUpdateThenAppUpdateRelaunches(t *testing.T) {
 		progress(50, 100)
 		return nil
 	}
-	relaunchApp = func() { relaunched = true }
+	relaunchApp = func() {
+		if !a.upd.relaunching {
+			t.Error("the app relaunched without being marked as an update relaunch")
+		}
+		relaunched = true
+	}
 	t.Cleanup(func() { installAppUpdate, relaunchApp = oldInstall, oldRelaunch })
 
 	a.startUpdate()
@@ -360,7 +365,12 @@ func TestABundledDaemonIsUpdatedByTheAppOnly(t *testing.T) {
 	installed, relaunched := false, false
 	oldInstall, oldRelaunch := installAppUpdate, relaunchApp
 	installAppUpdate = func(context.Context, *mygo.Update, func(int64, int64)) error { installed = true; return nil }
-	relaunchApp = func() { relaunched = true }
+	relaunchApp = func() {
+		if !a.upd.relaunching {
+			t.Error("the app relaunched without being marked as an update relaunch")
+		}
+		relaunched = true
+	}
 	t.Cleanup(func() { installAppUpdate, relaunchApp = oldInstall, oldRelaunch })
 
 	a.startUpdate()

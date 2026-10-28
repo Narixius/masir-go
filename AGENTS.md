@@ -85,6 +85,10 @@ subscriptions while smoke-testing unless that is the change under test.
 - **An idle daemon reports off but saves nothing.** `--idle` keeps Xray down for the
   process; it must not write `Power=false`. The app starts the daemon in normal mode so a
   restart doesn't silently turn masir (or the tunnel) off.
+- **Quitting disconnects; hiding does not.** The tray's Quit, Cmd+Q and Settings' Quit
+  Masir send `SetPower(false)` as `masir disconnect` does (Always-on Proxy keeps its port
+  up). Closing the window into the tray only hides it, and an update's relaunch keeps
+  masir on (`upd.relaunching`).
 - **Never start a daemon during an update or restart, and never beside a service.** The
   watch waits while `upd.busyUpdate()`/`restarting`, and when a service is installed it
   asks the service manager instead of spawning an unsupervised daemon.

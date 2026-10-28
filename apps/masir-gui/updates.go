@@ -100,6 +100,9 @@ type updateState struct {
 	// relaunchAfterRestart relaunches the app once a bundled daemon has restarted into
 	// the app update's copy.
 	relaunchAfterRestart bool
+	// relaunching says the quit now starting is an update's relaunch, not the person
+	// leaving: the app comes back, so masir stays on (see disconnectOnQuit).
+	relaunching bool
 }
 
 // daemonWaitTimeout bounds how long a restarted daemon may take to answer with the new
@@ -759,6 +762,7 @@ func (a *app) startAppUpdate() {
 					a.restartDaemon(u.Version)
 					return
 				}
+				a.upd.relaunching = true
 				relaunchApp()
 			}
 		})
@@ -1018,6 +1022,7 @@ func (a *app) restartDaemon(version string) {
 			a.upd.relaunchAfterRestart = false
 			a.upd.phase = updateIdle
 			if relaunch {
+				a.upd.relaunching = true
 				relaunchApp()
 			}
 		})

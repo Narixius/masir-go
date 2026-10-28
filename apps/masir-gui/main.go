@@ -151,6 +151,10 @@ func (s *shell) ready() {
 		s.a.flushPanelHeight()
 	})
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
+		// Quitting for good leaves nothing to turn masir off later, so this goes as
+		// `masir disconnect` does. Closing the window into the tray is not a quit,
+		// and neither is an update's relaunch; disconnectOnQuit knows the difference.
+		s.a.disconnectOnQuit()
 		if s.tray != nil {
 			s.tray.Destroy()
 		}

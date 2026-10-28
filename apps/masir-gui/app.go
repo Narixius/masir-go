@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -278,6 +279,10 @@ const rpcTimeout = 90 * time.Second
 func rpc() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), rpcTimeout)
 }
+
+// quitTimeout bounds the disconnect a quit sends: the daemon answers on a local socket in
+// milliseconds, and a quit must never hang on one that doesn't answer at all.
+const quitTimeout = 2 * time.Second
 
 // openScreen slides another page over the main one. A page opening from the main one gets
 // the window's height before it slides; coming back, the window keeps its size until the
@@ -581,6 +586,22 @@ func (a *app) power(on bool) error {
 		return fmt.Errorf("masir is on in proxy mode only: %s", describe(err))
 	}
 	return nil
+}
+
+// disconnectOnQuit turns masir off as `masir disconnect` does when the app is really
+// going away. Hiding the window in the tray is not a quit, and an update's relaunch is
+// not one either: the app comes back, so neither turns masir off.
+func (a *app) disconnectOnQuit() {
+	if a.upd.relaunching || !a.wantsOn() {
+		return
+	}
+	// Only power, so Always-on Proxy keeps its port up. A daemon failure here must not
+	// hold the quit (it may already be gone).
+	ctx, cancel := context.WithTimeout(context.Background(), quitTimeout)
+	defer cancel()
+	if _, err := a.d.SetPower(ctx, &pb.SetPowerRequest{On: false}); err != nil {
+		log.Print("disconnect on quit: ", err)
+	}
 }
 
 func (a *app) privileged() bool { return a.status != nil && a.status.Privileged }
