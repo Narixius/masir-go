@@ -358,9 +358,22 @@ func (a *app) advancedSection(c *ui.Context, p palette) {
 			})
 			cardDivider(c, p)
 			login := a.loginEnabled()
-			a.settingToggle(c, p, "login", "Open at Login", "Start Masir in the menu bar when you sign in.", login, func(on bool) {
+			hint := "Start Masir in the menu bar when you sign in."
+			if a.loginNeedsApproval {
+				hint = "Allow Masir in Login Items to start at login."
+			}
+			a.settingToggle(c, p, "login", "Open at Login", hint, login, func(on bool) {
 				a.setLoginEnabled(on)
 			})
+			if a.loginNeedsApproval && runtime.GOOS == "darwin" {
+				ui.Row(c).Padding(0, tw(3), tw(2.5)).Children(func() {
+					if button(c, "login-items", "Open Login Items", false, false, false, p) {
+						if err := openLoginItems(); err != nil {
+							a.fail("Couldn't open Login Items: ", err)
+						}
+					}
+				})
+			}
 		})
 	})
 }
@@ -396,6 +409,9 @@ func (a *app) refreshLoginState() {
 	a.async(func() {
 		on := openAtLogin()
 		a.post(func() {
+			if on {
+				a.loginNeedsApproval = false
+			}
 			if a.loginChecked && a.loginOn == on {
 				return
 			}
@@ -405,10 +421,21 @@ func (a *app) refreshLoginState() {
 }
 
 func (a *app) setLoginEnabled(on bool) {
-	if err := setOpenAtLogin(on); err != nil {
+	err := setOpenAtLogin(on)
+	if err != nil && on {
+		// A login item left behind by an earlier copy of Masir can make register fail
+		// ("already registered"). Removing it and registering again is what the person
+		// did by hand; do it for them, once.
+		if offErr := setOpenAtLogin(false); offErr == nil {
+			err = setOpenAtLogin(true)
+		}
+	}
+	if err != nil {
+		a.loginNeedsApproval = strings.Contains(err.Error(), "Login Items")
 		a.fail("Couldn't change it: ", err)
 		return
 	}
+	a.loginNeedsApproval = false
 	a.loginOn, a.loginChecked = on, true
 }
 

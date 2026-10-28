@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
 	"testing"
@@ -728,5 +729,47 @@ func TestRemovedRuleLeavesAtOnceAndReturnsIfRefused(t *testing.T) {
 	tt.Advance(time.Second)
 	if !tt.HasText(ltr("bank.test")) {
 		t.Fatalf("the rule didn't come back: %q", tt.Texts())
+	}
+}
+
+// A login item left by an earlier copy can make register fail. The toggle clears it and
+// registers again instead of just reporting "Couldn't change it".
+func TestOpenAtLoginClearsAStaleRegistration(t *testing.T) {
+	a := newTestApp(ukServers())
+	calls := []bool{}
+	old := setOpenAtLogin
+	setOpenAtLogin = func(on bool) error {
+		calls = append(calls, on)
+		if len(calls) == 1 && on {
+			return errors.New("mygo: already registered")
+		}
+		return nil
+	}
+	t.Cleanup(func() { setOpenAtLogin = old })
+
+	a.setLoginEnabled(true)
+	if !a.loginOn || !a.loginChecked || a.loginNeedsApproval {
+		t.Fatalf("on=%v checked=%v approval=%v", a.loginOn, a.loginChecked, a.loginNeedsApproval)
+	}
+	if len(calls) != 3 || calls[0] != true || calls[1] != false || calls[2] != true {
+		t.Fatalf("calls = %v, want [true false true]", calls)
+	}
+}
+
+// When macOS still needs the person to allow the item, the Settings page explains it.
+func TestOpenAtLoginShowsTheApprovalHint(t *testing.T) {
+	a := newTestApp(ukServers())
+	old := setOpenAtLogin
+	setOpenAtLogin = func(bool) error {
+		return errors.New("mygo: allow Masir to open at login in System Settings > General > Login Items")
+	}
+	t.Cleanup(func() { setOpenAtLogin = old })
+
+	a.setLoginEnabled(true)
+	if !a.loginNeedsApproval {
+		t.Fatal("the approval state was not recorded")
+	}
+	if a.loginOn {
+		t.Fatal("a failed registration left the switch on")
 	}
 }

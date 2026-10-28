@@ -570,7 +570,7 @@ func (a *app) rulesPanel(c *ui.Context, p palette) {
 			return
 		}
 		a.ruleRow(c, p, it.rule)
-	}).Padding(tw(1), tw(1.5), tw(1), tw(1)).Gap(tw(1.5)).Shrink(0)
+	}).Padding(0, tw(1.5), tw(1), tw(1)).Gap(tw(1.5)).Shrink(0)
 	if a.ruleQuery == "" {
 		list.MaxHeight(maxHeight)
 		if h := list.Bounds().H; h > 0 {
@@ -602,7 +602,7 @@ func (a *app) ruleListItems(rules []*pb.RoutingRule) []ruleListItem {
 // while its rows scroll under it. Its background is opaque, unlike the list's tint: rows
 // passing under a translucent header would show through it.
 func (a *app) ruleSectionRow(c *ui.Context, p palette, title string, count int) {
-	ui.Row(c).Padding(tw(1.5), tw(2), tw(0.5)).Background(p.listHeader).Children(func() {
+	ui.Row(c).Padding(tw(1), tw(2), tw(0.5)).Background(p.listHeader).Children(func() {
 		label(c, fmt.Sprintf("%s (%d)", strings.ToUpper(title), count), sizeMicro, 18, 600, p.muted).LetterSpacing(0.5)
 	})
 }

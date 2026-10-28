@@ -97,8 +97,9 @@ type app struct {
 
 	// What the system says about starting at login, read once rather than on every frame
 	// (the OS call is not free).
-	loginOn      bool
-	loginChecked bool
+	loginOn            bool
+	loginChecked       bool
+	loginNeedsApproval bool // the system has the item but needs the person to allow it
 
 	// Install actions in Settings, and what the last check of the command-line tool said.
 	serviceBusy bool
