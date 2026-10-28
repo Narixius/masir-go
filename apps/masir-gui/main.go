@@ -131,8 +131,13 @@ func (s *shell) ready() {
 		}
 	}
 	s.platformReady()
+	// A quit starts before its windows close, and the window's OnClose hides it into the
+	// tray unless this is a real quit. The flag therefore has to be set in OnBeforeQuit:
+	// setting it in OnWillQuit (which runs after the windows close) meant the close was
+	// held back and the whole quit cancelled, so Exit in the tray did nothing on Windows
+	// and Linux. macOS has no such window, which is why it worked there.
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { s.quitting = true })
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
-		s.quitting = true
 		if s.tray != nil {
 			s.tray.Destroy()
 		}
