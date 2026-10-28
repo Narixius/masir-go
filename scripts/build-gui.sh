@@ -92,11 +92,12 @@ cp "$go_mod" "$go_mod_orig"
 cp "$go_sum" "$go_sum_orig"
 (cd apps/masir-gui && go mod edit -replace github.com/egoist/mygo=../../.mygo-patched)
 
-# Every download is named after its system, then its version, then its architecture.
-# MyGo names what it builds after mygo.json (masir-desktop-<version>-<arch>.dmg,
-# masir-desktop_<version>_<arch>.deb, masir-desktop-<version>-linux-<arch>.tar.gz), so
-# each app build is renamed here: one place owns the names, and `make gui` produces the
-# files the release workflow uploads.
+# Every download is named <app>-<role>-<os>-<version>-<arch>: `portable` is the archive a
+# person unpacks and runs, `update` is the one MyGo's updater downloads, and the setup
+# downloads name their format (the .dmg, the .exe, the .deb). MyGo names what it builds
+# after mygo.json (masir-desktop-<version>-<arch>.dmg, masir-desktop_<version>_<arch>.deb,
+# masir-desktop-<version>-<platform>.tar.gz), so each app build is renamed here: one place
+# owns the names, and `make gui` produces the files the release workflow uploads.
 expected() {
 	[ -f "$1" ] || {
 		echo "build-gui: mygo built no $(basename -- "$1")" >&2
@@ -108,6 +109,8 @@ name_app() {
 	app_os=$1
 	app_arch=$2
 	app_dir="apps/masir-gui/dist/$app_os-$app_arch"
+	portable="$app_dir/masir-desktop-portable-$app_os-$version-$app_arch.tar.gz"
+
 	case "$app_os" in
 	darwin)
 		expected "$app_dir/masir-desktop-$version-$app_arch.dmg"
@@ -118,38 +121,42 @@ name_app() {
 		expected "$app_dir/masir-desktop-setup-$version-$app_arch.exe"
 		mv -f "$app_dir/masir-desktop-setup-$version-$app_arch.exe" \
 			"$app_dir/masir-desktop-setup-windows-$version-$app_arch.exe"
+		# Windows is unpacked from the .zip the release workflow packs, not from a
+		# tarball: its tarball exists only for MyGo's updater.
+		portable=""
 		;;
 	linux)
 		expected "$app_dir/masir-desktop_${version}_${app_arch}.deb"
 		mv -f "$app_dir/masir-desktop_${version}_${app_arch}.deb" \
 			"$app_dir/masir-desktop-linux-$version-$app_arch.deb"
-		expected "$app_dir/masir-desktop-$version-linux-$app_arch.tar.gz"
-		mv -f "$app_dir/masir-desktop-$version-linux-$app_arch.tar.gz" \
-			"$app_dir/masir-desktop-linux-$version-$app_arch.tar.gz"
-		# install.sh, which sits beside them, looks for the archive under MyGo's name;
-		# teach it the one it is next to now, and the one the usage text shows.
+		# install.sh, which sits beside the archives, looks for the portable one under
+		# MyGo's name; teach it the name it is next to now, and the one the usage text
+		# shows.
 		expected "$app_dir/install.sh"
-		sed -i.bak 's/\$name-\$version-\$target\.tar\.gz/masir-desktop-${target%%-*}-$version-${target##*-}.tar.gz/g' \
+		sed -i.bak 's/\$name-\$version-\$target\.tar\.gz/masir-desktop-portable-${target%%-*}-$version-${target##*-}.tar.gz/g' \
 			"$app_dir/install.sh"
-		sed -i.bak 's|\$name-\$version-<platform>\.tar\.gz|masir-desktop-<os>-<version>-<arch>.tar.gz|g' \
+		sed -i.bak 's|\$name-\$version-<platform>\.tar\.gz|masir-desktop-portable-<os>-<version>-<arch>.tar.gz|g' \
+			"$app_dir/install.sh"
+		sed -i.bak 's|download \$name-<version>-\$target\.tar\.gz|download masir-desktop-portable-<os>-<version>-<arch>.tar.gz|g' \
 			"$app_dir/install.sh"
 		rm -f "$app_dir/install.sh.bak"
 		;;
 	esac
 
-	# MyGo's update archive and manifest still use MyGo's own name. Rename the archive
-	# to the one every download uses and point the manifest at it; MyGo's updater reads
-	# the URL from the manifest, so the name is ours to choose.
+	# MyGo's update archive and manifest use MyGo's own name. Rename the archive to the
+	# one every download uses and point the manifest at it; MyGo's updater reads the URL
+	# from the manifest, so the name is ours to choose. On macOS and Linux the portable
+	# tarball is also the one the updater reads: same bytes, one download.
 	platform="$app_os-$app_arch"
 	old_archive="$app_dir/masir-desktop-$version-$platform.tar.gz"
-	new_archive="$app_dir/masir-desktop-$app_os-$version-$app_arch.tar.gz"
 	manifest="$app_dir/update-$platform.json"
+	new_archive="$portable"
+	if [ -z "$new_archive" ]; then
+		new_archive="$app_dir/masir-desktop-update-$app_os-$version-$app_arch.tar.gz"
+	fi
 	if [ -f "$manifest" ]; then
-		if [ -f "$old_archive" ]; then
-			mv -f "$old_archive" "$new_archive"
-		else
-			expected "$new_archive" # Linux: the portable tarball was renamed above
-		fi
+		expected "$old_archive"
+		mv -f "$old_archive" "$new_archive"
 		sed -i.bak "s|$(basename -- "$old_archive")|$(basename -- "$new_archive")|g" "$manifest"
 		rm -f "$manifest.bak"
 	fi

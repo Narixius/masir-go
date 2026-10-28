@@ -30,8 +30,10 @@ builds:
 archives:
   - id: masir
     ids: [masir]
-    # Every download is named <app>-<os>-<version>-<arch>; the updater asks for exactly
-    # this name (see ArchiveName in libs/masir-daemon/internal/update).
+    # Every download is named <app>-<role>-<os>-<version>-<arch>; the updater asks for
+    # exactly these names (see ArchiveName and UpdateArchiveName in
+    # libs/masir-daemon/internal/update). This one holds masir and the geo data, so a
+    # tarball is a whole install.
     name_template: "masir-cli-{{ .Os }}-{{ .Version }}-{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
@@ -40,6 +42,18 @@ archives:
     files:
       - src: build/geo/*.dat
         strip_parent: true
+  # The archive an update downloads: masir without the geo data. The job never installs
+  # the geo files beside it (the geo update is its own job), so carrying 7 MB of them in
+  # every update is a download nobody uses. A release without this archive still updates
+  # from the one above.
+  - id: masir-update
+    ids: [masir]
+    name_template: "masir-cli-update-{{ .Os }}-{{ .Version }}-{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: []
 
 checksum:
   name_template: checksums.txt

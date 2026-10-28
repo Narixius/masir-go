@@ -2,11 +2,11 @@
   "name": "Masir",
   "slug": "masir-desktop",
   "identifier": "com.masir.app",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "updates": {
     "publicKey": "F1TF2/+0zZqyhC6UZOeAm6K6IzfhOQ91x98gNya4lzg=",
     "github": "Narixius/masir-go",
-    "deltas": 0
+    "deltas": 1
   },
   "macos": {
     "infoPlist": { "LSUIElement": true }

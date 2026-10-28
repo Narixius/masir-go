@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,16 +29,52 @@ import (
 // The release workflow names the archives (.goreleaser.yaml); the updater has to ask for
 // exactly those, so a tag's downloads are found.
 func TestArchiveName(t *testing.T) {
-	for _, c := range []struct{ tag, goos, goarch, want string }{
-		{"v0.3.1", "darwin", "arm64", "masir-cli-darwin-0.3.1-arm64.tar.gz"},
-		{"v0.3.1", "darwin", "amd64", "masir-cli-darwin-0.3.1-amd64.tar.gz"},
-		{"v0.3.1", "linux", "amd64", "masir-cli-linux-0.3.1-amd64.tar.gz"},
-		{"0.4.0", "windows", "arm64", "masir-cli-windows-0.4.0-arm64.zip"},
-		{"v1.0.0-rc1", "linux", "arm64", "masir-cli-linux-1.0.0-rc1-arm64.tar.gz"},
+	for _, c := range []struct{ tag, goos, goarch, want, update string }{
+		{"v0.3.1", "darwin", "arm64", "masir-cli-darwin-0.3.1-arm64.tar.gz", "masir-cli-update-darwin-0.3.1-arm64.tar.gz"},
+		{"v0.3.1", "darwin", "amd64", "masir-cli-darwin-0.3.1-amd64.tar.gz", "masir-cli-update-darwin-0.3.1-amd64.tar.gz"},
+		{"v0.3.1", "linux", "amd64", "masir-cli-linux-0.3.1-amd64.tar.gz", "masir-cli-update-linux-0.3.1-amd64.tar.gz"},
+		{"0.4.0", "windows", "arm64", "masir-cli-windows-0.4.0-arm64.zip", "masir-cli-update-windows-0.4.0-arm64.zip"},
+		{"v1.0.0-rc1", "linux", "arm64", "masir-cli-linux-1.0.0-rc1-arm64.tar.gz", "masir-cli-update-linux-1.0.0-rc1-arm64.tar.gz"},
 	} {
 		if got := ArchiveName(c.tag, c.goos, c.goarch); got != c.want {
 			t.Errorf("ArchiveName(%q, %q, %q) = %q, want %q", c.tag, c.goos, c.goarch, got, c.want)
 		}
+		if got := UpdateArchiveName(c.tag, c.goos, c.goarch); got != c.update {
+			t.Errorf("UpdateArchiveName(%q, %q, %q) = %q, want %q", c.tag, c.goos, c.goarch, got, c.update)
+		}
+	}
+}
+
+// TestLatestConfirmsAnUnchangedRelease checks the conditional request the daemon makes
+// when a UI wants a fresher answer: the same release comes back as a 304 with no body.
+func TestLatestConfirmsAnUnchangedRelease(t *testing.T) {
+	gh := newFakeGitHub(t)
+	gh.publish(ReleaseRepo, "v0.2.0", map[string][]byte{"checksums.txt": []byte("x")})
+	rel, etag, notModified, err := LatestConditional(context.Background(), clients(), ReleaseRepo, "")
+	if err != nil || notModified || rel == nil || rel.Tag != "v0.2.0" {
+		t.Fatalf("first check: rel=%v etag=%q notModified=%v err=%v", rel, etag, notModified, err)
+	}
+	if etag == "" {
+		t.Fatal("GitHub's tag wasn't kept for the next check")
+	}
+	rel, sameETag, notModified, err := LatestConditional(context.Background(), clients(), ReleaseRepo, etag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !notModified || rel != nil {
+		t.Fatalf("an unchanged release: rel=%v notModified=%v", rel, notModified)
+	}
+	if sameETag != etag {
+		t.Fatalf("the tag changed on a 304: %q, want %q", sameETag, etag)
+	}
+	// A newer release is a whole answer again.
+	gh.publish(ReleaseRepo, "v0.2.1", map[string][]byte{"checksums.txt": []byte("x")})
+	rel, newerTag, notModified, err := LatestConditional(context.Background(), clients(), ReleaseRepo, etag)
+	if err != nil || notModified || rel == nil || rel.Tag != "v0.2.1" {
+		t.Fatalf("after a release: rel=%v notModified=%v err=%v", rel, notModified, err)
+	}
+	if newerTag == etag {
+		t.Error("a new release must bring a new tag")
 	}
 }
 
@@ -48,8 +85,26 @@ type fakeGitHub struct {
 	releases map[string]Release // repo -> latest
 	files    map[string][]byte  // name -> content
 	slow     map[string]bool
+	mu       sync.Mutex
+	hits     map[string]int // file name -> requests
 	ranges   atomic.Int32
 	fileHits atomic.Int32
+}
+
+// hit counts one request for name, and asked reports how many there were.
+func (f *fakeGitHub) hit(name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.hits == nil {
+		f.hits = map[string]int{}
+	}
+	f.hits[name]++
+}
+
+func (f *fakeGitHub) asked(name string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.hits[name]
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -61,6 +116,14 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 				http.NotFound(w, r)
 				return
 			}
+			// As GitHub does: the release's tag is its tag, and a check that sends it
+			// back is answered without a body.
+			etag := `"` + rel.Tag + `"`
+			if r.Header.Get("If-None-Match") == etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("ETag", etag)
 			json.NewEncoder(w).Encode(rel)
 			return
 		}
@@ -71,6 +134,7 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 			return
 		}
 		f.fileHits.Add(1)
+		f.hit(name)
 		if r.Header.Get("Range") != "" {
 			f.ranges.Add(1)
 		}
@@ -202,6 +266,60 @@ func TestMasirUpdateInstallsAndRestarts(t *testing.T) {
 	r.Start(task.Run)
 	if job := wait(t, r); job.State != pb.UpdateState_UPDATE_STATE_FAILED || !strings.Contains(job.Error, "development build") {
 		t.Errorf("dev build: %v %q", job.State, job.Error)
+	}
+}
+
+// An update downloads the archive that holds only masir when the release has one: the geo
+// data beside it in the full archive is never installed by this job.
+func TestMasirUpdatePrefersTheThinArchive(t *testing.T) {
+	gh := newFakeGitHub(t)
+	full := ArchiveName("v0.2.0", runtime.GOOS, runtime.GOARCH)
+	thin := UpdateArchiveName("v0.2.0", runtime.GOOS, runtime.GOARCH)
+	fullArc := archive(t, full, map[string]string{exe("masir"): "full masir", "geosite.dat": "x"})
+	thinArc := archive(t, thin, map[string]string{exe("masir"): "thin masir"})
+	gh.publish(ReleaseRepo, "v0.2.0", map[string][]byte{
+		full: fullArc, thin: thinArc,
+		"checksums.txt": []byte(fmt.Sprintf("%s  %s\n%s  %s\n", sum(fullArc), full, sum(thinArc), thin)),
+	})
+
+	bin := filepath.Join(t.TempDir(), exe("masir"))
+	os.WriteFile(bin, []byte("old masir"), 0o755)
+	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, t.TempDir())
+	r.Start(Masir{Clients: clients(), Current: "0.1.0", Binary: bin, WorkDir: r.workDir}.Run)
+	job := wait(t, r)
+	if job.State != pb.UpdateState_UPDATE_STATE_DONE || job.Error != "" {
+		t.Fatalf("job = %v (%s)", job.State, job.Error)
+	}
+	if got, _ := os.ReadFile(bin); string(got) != "thin masir" {
+		t.Fatalf("installed %q, want the thin archive's binary", got)
+	}
+	if n := gh.asked(full); n != 0 {
+		t.Errorf("the full archive was downloaded %d times; the update archive is enough", n)
+	}
+	if n := gh.asked(thin); n != 1 {
+		t.Errorf("the update archive was downloaded %d times, want 1", n)
+	}
+}
+
+// A release published before the thin archive existed still updates from its full one.
+func TestMasirUpdateFallsBackToTheFullArchive(t *testing.T) {
+	gh := newFakeGitHub(t)
+	full := ArchiveName("v0.2.0", runtime.GOOS, runtime.GOARCH)
+	fullArc := archive(t, full, map[string]string{exe("masir"): "full masir", "geosite.dat": "x"})
+	gh.publish(ReleaseRepo, "v0.2.0", map[string][]byte{
+		full:            fullArc,
+		"checksums.txt": []byte(fmt.Sprintf("%s  %s\n", sum(fullArc), full)),
+	})
+	bin := filepath.Join(t.TempDir(), exe("masir"))
+	os.WriteFile(bin, []byte("old masir"), 0o755)
+	r := NewRunner(pb.UpdateTarget_UPDATE_TARGET_MASIR, t.TempDir())
+	r.Start(Masir{Clients: clients(), Current: "0.1.0", Binary: bin, WorkDir: r.workDir}.Run)
+	job := wait(t, r)
+	if job.State != pb.UpdateState_UPDATE_STATE_DONE || job.Error != "" {
+		t.Fatalf("job = %v (%s)", job.State, job.Error)
+	}
+	if got, _ := os.ReadFile(bin); string(got) != "full masir" {
+		t.Fatalf("installed %q, want the full archive's binary", got)
 	}
 }
 

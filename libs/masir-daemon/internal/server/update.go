@@ -37,13 +37,15 @@ const (
 	geoMaxAge = 7 * 24 * time.Hour
 )
 
-// latestRelease asks GitHub for the newest release. Tests replace it.
-var latestRelease = update.Latest
+// latestRelease asks GitHub for the newest release, conditionally on the tag this daemon
+// already has. Tests replace it.
+var latestRelease = update.LatestConditional
 
 // updates holds the daemon's update jobs and what the last release check found.
 type updates struct {
 	masir, geo *update.Runner
 	release    *pb.ReleaseInfo // guarded by Server.mu
+	etag       string          // the release GitHub last served, for a conditional check
 	checkMu    sync.Mutex      // one GitHub check at a time
 }
 
@@ -271,16 +273,21 @@ func (s *Server) restartForUpdate() {
 func (s *Server) RestartRequested() bool { return s.restart.Load() }
 
 func (s *Server) CheckUpdate(ctx context.Context, req *pb.CheckUpdateRequest) (*pb.CheckUpdateResponse, error) {
-	info, err := s.checkRelease(ctx, req.GetForce())
+	info, asked, err := s.checkRelease(ctx, req.GetForce(), time.Duration(req.GetMaxAgeMs())*time.Millisecond)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
-	s.track("update_checked", map[string]any{
-		"trigger":         "user",
-		"available":       info.Available,
-		"current_version": info.CurrentVersion,
-		"latest_version":  info.LatestVersion,
-	})
+	// Only a check that GitHub answered is worth recording: an answer from the cache, or
+	// a conditional request that found nothing new, is not news. A UI asking every ten
+	// minutes would otherwise fill the events with "nothing happened".
+	if asked {
+		s.track("update_checked", map[string]any{
+			"trigger":         "user",
+			"available":       info.Available,
+			"current_version": info.CurrentVersion,
+			"latest_version":  info.LatestVersion,
+		})
+	}
 	return &pb.CheckUpdateResponse{Release: info}, nil
 }
 
@@ -305,46 +312,85 @@ func (s *Server) IgnoreUpdate(_ context.Context, req *pb.IgnoreUpdateRequest) (*
 }
 
 // checkRelease returns the release GitHub last named, or a fresh one when force is set
-// or the cache is older than checkEvery. A fresh check clears an ignored prompt.
-func (s *Server) checkRelease(ctx context.Context, force bool) (*pb.ReleaseInfo, error) {
-	if info := s.cachedRelease(force); info != nil {
-		return info, nil
+// or the cached one is older than maxAge. maxAge zero means the daily policy, and a
+// longer ask is capped at it: a UI may want a fresher answer, never a staler one. A
+// check that finds the same release costs a conditional request, and keeps a prompt the
+// person hid hidden.
+func (s *Server) checkRelease(ctx context.Context, force bool, maxAge time.Duration) (info *pb.ReleaseInfo, asked bool, err error) {
+	if cached := s.cachedRelease(force, maxAge); cached != nil {
+		return cached, false, nil
 	}
 	s.upd.checkMu.Lock()
 	defer s.upd.checkMu.Unlock()
-	if info := s.cachedRelease(force); info != nil {
-		return info, nil
-	}
-	rel, err := latestRelease(ctx, s.clients(), update.ReleaseRepo)
-	if err != nil {
-		return nil, err
-	}
-	info := &pb.ReleaseInfo{
-		CurrentVersion: Version,
-		LatestVersion:  rel.Tag,
-		Available:      update.Newer(rel.Tag, Version),
-		Url:            rel.URL,
-		PublishedAtMs:  rel.Published.UnixMilli(),
-		CheckedAtMs:    time.Now().UnixMilli(),
+	if cached := s.cachedRelease(force, maxAge); cached != nil {
+		return cached, false, nil
 	}
 	s.mu.Lock()
-	s.upd.release = info
+	etag := s.upd.etag
+	s.mu.Unlock()
+	rel, freshETag, notModified, err := latestRelease(ctx, s.clients(), update.ReleaseRepo, etag)
+	if err != nil {
+		return nil, false, err
+	}
+	now := time.Now().UnixMilli()
+	s.mu.Lock()
+	// Read again: an ignore set while the check was in flight is on the release as it
+	// is now, and the answer must keep it.
+	prev := s.upd.release
+	var next *pb.ReleaseInfo
+	switch {
+	case notModified && prev != nil:
+		// GitHub says the release hasn't changed: only when it was checked moves.
+		next = proto.Clone(prev).(*pb.ReleaseInfo)
+		next.CheckedAtMs = now
+	case notModified:
+		// Nothing was sent to compare with, so nothing can be confirmed. Ask again next
+		// time instead of claiming a release we don't have.
+		s.mu.Unlock()
+		return nil, false, errors.New("GitHub answered a check without a release")
+	default:
+		next = &pb.ReleaseInfo{
+			CurrentVersion: Version,
+			LatestVersion:  rel.Tag,
+			Available:      update.Newer(rel.Tag, Version),
+			Url:            rel.URL,
+			PublishedAtMs:  rel.Published.UnixMilli(),
+			CheckedAtMs:    now,
+		}
+		// A hidden prompt is for one version. A newer release is news again; the same
+		// one stays hidden, so a UI checking often never re-offers an ignored update.
+		if prev != nil && sameRelease(prev.LatestVersion, rel.Tag) {
+			next.IgnoredVersion = prev.IgnoredVersion
+		}
+	}
+	s.upd.etag = freshETag
+	s.upd.release = next
+	out := proto.Clone(next).(*pb.ReleaseInfo)
 	s.mu.Unlock()
 	s.changes.notify()
-	return proto.Clone(info).(*pb.ReleaseInfo), nil
+	return out, !notModified, nil
 }
 
-// cachedRelease is the last check when it is still fresh, and force is not set.
-func (s *Server) cachedRelease(force bool) *pb.ReleaseInfo {
+// sameRelease reports whether two release tags name the same version, with or without a
+// leading v.
+func sameRelease(a, b string) bool {
+	return strings.TrimPrefix(strings.TrimSpace(a), "v") == strings.TrimPrefix(strings.TrimSpace(b), "v")
+}
+
+// cachedRelease is the last check when it is younger than maxAge, and force is not set.
+func (s *Server) cachedRelease(force bool, maxAge time.Duration) *pb.ReleaseInfo {
 	if force {
 		return nil
+	}
+	if maxAge <= 0 || maxAge > checkEvery {
+		maxAge = checkEvery
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.upd == nil || s.upd.release == nil {
 		return nil
 	}
-	if time.Since(time.UnixMilli(s.upd.release.CheckedAtMs)) >= checkEvery {
+	if time.Since(time.UnixMilli(s.upd.release.CheckedAtMs)) >= maxAge {
 		return nil
 	}
 	return proto.Clone(s.upd.release).(*pb.ReleaseInfo)
@@ -463,7 +509,7 @@ func (s *Server) maintainUpdates(ctx context.Context) {
 		if stale && (lastAttempt.IsZero() || time.Since(lastAttempt) >= checkEvery) {
 			lastAttempt = time.Now()
 			cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			if info, err := s.checkRelease(cctx, true); err != nil {
+			if info, _, err := s.checkRelease(cctx, true, 0); err != nil {
 				s.Log("warn", "update check: "+err.Error())
 			} else if info.Available {
 				s.track("update_checked", map[string]any{

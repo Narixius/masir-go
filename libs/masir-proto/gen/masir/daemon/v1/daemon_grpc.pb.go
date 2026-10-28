@@ -136,10 +136,12 @@ type DaemonServiceClient interface {
 	GetActiveConfig(ctx context.Context, in *GetActiveConfigRequest, opts ...grpc.CallOption) (*GetActiveConfigResponse, error)
 	// Updates run as jobs in the daemon, one per target, so any UI can show progress
 	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading,
-	// from a cache one day old at most unless forced.
+	// from a cache one day old at most: a caller may say how old it will accept, and a
+	// check that finds nothing new costs a conditional request rather than a download.
 	CheckUpdate(ctx context.Context, in *CheckUpdateRequest, opts ...grpc.CallOption) (*CheckUpdateResponse, error)
-	// IgnoreUpdate hides this update prompt in the GUI until the next release check or
-	// until the daemon restarts. It does not change whether an update is available.
+	// IgnoreUpdate hides this update prompt in the GUI until a newer release is
+	// published or the daemon restarts. It does not change whether an update is
+	// available, and a check that finds the same release keeps the prompt hidden.
 	IgnoreUpdate(ctx context.Context, in *IgnoreUpdateRequest, opts ...grpc.CallOption) (*IgnoreUpdateResponse, error)
 	StartUpdate(ctx context.Context, in *StartUpdateRequest, opts ...grpc.CallOption) (*StartUpdateResponse, error)
 	PauseUpdate(ctx context.Context, in *PauseUpdateRequest, opts ...grpc.CallOption) (*PauseUpdateResponse, error)
@@ -761,10 +763,12 @@ type DaemonServiceServer interface {
 	GetActiveConfig(context.Context, *GetActiveConfigRequest) (*GetActiveConfigResponse, error)
 	// Updates run as jobs in the daemon, one per target, so any UI can show progress
 	// and offer pause, resume and stop. CheckUpdate asks GitHub without downloading,
-	// from a cache one day old at most unless forced.
+	// from a cache one day old at most: a caller may say how old it will accept, and a
+	// check that finds nothing new costs a conditional request rather than a download.
 	CheckUpdate(context.Context, *CheckUpdateRequest) (*CheckUpdateResponse, error)
-	// IgnoreUpdate hides this update prompt in the GUI until the next release check or
-	// until the daemon restarts. It does not change whether an update is available.
+	// IgnoreUpdate hides this update prompt in the GUI until a newer release is
+	// published or the daemon restarts. It does not change whether an update is
+	// available, and a check that finds the same release keeps the prompt hidden.
 	IgnoreUpdate(context.Context, *IgnoreUpdateRequest) (*IgnoreUpdateResponse, error)
 	StartUpdate(context.Context, *StartUpdateRequest) (*StartUpdateResponse, error)
 	PauseUpdate(context.Context, *PauseUpdateRequest) (*PauseUpdateResponse, error)

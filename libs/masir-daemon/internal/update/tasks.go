@@ -77,7 +77,15 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	}
 
 	name := ArchiveName(tag, runtime.GOOS, runtime.GOARCH)
-	archive, ok := rel.Asset(name)
+	// The update archive holds only masir. The full one also carries the geo data, which
+	// a fresh install wants and an update never unpacks: prefer the smaller download, and
+	// fall back to the full archive so an older release still updates.
+	assetName := UpdateArchiveName(tag, runtime.GOOS, runtime.GOARCH)
+	archive, ok := rel.Asset(assetName)
+	if !ok {
+		assetName = name
+		archive, ok = rel.Asset(name)
+	}
 	if !ok {
 		return fmt.Errorf("release %s has no build for %s/%s (%s)", tag, runtime.GOOS, runtime.GOARCH, name)
 	}
@@ -90,9 +98,9 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	if err := prepare(m.WorkDir, tag); err != nil {
 		return err
 	}
-	path := filepath.Join(dir, name)
+	path := filepath.Join(dir, assetName)
 	r.State(pb.UpdateState_UPDATE_STATE_DOWNLOADING)
-	r.File(name)
+	r.File(assetName)
 	r.Bytes(fileSize(path), archive.Size)
 	list, err := fetchSmall(ctx, m.Clients, sums.URL)
 	if err != nil {
@@ -101,7 +109,7 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	if err := checkSignature(ctx, m.Clients, rel, list); err != nil {
 		return err
 	}
-	want, err := checksum(list, name)
+	want, err := checksum(list, assetName)
 	if err != nil {
 		return err
 	}
@@ -158,13 +166,31 @@ func (m Masir) Run(ctx context.Context, r *Reporter) error {
 
 // ArchiveName is a release archive's file name, e.g. masir-cli-darwin-0.2.0-arm64.tar.gz:
 // the system, then the version, then the architecture, as every download is named (see
-// .goreleaser.yaml, and the desktop app in the release workflow).
+// .goreleaser.yaml, and the desktop app in the release workflow). It holds masir and the
+// geo data, so a tarball is a whole install.
 func ArchiveName(tag, goos, goarch string) string {
+	return archiveName("", tag, goos, goarch)
+}
+
+// UpdateArchiveName is the same release's update archive, e.g.
+// masir-cli-update-darwin-0.2.0-arm64.tar.gz: only masir, without the geo data the
+// update never installs. A release that predates it doesn't have one; the updater then
+// falls back to ArchiveName.
+func UpdateArchiveName(tag, goos, goarch string) string {
+	return archiveName("update", tag, goos, goarch)
+}
+
+func archiveName(role, tag, goos, goarch string) string {
 	ext := ".tar.gz"
 	if goos == "windows" {
 		ext = ".zip"
 	}
-	return fmt.Sprintf("masir-cli-%s-%s-%s%s", goos, strings.TrimPrefix(tag, "v"), goarch, ext)
+	parts := []string{"masir", "cli"}
+	if role != "" {
+		parts = append(parts, role)
+	}
+	parts = append(parts, goos, strings.TrimPrefix(tag, "v"), goarch)
+	return strings.Join(parts, "-") + ext
 }
 
 func exe(name string) string {

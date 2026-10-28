@@ -51,34 +51,62 @@ func (r *Release) Asset(name string) (Asset, bool) {
 
 // Latest is repo's newest published release.
 func Latest(ctx context.Context, c Clients, repo string) (*Release, error) {
-	var rel Release
-	err := c.do(ctx, func(hc *http.Client) error {
+	rel, _, _, err := LatestConditional(ctx, c, repo, "")
+	return rel, err
+}
+
+// LatestConditional is Latest, telling GitHub which release it already has (etag) so an
+// unchanged release comes back as a 304 with no body. It still counts against the
+// unauthenticated rate limit, so callers keep a cadence rather than polling.
+// notModified reports that the caller's copy is still current, and rel is nil then.
+func LatestConditional(ctx context.Context, c Clients, repo, etag string) (rel *Release, newETag string, notModified bool, err error) {
+	var body []byte
+	err = c.do(ctx, func(hc *http.Client) error {
+		notModified, newETag, body = false, "", nil
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/repos/"+repo+"/releases/latest", nil)
 		if err != nil {
 			return err
 		}
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("User-Agent", c.userAgent())
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
 		resp, err := hc.Do(req)
 		if err != nil {
 			return err
 		}
 		defer resp.Body.Close()
 		switch {
+		case resp.StatusCode == http.StatusNotModified && etag != "":
+			notModified, newETag = true, etag
+			return nil
+		case resp.StatusCode == http.StatusNotModified:
+			// Nothing was sent to compare with: comparing again would answer the same.
+			return errors.New("GitHub answered 304 to a check that sent no tag")
 		case resp.StatusCode == http.StatusNotFound:
 			return fmt.Errorf("%s has no releases yet", repo)
 		case resp.StatusCode != http.StatusOK:
 			return fmt.Errorf("GitHub answered %s", resp.Status)
 		}
-		return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&rel)
+		newETag = resp.Header.Get("ETag")
+		body, err = io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		return err
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", false, err
 	}
-	if rel.Tag == "" {
-		return nil, errors.New("GitHub returned a release without a tag")
+	if notModified {
+		return nil, newETag, true, nil
 	}
-	return &rel, nil
+	var r Release
+	if err := json.Unmarshal(body, &r); err != nil {
+		return nil, "", false, err
+	}
+	if r.Tag == "" {
+		return nil, "", false, errors.New("GitHub returned a release without a tag")
+	}
+	return &r, newETag, false, nil
 }
 
 // Newer reports whether release tag latest is newer than version current. Development

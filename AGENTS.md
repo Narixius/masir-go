@@ -137,6 +137,16 @@ subscriptions while smoke-testing unless that is the change under test.
   existing `build/geo` file against the source sum and downloads to a temporary file; a
   killed download must never leave a truncated `.dat` that later builds reuse. Use
   `MASIR_GEO_SKIP=1` only for an offline build with known-good files.
+- **Updates are checked with the person's attention, not on a timer.** Opening the panel
+  (macOS) or focusing the window asks the daemon for a release at most every 10 minutes;
+  the daemon answers from its daily cache when it can, and a check that finds nothing new
+  is a conditional request (a 304), not a download. An ignored prompt survives checks and
+  clears only when a newer release is published or the daemon restarts. Do not add a
+  polling timer.
+- **An update downloads the smallest asset that satisfies it.** The thin
+  `masir-cli-update-…` archive first, the full one as the fallback; the app's delta when
+  it applies, its archive when it doesn't. Every asset is in a signed list — security
+  never depends on which one was fetched. See `docs/updates.md`.
 - **Desktop updates are signed.** The public key is in `apps/masir-gui/mygo.json`; the
   matching private key is `MYGO_UPDATER_PRIVATE_KEY`, kept in `.env` or the GitHub secret.
   Generate it with `cd apps/masir-gui && go tool mygo keygen`; never commit the private

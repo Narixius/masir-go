@@ -127,8 +127,13 @@ jobs:
             dir="apps/masir-gui/dist/darwin-$arch"
             gh release upload "$GITHUB_REF_NAME" \
               "$dir/masir-desktop-darwin-$version-$arch.dmg" \
-              "$dir/masir-desktop-darwin-$version-$arch.tar.gz" \
+              "$dir/masir-desktop-portable-darwin-$version-$arch.tar.gz" \
               "$dir/update-darwin-$arch.json" --clobber
+            # Delta updates, when the build had a published version to diff against.
+            for delta in "$dir"/*.delta; do
+              [ -e "$delta" ] || continue
+              gh release upload "$GITHUB_REF_NAME" "$delta" --clobber
+            done
           done
       - name: Upload the Windows app
         if: matrix.name == 'windows'
@@ -137,11 +142,24 @@ jobs:
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
           foreach ($arch in @("amd64", "arm64")) {
             $src = "apps/masir-gui/dist/windows-$arch"
-            $out = "masir-desktop-windows-$version-$arch.zip"
-            Compress-Archive -Path "$src/*" -DestinationPath $out
+            # The portable zip is the app as a person should get it: not the update
+            # tarball, delta or manifest that sit beside it for the updater.
+            $portable = Join-Path $env:RUNNER_TEMP "portable-windows-$arch"
+            Remove-Item $portable -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Path $portable | Out-Null
+            Copy-Item "$src/*" $portable -Recurse -Force
+            foreach ($junk in @("*.tar.gz", "*.delta", "update-*.json")) {
+              Remove-Item (Join-Path $portable $junk) -Force -ErrorAction SilentlyContinue
+            }
+            $out = "masir-desktop-portable-windows-$version-$arch.zip"
+            Compress-Archive -Path "$portable/*" -DestinationPath $out
             gh release upload $env:GITHUB_REF_NAME $out `
-              "$src/masir-desktop-windows-$version-$arch.tar.gz" `
+              "$src/masir-desktop-update-windows-$version-$arch.tar.gz" `
               "$src/update-windows-$arch.json" --clobber
+            # Delta updates, when the build had a published version to diff against.
+            Get-ChildItem "$src/*.delta" -ErrorAction SilentlyContinue | ForEach-Object {
+              gh release upload $env:GITHUB_REF_NAME $_.FullName --clobber
+            }
           }
       - name: Upload the Linux app
         if: matrix.name == 'linux'
@@ -152,8 +170,13 @@ jobs:
             dir="apps/masir-gui/dist/linux-$arch"
             gh release upload "$GITHUB_REF_NAME" \
               "$dir/masir-desktop-linux-$version-$arch.deb" \
-              "$dir/masir-desktop-linux-$version-$arch.tar.gz" \
+              "$dir/masir-desktop-portable-linux-$version-$arch.tar.gz" \
               "$dir/update-linux-$arch.json" --clobber
+            # Delta updates, when the build had a published version to diff against.
+            for delta in "$dir"/*.delta; do
+              [ -e "$delta" ] || continue
+              gh release upload "$GITHUB_REF_NAME" "$delta" --clobber
+            done
           done
   desktop-checksums:
     # The release job signs the command-line archives; the desktop assets are uploaded
@@ -180,6 +203,9 @@ jobs:
           umask 077
           printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/minisign.key"
           cd desktop
+          # Every desktop download: the archives, the manifests and the deltas (which are
+          # named masir-desktop-… too). The app's own key signs the manifest, and this
+          # list lets anyone verify what they downloaded.
           sha256sum masir-desktop-* update-* | sort -k2 > checksums-desktop.txt
           minisign -S -s "$RUNNER_TEMP/minisign.key" -m checksums-desktop.txt -x checksums-desktop.txt.minisig
           rm -f "$RUNNER_TEMP/minisign.key"

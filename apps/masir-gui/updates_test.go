@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -331,5 +333,165 @@ func TestABundledDaemonPathIsNotOfferedADaemonUpdate(t *testing.T) {
 	}
 	if !a.appUpdateCoversDaemon() {
 		t.Fatal("the app update should carry a bundled daemon")
+	}
+}
+
+// waitCalls waits for n calls like s: checks run off the main thread.
+func waitCalls(t *testing.T, f *fakeDaemon, s string, n int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if f.count(s) >= n {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("wanted %d %q calls, have %d", n, s, f.count(s))
+}
+
+// Opening the panel is the moment a new release can be seen, so it asks for an answer
+// newer than ten minutes, and never more often than that.
+func TestOpeningThePanelAsksForAReleaseEveryTenMinutes(t *testing.T) {
+	f := ukServers()
+	f.release = releaseInfo("0.1.0", "v0.1.0")
+	a := newTestApp(f)
+	if got := f.ageAsked(); got != updateCheckEvery {
+		t.Fatalf("the status check asked for %v, want the daily one", got)
+	}
+	// The release is a day old: the next open must ask again.
+	a.upd.rel.CheckedAtMs = time.Now().Add(-11 * time.Minute).UnixMilli()
+	a.checkForUpdateOnForeground()
+	waitCalls(t, f, "check update", 2)
+	if got := f.ageAsked(); got != updateForegroundEvery {
+		t.Fatalf("an open asked for %v, want %v", got, updateForegroundEvery)
+	}
+	// The same open twice, and a second one a moment later: nothing new is asked.
+	for _, age := range []time.Duration{0, 5 * time.Minute} {
+		a.upd.lastForeground = time.Now().Add(-age)
+		a.upd.rel.CheckedAtMs = time.Now().Add(-11 * time.Minute).UnixMilli()
+		a.checkForUpdateOnForeground()
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := f.count("check update"); n != 2 {
+		t.Fatalf("opens inside ten minutes brought the checks to %d, want 2", n)
+	}
+}
+
+// The app feed answers for one release: a UI checking every few minutes must not ask it
+// again until that release changes, or six hours pass.
+func TestTheAppFeedIsAskedOncePerRelease(t *testing.T) {
+	f := ukServers()
+	f.release = releaseInfo("0.1.0", "v0.1.0")
+	enabled, check := appUpdatesEnabled, checkAppUpdate
+	t.Cleanup(func() { appUpdatesEnabled, checkAppUpdate = enabled, check })
+	appUpdatesEnabled = func() bool { return true }
+	asked := 0
+	var mu sync.Mutex
+	checkAppUpdate = func(context.Context) (*mygo.Update, error) {
+		mu.Lock()
+		asked++
+		mu.Unlock()
+		return nil, nil
+	}
+	a := newTestApp(f)
+	waitFeed := func(n int) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			mu.Lock()
+			got := asked
+			mu.Unlock()
+			if got >= n {
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		t.Fatalf("wanted %d app feed checks, have %d", n, asked)
+	}
+	waitFeed(1)
+	// A release the feed has answered for: a new foreground check doesn't ask again.
+	a.upd.rel.CheckedAtMs = time.Now().Add(-11 * time.Minute).UnixMilli()
+	a.upd.lastForeground = time.Time{}
+	a.checkForUpdateOnForeground()
+	a.upd.lastForeground = time.Time{}
+	a.checkForUpdateOnForeground()
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	if asked != 1 {
+		mu.Unlock()
+		t.Fatalf("the feed was asked %d times for one release", asked)
+	}
+	mu.Unlock()
+	// Six hours on, it is asked again: the app may be released apart from the daemon.
+	a.upd.appCheckedAt = time.Now().Add(-updateFeedEvery - time.Minute)
+	a.upd.appAttempt = time.Time{}
+	a.upd.lastForeground = time.Time{}
+	a.checkForUpdateOnForeground()
+	waitFeed(2)
+}
+
+// A daemon that isn't running can't be updated, but the app carries one: the app feed is
+// still asked, so a broken daemon doesn't hide the app that fixes it.
+func TestTheAppFeedIsAskedWithoutADaemon(t *testing.T) {
+	f := ukServers()
+	f.release, f.releaseErr = nil, errors.New("no daemon")
+	enabled, check := appUpdatesEnabled, checkAppUpdate
+	t.Cleanup(func() { appUpdatesEnabled, checkAppUpdate = enabled, check })
+	appUpdatesEnabled = func() bool { return true }
+	asked := 0
+	var mu sync.Mutex
+	checkAppUpdate = func(context.Context) (*mygo.Update, error) {
+		mu.Lock()
+		asked++
+		mu.Unlock()
+		return nil, nil
+	}
+	a := newTestApp(f)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		got := asked
+		mu.Unlock()
+		if got > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	mu.Lock()
+	first := asked
+	mu.Unlock()
+	if first == 0 {
+		t.Fatal("no release and no app feed check: a stopped daemon hides the app update")
+	}
+	// And not again on the next open, since the feed answered moments ago.
+	a.upd.lastForeground = time.Time{}
+	a.upd.lastAttempt = time.Time{}
+	a.checkForUpdateOnForeground()
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if asked > 1 {
+		t.Fatalf("the feed was asked %d times inside six hours", asked)
+	}
+}
+
+// A hidden prompt stays hidden while the release doesn't change, however often the GUI
+// asks.
+func TestAnIgnoredUpdateStaysHiddenAcrossChecks(t *testing.T) {
+	f := ukServers()
+	rel := releaseInfo("0.1.0", "v0.2.0")
+	rel.IgnoredVersion = "v0.2.0"
+	f.release = rel
+	a := newTestApp(f)
+	if a.upd.phase == updateAvailable {
+		t.Fatal("an ignored update was offered")
+	}
+	a.upd.rel.CheckedAtMs = time.Now().Add(-11 * time.Minute).UnixMilli()
+	a.checkForUpdateOnForeground()
+	time.Sleep(20 * time.Millisecond)
+	if !a.ignored("v0.2.0") || a.upd.phase == updateAvailable {
+		t.Fatalf("a check brought an ignored update back: phase=%v", a.upd.phase)
 	}
 }

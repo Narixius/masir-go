@@ -14,6 +14,7 @@ import (
 func (s *shell) show() {
 	if s.open {
 		s.win.Focus()
+		s.a.checkForUpdateOnForeground()
 		return
 	}
 	height := int(math.Round(float64(s.a.heightForOpen())))
@@ -35,6 +36,9 @@ func (s *shell) show() {
 		s.win, s.open, s.sizeQueued = nil, false, false
 		s.stop()
 	})
+	// A panel is opened to look at masir, so it is also the moment to ask whether a new
+	// release is out. The check never blocks the open frame.
+	s.a.checkForUpdateOnForeground()
 }
 
 func (s *shell) hide() {

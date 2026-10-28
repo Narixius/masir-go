@@ -36,9 +36,27 @@ make gui GUI_OS=windows GUI_ARCHES=arm64   # one build
 `GUI_OS` is `darwin`, `linux` and/or `windows`; `GUI_ARCHES` is `amd64` and/or `arm64`.
 Space or comma separated; the default is all six builds. Each goes to
 `apps/masir-gui/dist/<os>-<arch>`, with the `masir` executable and the geo data in the
-`bin` folder of the resources it ships. The download itself is named
-`masir-desktop-<os>-<version>-<arch>.<ext>` (`.dmg`, `.deb`, `.tar.gz`, and the `.zip` the
-release workflow packs on Windows), like the `masir-cli-<os>-<version>-<arch>` archives.
+`bin` folder of the resources it ships.
+
+Every download is named `<app>-<role>-<os>-<version>-<arch>`:
+
+- `masir-desktop-<os>-<version>-<arch>.dmg` (macOS, drag to Applications),
+  `masir-desktop-setup-windows-<version>-<arch>.exe` and
+  `masir-desktop-<os>-<version>-<arch>.deb` are the installers;
+- `masir-desktop-portable-<os>-<version>-<arch>.<ext>` is the archive a person unpacks and
+  runs: `.tar.gz` on macOS and Linux, `.zip` on Windows (the release workflow packs it);
+- `masir-desktop-update-windows-<version>-<arch>.tar.gz` is the Windows archive MyGo's
+  updater reads. On macOS and Linux the portable tarball is that archive too: the same
+  bytes serve both, so nobody downloads the app twice;
+- `masir-cli-<os>-<version>-<arch>.tar.gz` (masir and the geo data, a whole install) and
+  `masir-cli-update-<os>-<version>-<arch>.tar.gz` (masir only, what `masir update` asks
+  for).
+
+`update-<os>-<arch>.json` is the signed manifest the app reads, and it points at the
+archive above, so the names are ours to choose. `deltas: 1` in `mygo.json` makes the build
+publish a `masir-desktop-<from>-to-<version>-<os>-<arch>.delta` from the previous release,
+which is what an update downloads when it applies; a delta that doesn't apply falls back to
+the whole archive.
 
 The build applies the patches in `patches/` to MyGo for its duration. Windows stretched a
 frame drawn for one client height into a window that has changed height, which made the
@@ -66,7 +84,7 @@ without a Developer ID. `AssociatedBundleIdentifiers` stays in the plist for a s
 build. Updates re-apply the icon to the new binary. `resources/AppIcon.rsrc` and
 `resources/FinderInfo.bin` are generated from `AppIcon.icns` with `sips -i`, `DeRez`,
 `Rez` and `SetFile`; regenerate them if the icon changes. The security of an update does
-not come from that signature: the app archive is verified with
+not come from that signature: the app archive (or its delta) is verified with
 the MyGo ed25519 key, and the command line/daemon archives with the release minisign key
 (`MASIR_UPDATE_PUBKEY`, signed `checksums.txt` and `checksums-desktop.txt`). A build
 without a key refuses updates instead of installing an unverified one;
@@ -80,6 +98,12 @@ release. The previous download stays verifiable with:
 minisign -V -P <MASIR_UPDATE_PUBKEY> -m checksums-desktop.txt -x checksums-desktop.txt.minisig
 shasum -a 256 -c checksums-desktop.txt
 ```
+
+`docs/updates.md` has the whole flow: what the app asks and when, what each job installs,
+and which combinations of app and daemon versions work together.
+
+`docs/updates.md` has the whole flow: what the app checks and when, what each job
+installs, and which combinations of app and daemon versions work together.
 
 The macOS build is `dist/darwin-<arch>/Masir.app` (and a `.dmg`); drag it to Applications,
 or:

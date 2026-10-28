@@ -15,12 +15,22 @@ import (
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
-// The GUI checks for a new release at most as often as the daemon does, and an ignored
-// prompt comes back when a fresh check runs (or when the daemon restarts).
+// The GUI asks the daemon for a release when the person opens the panel or focuses the
+// window, at most every updateForegroundEvery: a daily cache would leave a security
+// release unnoticed for a day. It asks the signed app feed when that release is one the
+// feed hasn't answered for, and every updateFeedEvery regardless, since the app is
+// released from the same tag but may one day not be.
 const (
+	// updateCheckEvery is how old the daemon's release check may be before a status
+	// makes the GUI ask for a newer one.
 	updateCheckEvery = 24 * time.Hour
+	// updateForegroundEvery is what opening the panel, or focusing the window, asks for.
+	updateForegroundEvery = 10 * time.Minute
+	// updateFeedEvery is the fallback cadence for the signed desktop app feed.
+	updateFeedEvery = 6 * time.Hour
 	// updateRetryWait is how soon a failed check is tried again. A lost network at launch
-	// must not hide a security update for a day.
+	// must not hide a security update for a day, and a failing GitHub must not be asked
+	// on every open.
 	updateRetryWait = 15 * time.Minute
 )
 
@@ -51,13 +61,17 @@ type updateState struct {
 	job      *pb.UpdateJob
 	err      string
 	checking bool
-	// appChecked says the signed app update was asked for in this check cycle;
-	// appAttempt is when, so a failed check is retried later rather than on every status.
-	appChecked bool
-	appAttempt time.Time
-	// lastAttempt keeps a failed release check from being repeated on every status.
-	lastAttempt time.Time
-	lastStart   int64
+	// appCheckedVersion is the release the signed app feed last answered for,
+	// appCheckedAt is when it answered, and appAttempt is when it was last asked, so a
+	// failed check is retried later rather than on every status.
+	appCheckedVersion string
+	appCheckedAt      time.Time
+	appAttempt        time.Time
+	// lastAttempt keeps a failed release check from being repeated on every status, and
+	// lastForeground is the last check an open panel asked for.
+	lastAttempt    time.Time
+	lastForeground time.Time
+	lastStart      int64
 	// download progress for the app update; the daemon job has its own bytes.
 	progress, total int64
 	appPaused       bool
@@ -107,7 +121,8 @@ func (a *app) observeUpdates(st *pb.Status) {
 		// A new daemon: its ignored version is gone, and its release cache with it.
 		a.upd.rel = nil
 		a.upd.app = nil
-		a.upd.appChecked = false
+		a.upd.appCheckedVersion = ""
+		a.upd.appCheckedAt = time.Time{}
 		a.upd.lastAttempt = time.Time{}
 		a.upd.attached = false
 		if a.upd.phase == updateAvailable || a.upd.phase == updateFailed {
@@ -119,9 +134,10 @@ func (a *app) observeUpdates(st *pb.Status) {
 	}
 	if rel := st.GetLatestRelease(); rel != nil {
 		a.applyRelease(rel)
-	} else if !a.busyUpdate() {
-		a.upd.rel = nil
 	}
+	// A status without a release (a daemon that restarted, or one that hasn't checked
+	// yet) is not news that the release is gone: it keeps the answer the last check
+	// brought, and a daemon restart clears it above.
 	a.noteVersionGap(st)
 	a.maybeCheckUpdates()
 	if !a.upd.attached {
@@ -134,13 +150,7 @@ func (a *app) observeUpdates(st *pb.Status) {
 
 // applyRelease takes a release check and updates what the control offers.
 func (a *app) applyRelease(rel *pb.ReleaseInfo) {
-	old := a.upd.rel
 	a.upd.rel = rel
-	if old == nil || old.GetCheckedAtMs() != rel.GetCheckedAtMs() {
-		// A fresh daemon check starts a new check cycle for the signed app update too.
-		a.upd.appChecked = false
-		a.upd.appAttempt = time.Time{}
-	}
 	if a.upd.phase == updateAvailable && !a.hasUpdate() {
 		a.upd.phase = updateIdle
 	}
@@ -189,43 +199,91 @@ func (a *app) noteVersionGap(st *pb.Status) {
 	})
 }
 
-// maybeCheckUpdates asks the daemon for a release when its cached one is missing or old,
-// then asks the signed app feed once in that check cycle. It never polls.
+// maybeCheckUpdates is the status-driven check: the daemon's daily cache is what it
+// trusts, so a status only asks when that cache is a day old.
 func (a *app) maybeCheckUpdates() {
-	if a.busyUpdate() || a.upd.checking {
+	a.refreshUpdateCheck(updateCheckEvery)
+}
+
+// checkForUpdateOnForeground is what opening the panel, or focusing the window, asks for:
+// a release reflected while the person is looking, at most every updateForegroundEvery.
+// It is cheap when nothing changed: the daemon answers a conditional check with a 304
+// that carries no body.
+func (a *app) checkForUpdateOnForeground() {
+	if !a.upd.lastForeground.IsZero() && time.Since(a.upd.lastForeground) < updateForegroundEvery {
+		return
+	}
+	a.upd.lastForeground = time.Now()
+	a.refreshUpdateCheck(updateForegroundEvery)
+}
+
+// refreshUpdateCheck asks the daemon for a release younger than maxAge, then the signed
+// app feed for a release it hasn't answered for. Neither call polls.
+func (a *app) refreshUpdateCheck(maxAge time.Duration) {
+	if a.busyUpdate() || a.upd.checking || a.upd.restarting {
 		return
 	}
 	rel := a.upd.rel
-	if rel == nil || time.Since(time.UnixMilli(rel.GetCheckedAtMs())) >= updateCheckEvery {
-		if !a.upd.lastAttempt.IsZero() && time.Since(a.upd.lastAttempt) < updateRetryWait {
-			return
+	if rel == nil || time.Since(time.UnixMilli(rel.GetCheckedAtMs())) >= maxAge {
+		if a.upd.lastAttempt.IsZero() || time.Since(a.upd.lastAttempt) >= updateRetryWait {
+			a.upd.lastAttempt = time.Now()
+			a.checkDaemonRelease(maxAge)
+			return // its answer asks the app feed, with the release it brought
 		}
-		a.upd.lastAttempt = time.Now()
-		a.checkDaemonRelease()
-		return
+		// A recent attempt failed, or a daemon too old to accept max age keeps answering
+		// from its own cache. The feed is still worth asking: it is the app's own.
 	}
-	if a.ignored(rel.GetLatestVersion()) {
-		return
-	}
-	if !a.upd.appChecked {
-		if !a.upd.appAttempt.IsZero() && time.Since(a.upd.appAttempt) < updateRetryWait {
-			return
-		}
-		a.checkAppRelease()
-	}
+	a.checkAppFeed()
 }
 
-// checkDaemonRelease asks the daemon for the latest release. The daemon caches it for
-// one day, so this is cheap when another UI already checked.
-func (a *app) checkDaemonRelease() {
+// appFeedDue reports whether the signed app feed should be asked: a release version it
+// hasn't answered for, updateFeedEvery since it last answered, or a check that never
+// succeeded. With no daemon release at all the feed is still asked on its own schedule,
+// because the app carries a daemon and can fix one that won't start.
+func (a *app) appFeedDue() bool {
+	rel := a.upd.rel
+	if rel != nil && a.ignored(rel.GetLatestVersion()) {
+		return false
+	}
+	if !a.appFeedAnswered() {
+		return true
+	}
+	return time.Since(a.upd.appCheckedAt) >= updateFeedEvery
+}
+
+// appFeedAnswered reports whether the signed app feed has answered for the release the
+// daemon last reported.
+func (a *app) appFeedAnswered() bool {
+	rel := a.upd.rel
+	return rel != nil && !a.upd.appCheckedAt.IsZero() && a.upd.appCheckedVersion == rel.GetLatestVersion()
+}
+
+// checkAppFeed asks the app feed when it is due, and not again until a failed check may
+// be retried.
+func (a *app) checkAppFeed() {
+	if !a.appFeedDue() {
+		return
+	}
+	if !a.upd.appAttempt.IsZero() && time.Since(a.upd.appAttempt) < updateRetryWait {
+		return
+	}
+	a.checkAppRelease()
+}
+
+// checkDaemonRelease asks the daemon for the latest release, saying how old an answer it
+// may give. A daemon that predates the hint ignores it and answers from its own cache.
+func (a *app) checkDaemonRelease(maxAge time.Duration) {
 	a.upd.checking = true
 	a.async(func() {
 		ctx, cancel := rpc()
-		res, err := a.d.CheckUpdate(ctx, &pb.CheckUpdateRequest{})
+		res, err := a.d.CheckUpdate(ctx, &pb.CheckUpdateRequest{MaxAgeMs: maxAge.Milliseconds()})
 		cancel()
 		a.post(func() {
 			a.upd.checking = false
 			if err == nil && res.GetRelease() != nil {
+				// The attempt worked, so a later open may ask again: the retry wait is
+				// for failures, and an open should not inherit the launch check's.
+				a.upd.lastAttempt = time.Time{}
 				a.applyRelease(res.GetRelease())
 			}
 			a.maybeCheckUpdates()
@@ -235,9 +293,13 @@ func (a *app) checkDaemonRelease() {
 
 // checkAppRelease asks MyGo for a signed update of the desktop app itself.
 func (a *app) checkAppRelease() {
-	a.upd.appChecked = true
+	key := ""
+	if a.upd.rel != nil {
+		key = a.upd.rel.GetLatestVersion()
+	}
 	a.upd.appAttempt = time.Now()
 	if !appUpdatesEnabled() {
+		a.upd.appCheckedVersion, a.upd.appCheckedAt = key, time.Now()
 		if a.upd.wantApp {
 			a.upd.wantApp = false
 			a.upd.phase = updateIdle
@@ -251,10 +313,9 @@ func (a *app) checkAppRelease() {
 		a.post(func() {
 			if err == nil {
 				a.upd.app = u
-			} else {
-				// Try again after updateRetryWait instead of hiding the update until
-				// the next daily release check.
-				a.upd.appChecked = false
+				// Keyed by the release the answer belongs to, so a release that appeared
+				// while this was in flight asks the feed again rather than trusting it.
+				a.upd.appCheckedVersion, a.upd.appCheckedAt = key, time.Now()
 			}
 			if a.upd.wantApp {
 				a.upd.wantApp = false
@@ -332,9 +393,9 @@ func (a *app) hasUpdate() bool {
 	if a.daemonUpdateAvailable() || a.appUpdateAvailable() {
 		return true
 	}
-	// A bundled daemon is updated by the app. Until the app feed has answered, its
-	// release is still worth showing; once it says the app is current, it isn't.
-	return a.appUpdateCoversDaemon() && a.daemonReleaseAvailable() && !a.upd.appChecked
+	// A bundled daemon is updated by the app. Until the app feed has answered for this
+	// release, it is still worth showing; once it says the app is current, it isn't.
+	return a.appUpdateCoversDaemon() && a.daemonReleaseAvailable() && !a.appFeedAnswered()
 }
 
 // updateInFlight answers the daemon watch from another goroutine. The update state is
@@ -402,9 +463,7 @@ func (a *app) startUpdate() {
 		// feed may still be answering; start it as soon as it does.
 		a.upd.wantApp = true
 		a.upd.phase = updateStarting
-		a.upd.appChecked = false
-		a.upd.appAttempt = time.Time{}
-		a.checkAppRelease()
+		a.checkAppRelease() // asks now, whatever the cadence says
 	}
 }
 

@@ -34,12 +34,33 @@ type fakeDaemon struct {
 	updateJob                            *pb.UpdateJob
 	updateStream                         *fakeUpdateStream
 	restartVersion                       string
+	checkAge                             time.Duration // the last check's max age
 }
 
 func (f *fakeDaemon) log(s string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, s)
+}
+
+// count reports how many calls like s arrived.
+func (f *fakeDaemon) count(s string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, c := range f.calls {
+		if c == s {
+			n++
+		}
+	}
+	return n
+}
+
+// ageAsked is the max age the last release check asked for.
+func (f *fakeDaemon) ageAsked() time.Duration {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.checkAge
 }
 
 func (f *fakeDaemon) called(s string) bool {
@@ -99,6 +120,9 @@ func (f *fakeDaemon) RemoveRouting(_ context.Context, r *pb.RemoveRoutingRequest
 }
 
 func (f *fakeDaemon) CheckUpdate(_ context.Context, r *pb.CheckUpdateRequest, _ ...grpc.CallOption) (*pb.CheckUpdateResponse, error) {
+	f.mu.Lock()
+	f.checkAge = time.Duration(r.GetMaxAgeMs()) * time.Millisecond
+	f.mu.Unlock()
 	if r.GetForce() {
 		f.log("check update force")
 	} else {

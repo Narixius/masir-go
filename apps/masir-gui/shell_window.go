@@ -15,6 +15,7 @@ import (
 func (s *shell) show() {
 	if s.open {
 		s.win.Focus()
+		s.a.checkForUpdateOnForeground()
 		return
 	}
 	height := int(math.Round(float64(s.a.heightForOpen())))
@@ -46,6 +47,9 @@ func (s *shell) show() {
 			e.PreventDefault()
 			s.hide() // closing puts it away in the tray
 		})
+		// Coming back to the window is a moment to ask whether a new release is out, as
+		// opening the panel is on macOS. The check never blocks the focus.
+		s.win.OnFocus(func() { s.a.checkForUpdateOnForeground() })
 	}
 	s.wantHeight, s.lastHeight, s.sizeQueued = height, height, false
 	s.a.askedHeight = float32(height)
@@ -54,6 +58,7 @@ func (s *shell) show() {
 	s.win.Show()
 	s.win.Focus()
 	s.sync()
+	s.a.checkForUpdateOnForeground()
 }
 
 func (s *shell) hide() {

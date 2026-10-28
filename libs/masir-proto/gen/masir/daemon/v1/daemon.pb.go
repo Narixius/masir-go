@@ -5174,9 +5174,9 @@ type ReleaseInfo struct {
 	Available      bool                   `protobuf:"varint,3,opt,name=available,proto3" json:"available,omitempty"` // latest is newer than current (never for development builds)
 	Url            string                 `protobuf:"bytes,4,opt,name=url,proto3" json:"url,omitempty"`              // the release page
 	PublishedAtMs  int64                  `protobuf:"varint,5,opt,name=published_at_ms,json=publishedAtMs,proto3" json:"published_at_ms,omitempty"`
-	CheckedAtMs    int64                  `protobuf:"varint,6,opt,name=checked_at_ms,json=checkedAtMs,proto3" json:"checked_at_ms,omitempty"`
-	// The version the GUI hid until the next check or daemon restart. Available stays
-	// true, so the CLI and other clients still see the update.
+	CheckedAtMs    int64                  `protobuf:"varint,6,opt,name=checked_at_ms,json=checkedAtMs,proto3" json:"checked_at_ms,omitempty"` // when the release was last confirmed with GitHub
+	// The version the GUI hid until a newer release is published or the daemon
+	// restarts. Available stays true, so the CLI and other clients still see the update.
 	IgnoredVersion string `protobuf:"bytes,7,opt,name=ignored_version,json=ignoredVersion,proto3" json:"ignored_version,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -5393,7 +5393,13 @@ func (x *UpdateJob) GetBlockedRules() []*RuleProblem {
 type CheckUpdateRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Force asks GitHub now, even when the last check is less than one day old.
-	Force         bool `protobuf:"varint,1,opt,name=force,proto3" json:"force,omitempty"`
+	Force bool `protobuf:"varint,1,opt,name=force,proto3" json:"force,omitempty"`
+	// MaxAgeMs is how old the release check may be for this answer: the daemon returns
+	// its cached release when it is younger, and asks GitHub (conditionally, when it can)
+	// otherwise. Zero means the daily default, and a longer ask is capped at it so one
+	// client can't make the daemon trust a stale release. A daemon that predates this
+	// field ignores it and answers from its own cache.
+	MaxAgeMs      int64 `protobuf:"varint,2,opt,name=max_age_ms,json=maxAgeMs,proto3" json:"max_age_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5433,6 +5439,13 @@ func (x *CheckUpdateRequest) GetForce() bool {
 		return x.Force
 	}
 	return false
+}
+
+func (x *CheckUpdateRequest) GetMaxAgeMs() int64 {
+	if x != nil {
+		return x.MaxAgeMs
+	}
+	return 0
 }
 
 type CheckUpdateResponse struct {
@@ -6550,9 +6563,11 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\n" +
 	"staged_dir\x18\n" +
 	" \x01(\tR\tstagedDir\x12A\n" +
-	"\rblocked_rules\x18\v \x03(\v2\x1c.masir.daemon.v1.RuleProblemR\fblockedRules\"*\n" +
+	"\rblocked_rules\x18\v \x03(\v2\x1c.masir.daemon.v1.RuleProblemR\fblockedRules\"H\n" +
 	"\x12CheckUpdateRequest\x12\x14\n" +
-	"\x05force\x18\x01 \x01(\bR\x05force\"M\n" +
+	"\x05force\x18\x01 \x01(\bR\x05force\x12\x1c\n" +
+	"\n" +
+	"max_age_ms\x18\x02 \x01(\x03R\bmaxAgeMs\"M\n" +
 	"\x13CheckUpdateResponse\x126\n" +
 	"\arelease\x18\x01 \x01(\v2\x1c.masir.daemon.v1.ReleaseInfoR\arelease\"/\n" +
 	"\x13IgnoreUpdateRequest\x12\x18\n" +
