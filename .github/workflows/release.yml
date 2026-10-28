@@ -237,32 +237,30 @@ jobs:
           # three other jobs. Check the first against the second before anyone sees it: a
           # missing upload would otherwise publish a release whose table 404s.
           #
-          # The release is still a draft here, and /releases/tags/{tag} answers only for
-          # published ones, so find it in the list, which includes drafts for a token with
-          # push access.
-          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .body" > "$RUNNER_TEMP/notes.md"
-          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
-            echo "::error::the release $GITHUB_REF_NAME has no notes to check"
+          # A draft's download URLs answer 404 until it is published, so compare every
+          # linked file with the assets the release has, not by fetching it. The draft is
+          # found in the releases list, which includes drafts for a token with push access.
+          release=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\")")
+          if [ -z "$release" ]; then
+            echo "::error::no release for $GITHUB_REF_NAME"
             exit 1
           fi
-          grep -oE "https://github\.com/[^ )]+/releases/download/[^ )]+" "$RUNNER_TEMP/notes.md" \
-            | sort -u > "$RUNNER_TEMP/links.txt" || true
-          if [ ! -s "$RUNNER_TEMP/links.txt" ]; then
+          printf '%s' "$release" | jq -r '.body' > "$RUNNER_TEMP/notes.md"
+          printf '%s' "$release" | jq -r '.assets[].name' | sort -u > "$RUNNER_TEMP/assets.txt"
+          grep -oE "/releases/download/[^ )]+" "$RUNNER_TEMP/notes.md" \
+            | sed 's|.*/||' | sort -u > "$RUNNER_TEMP/linked.txt" || true
+          if [ ! -s "$RUNNER_TEMP/linked.txt" ]; then
             echo "::error::the release notes link no downloads"
             exit 1
           fi
-          failed=0
-          while IFS= read -r url; do
-            # A ranged GET, not HEAD: the asset redirects to a host that answers it.
-            code=$(curl -s -o /dev/null -w '%{http_code}' -L --range 0-0 --retry 3 --retry-delay 2 "$url" || true)
-            if [ "$code" != 200 ] && [ "$code" != 206 ]; then
-              echo "::error::the notes link $url answers $code"
-              failed=1
-            fi
-          done < "$RUNNER_TEMP/links.txt"
-          echo "checked $(wc -l < "$RUNNER_TEMP/links.txt" | tr -d ' ') download links"
-          exit $failed
+          missing=$(comm -23 "$RUNNER_TEMP/linked.txt" "$RUNNER_TEMP/assets.txt")
+          if [ -n "$missing" ]; then
+            echo "::error::the notes link files the release does not have:"
+            printf '  %s\n' $missing
+            exit 1
+          fi
+          echo "checked $(wc -l < "$RUNNER_TEMP/linked.txt" | tr -d ' ') links against $(wc -l < "$RUNNER_TEMP/assets.txt" | tr -d ' ') assets"
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
