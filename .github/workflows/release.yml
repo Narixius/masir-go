@@ -143,17 +143,19 @@ jobs:
           foreach ($arch in @("amd64", "arm64")) {
             $src = "apps/masir-gui/dist/windows-$arch"
             # The portable zip is the app as a person should get it: not the update
-            # tarball, delta or manifest that sit beside it for the updater.
+            # tarball, delta or manifest that sit beside it for the updater, and not the
+            # setup .exe, which is the other way to install and is uploaded on its own.
             $portable = Join-Path $env:RUNNER_TEMP "portable-windows-$arch"
             Remove-Item $portable -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Path $portable | Out-Null
             Copy-Item "$src/*" $portable -Recurse -Force
-            foreach ($junk in @("*.tar.gz", "*.delta", "update-*.json")) {
+            foreach ($junk in @("*.tar.gz", "*.delta", "update-*.json", "masir-desktop-setup-*.exe")) {
               Remove-Item (Join-Path $portable $junk) -Force -ErrorAction SilentlyContinue
             }
             $out = "masir-desktop-portable-windows-$version-$arch.zip"
             Compress-Archive -Path "$portable/*" -DestinationPath $out
             gh release upload $env:GITHUB_REF_NAME $out `
+              "$src/masir-desktop-setup-windows-$version-$arch.exe" `
               "$src/masir-desktop-update-windows-$version-$arch.tar.gz" `
               "$src/update-windows-$arch.json" --clobber
             # Delta updates, when the build had a published version to diff against.
@@ -225,6 +227,42 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Every download the notes link exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # The notes are written by hand (release.header) and the assets are uploaded by
+          # three other jobs. Check the first against the second before anyone sees it: a
+          # missing upload would otherwise publish a release whose table 404s.
+          #
+          # The release is still a draft here, and /releases/tags/{tag} answers only for
+          # published ones, so find it in the list, which includes drafts for a token with
+          # push access.
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .body" > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::the release $GITHUB_REF_NAME has no notes to check"
+            exit 1
+          fi
+          grep -oE "https://github\.com/[^ )]+/releases/download/[^ )]+" "$RUNNER_TEMP/notes.md" \
+            | sort -u > "$RUNNER_TEMP/links.txt" || true
+          if [ ! -s "$RUNNER_TEMP/links.txt" ]; then
+            echo "::error::the release notes link no downloads"
+            exit 1
+          fi
+          failed=0
+          while IFS= read -r url; do
+            # A ranged GET, not HEAD: the asset redirects to a host that answers it.
+            code=$(curl -s -o /dev/null -w '%{http_code}' -L --range 0-0 --retry 3 --retry-delay 2 "$url" || true)
+            if [ "$code" != 200 ] && [ "$code" != 206 ]; then
+              echo "::error::the notes link $url answers $code"
+              failed=1
+            fi
+          done < "$RUNNER_TEMP/links.txt"
+          echo "checked $(wc -l < "$RUNNER_TEMP/links.txt" | tr -d ' ') download links"
+          exit $failed
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

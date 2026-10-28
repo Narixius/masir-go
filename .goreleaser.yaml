@@ -73,3 +73,43 @@ release:
   github:
     owner: Narixius
     name: masir-go
+  # The first thing on the release page: which file to download, per system, with the
+  # updater's own files folded away at the end. The names here are the assets the build
+  # uploads (see scripts/build-gui.sh and .github/workflows/release.yml); the publish job
+  # checks every link below before the release leaves draft, so a name that drifts from
+  # what was uploaded cannot reach the page.
+  header: |
+    ## Download Masir GUI
+
+    Most people want the **installer** for their system. Both columns are the same app;
+    the **portable** one runs from a folder without installing.
+
+    | | Installer | Portable |
+    |---|---|---|
+    | **macOS** | [Apple Silicon](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-darwin-{{ .Version }}-arm64.dmg) · [Intel](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-darwin-{{ .Version }}-amd64.dmg) | [Apple Silicon](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-portable-darwin-{{ .Version }}-arm64.tar.gz) · [Intel](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-portable-darwin-{{ .Version }}-amd64.tar.gz) |
+    | **Windows** | [x64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-setup-windows-{{ .Version }}-amd64.exe) · [ARM64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-setup-windows-{{ .Version }}-arm64.exe) | [x64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-portable-windows-{{ .Version }}-amd64.zip) · [ARM64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-portable-windows-{{ .Version }}-arm64.zip) |
+    | **Linux** | [x64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-linux-{{ .Version }}-amd64.deb) · [ARM64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-linux-{{ .Version }}-arm64.deb) | [x64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-portable-linux-{{ .Version }}-amd64.tar.gz) · [ARM64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-desktop-portable-linux-{{ .Version }}-arm64.tar.gz) |
+
+    ## Masir CLI
+
+    One executable: the CLI, and `masir daemon run` is the daemon. Unpack it and put
+    `masir` on your PATH; the app does this for you when you install it.
+
+    | | Download |
+    |---|---|
+    | **macOS** | [Apple Silicon](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-cli-darwin-{{ .Version }}-arm64.tar.gz) · [Intel](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-cli-darwin-{{ .Version }}-amd64.tar.gz) |
+    | **Windows** | [x64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-cli-windows-{{ .Version }}-amd64.zip) · [ARM64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-cli-windows-{{ .Version }}-arm64.zip) |
+    | **Linux** | [x64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-cli-linux-{{ .Version }}-amd64.tar.gz) · [ARM64](https://github.com/Narixius/masir-go/releases/download/{{ .Tag }}/masir-cli-linux-{{ .Version }}-arm64.tar.gz) |
+
+    <details><summary>What are the other files?</summary>
+
+    - `masir-cli-update-…` — what the app's updater downloads: masir without the geo data.
+    - `masir-desktop-<old>-to-<new>-…delta` — the change from the previous release; the
+      app uses it when it applies, and the whole archive otherwise.
+    - `update-<os>-<arch>.json` — the signed update manifest the app reads.
+    - `masir-desktop-update-windows-…tar.gz` — the Windows archive the updater reads.
+    - `checksums.txt`, `checksums-desktop.txt` and their `.minisig` — verify a download;
+      [docs/updates.md](https://github.com/Narixius/masir-go/blob/master/docs/updates.md)
+      has the commands and the whole update flow.
+
+    </details>
