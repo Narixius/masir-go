@@ -15,7 +15,9 @@ resources), so it can start the daemon when none is running. Country flags are d
 bundled SVGs rather than emoji, so they look the same on every OS, including Windows, whose
 emoji font has no flags. The daemon runs as the user, which is all proxy mode needs; tunnel
 mode asks for root through the OS prompt (the system password dialog on macOS and Linux,
-the UAC prompt on Windows). Settings can install the daemon as a background service. The
+the UAC prompt on Windows). Settings can install the daemon as a background service, but
+never has to: without one, connecting starts a root daemon for the session; with one,
+connecting starts the service if it is stopped. The
 `masir` command-line tool installs itself on first launch: a link in `~/.local/bin` on
 macOS and Linux, with a marked PATH block added to the user's shell config when needed, or
 the app's `bin` folder on the user's PATH on Windows. Removing it in Settings records an
@@ -62,6 +64,13 @@ The build applies the patches in `patches/` to MyGo for its duration. Windows st
 frame drawn for one client height into a window that has changed height, which made the
 content magnify during the animated height changes; `mygo-dxgi-no-stretch.patch` makes the
 swap chain show the stale frame unscaled and fills the rest with the window's background.
+`mygo-windows-software-gpu.patch` keeps a window from drawing through a renderer that
+cannot follow a resize: Windows' software D3D rasterizer (no 3D adapter), and a virtual
+machine's display adapter, which D3D11 takes for a GPU but which shows the frame of the old
+window size stretched into the new one until the frame of the new size comes, on every frame
+of an animated resize. There the window draws in memory instead, the path `MYGO_GPU=0`
+takes everywhere, and a window on a real GPU keeps the swap chain fix above. A Windows build
+fails if the executable does not carry both fixes.
 The macOS popover animated a content size change on AppKit's own schedule, so the panel's
 height ran ahead of the lists it holds; `mygo-darwin-popover-resize.patch` turns that
 animation off so the shell can follow the springs every frame, as the other platforms do.

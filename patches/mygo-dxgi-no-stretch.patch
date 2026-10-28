@@ -1,7 +1,16 @@
-diff -ruN a/internal/gpu/d3d11/d3d11.go b/internal/gpu/d3d11/d3d11.go
---- a/internal/gpu/d3d11/d3d11.go	2026-10-26 21:36:21
-+++ b/internal/gpu/d3d11/d3d11.go	2026-10-27 09:28:40
-@@ -106,6 +106,7 @@
+diff --git a/internal/gpu/d3d11/d3d11.go b/internal/gpu/d3d11/d3d11.go
+index c9af546..32882f0 100644
+--- a/internal/gpu/d3d11/d3d11.go
++++ b/internal/gpu/d3d11/d3d11.go
+@@ -15,6 +15,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"image"
++	"log"
+ 	"math"
+ 	"os"
+ 	"syscall"
+@@ -106,6 +107,7 @@ const (
  	factoryCreateSwapChainComp = 24 // CreateSwapChainForComposition
  	scPresent                  = 8
  	scPresent1                 = 22 // IDXGISwapChain1
@@ -9,7 +18,7 @@ diff -ruN a/internal/gpu/d3d11/d3d11.go b/internal/gpu/d3d11/d3d11.go
  	scGetBuffer                = 9
  	scResizeBuffers            = 13
  	scSetSourceSize            = 29 // IDXGISwapChain2
-@@ -283,6 +284,11 @@
+@@ -283,6 +285,11 @@ type Renderer struct {
  	// root of dcomp's target for the window.
  	composed              bool
  	dcomp, target, visual uintptr
@@ -21,7 +30,7 @@ diff -ruN a/internal/gpu/d3d11/d3d11.go b/internal/gpu/d3d11/d3d11.go
  
  	// swapChain2 is the swap chain's IDXGISwapChain2 (Windows 8.1), bw×bh
  	// the size of its buffers, larger than w×h while resizing, and
-@@ -536,14 +542,39 @@
+@@ -536,14 +543,39 @@ func (r *Renderer) resize(w, h int) error {
  	return r.buffers(w, h, w+w/4+64, h+h/4+64, resizeBuffers)
  }
  
@@ -62,11 +71,14 @@ diff -ruN a/internal/gpu/d3d11/d3d11.go b/internal/gpu/d3d11/d3d11.go
  		if r.composed {
  			if err := r.composeSwapChain(desc); err != nil {
  				return err
-@@ -562,12 +593,14 @@
+@@ -562,12 +594,17 @@ func (r *Renderer) buffers(w, h, bw, bh, n int) error {
  			call(r.swapChain2, scSetMaxLatency, 1)
  			r.lat.handle = call(r.swapChain2, scLatencyWaitable)
  		}
 +		r.setBackground()
++		if scaling != 0 {
++			log.Printf("mygo: swap chain %dx%d, no stretch", bw, bh)
++		}
  	} else if hr := call(r.swapChain, scResizeBuffers, uintptr(n), uintptr(bw), uintptr(bh), 0, swapChainWaitable); failed(hr) {
  		return fmt.Errorf("d3d11: cannot resize the swap chain: %#x", uint32(hr))
  	}
@@ -77,10 +89,11 @@ diff -ruN a/internal/gpu/d3d11/d3d11.go b/internal/gpu/d3d11/d3d11.go
  	r.bw, r.bh = bw, bh
  	var back uintptr
  	if hr := call(r.swapChain, scGetBuffer, 0, uintptr(unsafe.Pointer(&iidID3D11Texture2D)), uintptr(unsafe.Pointer(&back))); failed(hr) {
-diff -ruN a/internal/platform/surface.go b/internal/platform/surface.go
---- a/internal/platform/surface.go	2026-10-26 21:36:21
-+++ b/internal/platform/surface.go	2026-10-27 09:28:41
-@@ -181,6 +181,10 @@
+diff --git a/internal/platform/surface.go b/internal/platform/surface.go
+index 50ab4a8..a8a4ac3 100644
+--- a/internal/platform/surface.go
++++ b/internal/platform/surface.go
+@@ -181,6 +181,10 @@ type SurfaceNative struct {
  	// DirectComposition, with the frames' alpha, which the material shows
  	// through.
  	Composed bool
@@ -91,10 +104,11 @@ diff -ruN a/internal/platform/surface.go b/internal/platform/surface.go
  	// View is the surface's NSView and Layer its layer (macOS).
  	View, Layer uintptr
  	// Widget is the surface's GtkGLArea or GtkDrawingArea, and GLArea the
-diff -ruN a/internal/windows/surface.go b/internal/windows/surface.go
---- a/internal/windows/surface.go	2026-10-26 21:36:22
-+++ b/internal/windows/surface.go	2026-10-27 09:28:40
-@@ -211,7 +211,11 @@
+diff --git a/internal/windows/surface.go b/internal/windows/surface.go
+index 728425c..00b46f4 100644
+--- a/internal/windows/surface.go
++++ b/internal/windows/surface.go
+@@ -211,7 +211,11 @@ func (s *surface) toDIP(v int32) float64 { return float64(v) * 96 / float64(s.dp
  // window from then on, and the frames drawn in memory let go of it.
  func (s *surface) Native() platform.SurfaceNative {
  	s.freeComp()
@@ -107,10 +121,11 @@ diff -ruN a/internal/windows/surface.go b/internal/windows/surface.go
  }
  
  // viaComposition reports whether the frames show through
-diff -ruN a/ui/gpu_windows.go b/ui/gpu_windows.go
---- a/ui/gpu_windows.go	2026-10-26 21:36:22
-+++ b/ui/gpu_windows.go	2026-10-27 09:28:40
-@@ -11,9 +11,19 @@
+diff --git a/ui/gpu_windows.go b/ui/gpu_windows.go
+index 6442d21..bcb23f4 100644
+--- a/ui/gpu_windows.go
++++ b/ui/gpu_windows.go
+@@ -11,9 +11,19 @@ func newGPURenderer(n platform.SurfaceNative) (gpuRenderer, error) {
  	if n.HWND == 0 {
  		return nil, errors.New("the surface has no window")
  	}

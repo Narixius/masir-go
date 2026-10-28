@@ -116,8 +116,13 @@ subscriptions while smoke-testing unless that is the change under test.
   from inside a frame.
 - **Height follows the springs on every platform.** macOS needs
   `patches/mygo-darwin-popover-resize.patch` to stop AppKit animating its own resize. Keep
-  `mygo-dxgi-no-stretch.patch` for Windows. If MyGo is updated, verify both patches still
-  apply and run `make gui-local`.
+  `mygo-dxgi-no-stretch.patch` for Windows, and `mygo-windows-software-gpu.patch`, which
+  makes a window draw in memory when its renderer cannot follow a resize: WARP (no 3D
+  adapter) and a virtual machine's display adapter, which D3D11 accepts as a GPU but which
+  shows the old frame stretched into the new size on every frame of an animated resize (a
+  UTM/virtio Windows guest at 200 % is where it is obvious). If MyGo is updated, verify the
+  patches still apply and run `make gui-local`; a Windows build fails if either fix is
+  missing from the executable.
 - **Flags are 1:1** in tiles (`Fit(ui.Cover)`, rounded corners). Use `iconTile` for flags
   and app icons so both stay centered; `TestIconTileCentersWhatItHolds` guards it.
 - **Service first.** When a masir service is installed, the app uses its
