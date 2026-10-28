@@ -35,6 +35,26 @@ func TestSnapshots(t *testing.T) {
 		{"servers-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click(ltr("United Kingdom")) }},
 		{"rules-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click("RULES") }},
 		{"settings-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click("Settings") }},
+		{"settings-middle", true, func(a *app, tt *ui.Tester) {
+			_ = tt.Click("Settings")
+			tt.Advance(time.Second)
+			tt.Scroll(panelWidth/2, 300, 0, 430)
+			tt.Advance(time.Second)
+		}},
+		{"settings-logging", true, func(a *app, tt *ui.Tester) {
+			_ = tt.Click("Settings")
+			tt.Advance(time.Second)
+			tt.Scroll(panelWidth/2, 300, 0, 650)
+			tt.Advance(time.Second)
+		}},
+		{"settings-select", true, func(a *app, tt *ui.Tester) {
+			_ = tt.Click("Settings")
+			tt.Advance(time.Second)
+			tt.Scroll(panelWidth/2, 300, 0, 430)
+			tt.Advance(time.Second)
+			_ = tt.Click("Warning") // the log level select's trigger
+			tt.Advance(100 * time.Millisecond)
+		}},
 		{"update-available", true, func(a *app, tt *ui.Tester) {
 			a.upd.rel = &pb.ReleaseInfo{CurrentVersion: "0.1.0", LatestVersion: "v0.2.0", Available: true, CheckedAtMs: time.Now().UnixMilli()}
 			a.upd.phase = updateAvailable
@@ -65,7 +85,7 @@ func TestSnapshots(t *testing.T) {
 		{"system-dark", true, func(a *app, tt *ui.Tester) {
 			_ = tt.Click("Settings")
 			tt.Advance(time.Second)
-			tt.Scroll(panelWidth/2, 420, 0, 900)
+			tt.Scroll(panelWidth/2, 420, 0, 1200)
 			tt.Advance(100 * time.Millisecond)
 		}},
 		{"add-dark", true, func(a *app, tt *ui.Tester) { _ = tt.Click("Add subscription") }},

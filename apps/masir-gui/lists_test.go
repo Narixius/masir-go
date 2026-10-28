@@ -81,28 +81,3 @@ func TestServerPickerBuildsOnlyVisibleRows(t *testing.T) {
 		t.Fatalf("built %d rows of 160; want only the visible rows", built)
 	}
 }
-
-// TestSettingsServerListBuildsOnlyVisibleRows checks the subscription card in settings,
-// which lists a subscription's configurations.
-func TestSettingsServerListBuildsOnlyVisibleRows(t *testing.T) {
-	f := ukServers()
-	f.configs["s1"] = manyConfigs(160)
-	a := newTestApp(f)
-	tt := tester(a)
-	if err := tt.Click("Settings"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Advance(time.Second)
-
-	st := a.subLists["s1"]
-	if st == nil {
-		t.Fatal("the subscription's list is missing")
-	}
-	first, last := st.Visible()
-	if first < 0 || last < 0 {
-		t.Fatalf("the subscription list wasn't laid out: %d..%d", first, last)
-	}
-	if built := last - first + 1; built > 24 {
-		t.Fatalf("built %d rows of 160; want only the visible rows", built)
-	}
-}

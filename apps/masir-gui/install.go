@@ -138,11 +138,9 @@ func (a *app) autoInstallCLI() {
 		a.refreshCLIState()
 		return
 	}
+	// The command is part of the app, not an optional extra: Settings no longer offers to
+	// remove it, and an opt-out left by an older version is not honored.
 	choice := a.cliChoice()
-	if choice == "off" {
-		a.refreshCLIState()
-		return
-	}
 	done := choice == "done"
 	a.cliBusy = true
 	a.async(func() {
@@ -224,28 +222,6 @@ func (a *app) installCommandLine() {
 			default:
 				a.notify("masir was not installed; see the log for why")
 			}
-		})
-	})
-}
-
-func (a *app) removeCommandLine() {
-	if a.cliBusy {
-		return
-	}
-	bin := a.cliBinary()
-	a.cliBusy = true
-	a.async(func() {
-		err := removeCLI(bin)
-		a.post(func() {
-			a.cliBusy = false
-			if err != nil {
-				a.fail("Couldn't remove the command line tool: ", err)
-				return
-			}
-			a.setCLIChoice("off")
-			a.cliChecked = false
-			a.refreshCLIState()
-			a.notify("The masir command was removed")
 		})
 	})
 }

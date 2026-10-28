@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +35,7 @@ type fakeDaemon struct {
 	releaseErr                           error
 	updateJob                            *pb.UpdateJob
 	updateStream                         *fakeUpdateStream
+	xrayConfig                           string
 	restartVersion                       string
 	checkAge                             time.Duration // the last check's max age
 }
@@ -107,7 +110,56 @@ func (f *fakeDaemon) UpdateSettings(_ context.Context, r *pb.UpdateSettingsReque
 	if r.RulesEnabled != nil {
 		f.log("rules enabled " + map[bool]string{true: "on", false: "off"}[*r.RulesEnabled])
 	}
+	if r.AlwaysOnProxy != nil {
+		f.log("always on " + map[bool]string{true: "on", false: "off"}[*r.AlwaysOnProxy])
+	}
+	if r.AllowLan != nil {
+		f.log("lan " + map[bool]string{true: "on", false: "off"}[*r.AllowLan])
+	}
+	if r.ProxyPort != nil {
+		f.log("port " + strconv.Itoa(int(*r.ProxyPort)))
+	}
+	if r.DohDns != nil {
+		f.log("doh " + *r.DohDns)
+	}
+	if r.DnsServers != nil {
+		f.log("dns " + strings.Join(r.DnsServers.Values, ","))
+	}
+	if r.TunDns != nil {
+		f.log("tun dns " + strings.Join(r.TunDns.Values, ","))
+	}
+	if r.TunGateway != nil {
+		f.log("gateway " + *r.TunGateway)
+	}
+	if r.SubIntervalMinutes != nil {
+		f.log("interval " + strconv.Itoa(int(*r.SubIntervalMinutes)))
+	}
+	if r.XrayLogLevel != nil {
+		f.log("log level " + *r.XrayLogLevel)
+	}
+	if r.Analytics != nil {
+		f.log("analytics " + map[bool]string{true: "on", false: "off"}[*r.Analytics])
+	}
 	return &pb.UpdateSettingsResponse{}, nil
+}
+
+func (f *fakeDaemon) GetXrayConfig(context.Context, *pb.GetXrayConfigRequest, ...grpc.CallOption) (*pb.GetXrayConfigResponse, error) {
+	f.log("get config")
+	return &pb.GetXrayConfigResponse{Json: f.xrayConfig}, nil
+}
+
+func (f *fakeDaemon) GetSettings(context.Context, *pb.GetSettingsRequest, ...grpc.CallOption) (*pb.GetSettingsResponse, error) {
+	return &pb.GetSettingsResponse{Settings: f.status.Settings, Defaults: &pb.Settings{
+		Fallback:           pb.Fallback_FALLBACK_PROXY,
+		ProxyPort:          7890,
+		DohDns:             "https://1.1.1.1/dns-query",
+		DnsServers:         []string{"1.1.1.1", "8.8.8.8"},
+		TunGateway:         "10.10.20.1/24",
+		SubIntervalMinutes: 12 * 60,
+		XrayLogLevel:       "warning",
+		Analytics:          true,
+		RulesEnabled:       true,
+	}}, nil
 }
 func (f *fakeDaemon) SetRuleEnabled(_ context.Context, r *pb.SetRuleEnabledRequest, _ ...grpc.CallOption) (*pb.SetRuleEnabledResponse, error) {
 	f.log("rule " + r.RuleTags[0] + map[bool]string{true: " on", false: " off"}[r.Enabled])
@@ -237,6 +289,7 @@ func newTestApp(f *fakeDaemon) *app {
 	quit = func() {}
 	readClipboard = func() string { return "" }
 	readService = func() service.Info { return service.Info{} }
+	markNoticeShown = func() {} // the test must not write the user's real config directory
 	a := newApp(f, "")
 	a.motion.instant = true // no waiting for animations
 	a.async = func(fn func()) { fn() }
@@ -349,10 +402,13 @@ func TestSettingsAndBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Advance(time.Second) // the page slides in
-	for _, want := range []string{"Settings", "xrouter", "Always-on Proxy Port", "Port Number", "Quit Masir"} {
+	for _, want := range []string{"Settings", "Always-on Proxy Port", "Port Number", "Quit Masir"} {
 		if !tt.HasText(want) {
 			t.Errorf("no %q in %q", want, tt.Texts())
 		}
+	}
+	if tt.HasText("xrouter") {
+		t.Errorf("settings still lists subscriptions: %q", tt.Texts())
 	}
 	if err := tt.Click("Back"); err != nil {
 		t.Fatal(err)
@@ -363,16 +419,12 @@ func TestSettingsAndBack(t *testing.T) {
 	}
 }
 
-// TestAddSubscriptionReturnsToSettings checks that the add form opened from settings goes
-// back there, not to the main page.
-func TestAddSubscriptionReturnsToSettings(t *testing.T) {
+// TestAddSubscriptionReturnsToMain checks that the add form opened from the main page
+// goes back there; settings no longer lists subscriptions.
+func TestAddSubscriptionReturnsToMain(t *testing.T) {
 	a := newTestApp(ukServers())
 	tt := tester(a)
-	if err := tt.Click("Settings"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Advance(time.Second)
-	if err := tt.Click("Add"); err != nil {
+	if err := tt.Click("Add Subscription"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Advance(time.Second)
@@ -383,8 +435,8 @@ func TestAddSubscriptionReturnsToSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Advance(time.Second)
-	if !tt.HasText("Always-on Proxy Port") || !tt.HasText("Settings") {
-		t.Fatalf("not back in settings: %q", tt.Texts())
+	if !tt.HasText("RULES") {
+		t.Fatalf("not back on the main page: %q", tt.Texts())
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -60,6 +61,11 @@ type pending struct {
 	active       opt[serverKey]
 	alwaysOn     opt[bool]
 	allowLAN     opt[bool]
+	doh          opt[string]
+	logLevel     opt[string]
+	gateway      opt[string]
+	subInterval  opt[uint32]
+	analytics    opt[bool]
 	ruleEnabled  map[string]*opt[bool]
 	ruleRemoved  map[string]*opt[bool]
 }
@@ -84,6 +90,11 @@ func (p *pending) caughtUp() {
 	p.active.caughtUp()
 	p.alwaysOn.caughtUp()
 	p.allowLAN.caughtUp()
+	p.doh.caughtUp()
+	p.logLevel.caughtUp()
+	p.gateway.caughtUp()
+	p.subInterval.caughtUp()
+	p.analytics.caughtUp()
 	for _, o := range p.ruleEnabled {
 		o.caughtUp()
 	}
@@ -121,6 +132,72 @@ func (a *app) allowLAN() bool {
 		return v
 	}
 	return a.status.GetSettings().GetAllowLan()
+}
+
+// dohURL is the DNS-over-HTTPS resolver as shown.
+func (a *app) dohURL() string {
+	if v, ok := a.pend.doh.get(); ok {
+		return v
+	}
+	if v := a.status.GetSettings().GetDohDns(); v != "" {
+		return v
+	}
+	return "https://1.1.1.1/dns-query"
+}
+
+// logLevel is Xray's log level as shown: normalized, and warning when unset, which is
+// what a daemon from before the setting reports.
+func (a *app) logLevel() string {
+	if v, ok := a.pend.logLevel.get(); ok {
+		return v
+	}
+	if v, ok := normalizeLogLevel(a.status.GetSettings().GetXrayLogLevel()); ok {
+		return v
+	}
+	return "warning"
+}
+
+// normalizeLogLevel is the daemon's spelling of a level, and whether it was set at all.
+func normalizeLogLevel(level string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "":
+		return "", false
+	case "warn":
+		return "warning", true
+	default:
+		return strings.ToLower(strings.TrimSpace(level)), true
+	}
+}
+
+func (a *app) gateway() string {
+	if v, ok := a.pend.gateway.get(); ok {
+		return v
+	}
+	if v := a.status.GetSettings().GetTunGateway(); v != "" {
+		return v
+	}
+	return defaultGateway
+}
+
+func (a *app) subInterval() uint32 {
+	if v, ok := a.pend.subInterval.get(); ok {
+		return v
+	}
+	if v := a.status.GetSettings().GetSubIntervalMinutes(); v > 0 {
+		return v
+	}
+	return 12 * 60
+}
+
+// analyticsOn is the person's choice as shown; analytics is on out of the box.
+func (a *app) analyticsOn() bool {
+	if v, ok := a.pend.analytics.get(); ok {
+		return v
+	}
+	if s := a.status.GetSettings(); s != nil {
+		return s.GetAnalytics()
+	}
+	return true
 }
 
 // activeKey is the selected server, as shown.
@@ -236,6 +313,46 @@ func (a *app) setAllowLAN(on bool) {
 	a.pend.allowLAN.set(on)
 	a.mutate("Couldn't save the setting: ", a.pend.allowLAN.done, a.pend.allowLAN.revert, func(ctx context.Context) error {
 		_, err := a.d.UpdateSettings(ctx, &pb.UpdateSettingsRequest{AllowLan: &on})
+		return err
+	})
+}
+
+func (a *app) setDoH(url string) {
+	a.pend.doh.set(url)
+	a.mutate("Couldn't save the setting: ", a.pend.doh.done, a.pend.doh.revert, func(ctx context.Context) error {
+		_, err := a.d.UpdateSettings(ctx, &pb.UpdateSettingsRequest{DohDns: &url})
+		return err
+	})
+}
+
+func (a *app) setLogLevel(level string) {
+	a.pend.logLevel.set(level)
+	a.mutate("Couldn't save the setting: ", a.pend.logLevel.done, a.pend.logLevel.revert, func(ctx context.Context) error {
+		_, err := a.d.UpdateSettings(ctx, &pb.UpdateSettingsRequest{XrayLogLevel: &level})
+		return err
+	})
+}
+
+func (a *app) setGateway(gateway string) {
+	a.pend.gateway.set(gateway)
+	a.mutate("Couldn't save the setting: ", a.pend.gateway.done, a.pend.gateway.revert, func(ctx context.Context) error {
+		_, err := a.d.UpdateSettings(ctx, &pb.UpdateSettingsRequest{TunGateway: &gateway})
+		return err
+	})
+}
+
+func (a *app) setSubInterval(minutes uint32) {
+	a.pend.subInterval.set(minutes)
+	a.mutate("Couldn't save the setting: ", a.pend.subInterval.done, a.pend.subInterval.revert, func(ctx context.Context) error {
+		_, err := a.d.UpdateSettings(ctx, &pb.UpdateSettingsRequest{SubIntervalMinutes: &minutes})
+		return err
+	})
+}
+
+func (a *app) setAnalytics(on bool) {
+	a.pend.analytics.set(on)
+	a.mutate("Couldn't save the setting: ", a.pend.analytics.done, a.pend.analytics.revert, func(ctx context.Context) error {
+		_, err := a.d.UpdateSettings(ctx, &pb.UpdateSettingsRequest{Analytics: &on})
 		return err
 	})
 }

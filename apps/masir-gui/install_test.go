@@ -69,7 +69,8 @@ func TestAutoInstallCLIRestoresAMissingPathBlock(t *testing.T) {
 	}
 }
 
-func TestAutoInstallCLIRespectsRemoval(t *testing.T) {
+// The command is unremovable: an opt-out left by an older version is installed again.
+func TestAutoInstallCLIReinstallsAfterAnOldOptOut(t *testing.T) {
 	a, home := autoTestApp(t)
 	if err := os.MkdirAll(filepath.Dir(a.cliFile), 0o700); err != nil {
 		t.Fatal(err)
@@ -78,10 +79,10 @@ func TestAutoInstallCLIRespectsRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.autoInstallCLI()
-	if _, err := os.Lstat(filepath.Join(home, ".local", "bin", "masir")); !os.IsNotExist(err) {
-		t.Fatalf("the command came back after removal: %v", err)
+	if _, err := os.Lstat(filepath.Join(home, ".local", "bin", "masir")); err != nil {
+		t.Fatalf("the command wasn't installed: %v", err)
 	}
-	if strings.TrimSpace(a.cliChoice()) != "off" {
+	if strings.TrimSpace(a.cliChoice()) != "done" {
 		t.Fatalf("choice = %q", a.cliChoice())
 	}
 }

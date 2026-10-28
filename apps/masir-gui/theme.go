@@ -14,7 +14,7 @@ type palette struct {
 	// Surfaces and layers.
 	rootTint                                 ui.Color // tints the material under the whole panel
 	card, cardHover, cardActive              ui.Color
-	elevated, subdued, inset                 ui.Color
+	elevated, popup, subdued, inset          ui.Color
 	listHeader                               ui.Color // opaque, for a pinned header over scrolling rows
 	borderSubtle, borderDefault, borderFocus ui.Color
 	// Status.
@@ -40,7 +40,7 @@ func paletteFor(c *ui.Context) palette {
 			text: ui.Hex("#f5f5f7"), muted: ui.RGBA(255, 255, 255, 0.45), tertiary: ui.RGBA(255, 255, 255, 0.35), quaternary: ui.RGBA(255, 255, 255, 0.25),
 			rootTint: ui.RGBA(26, 26, 28, 0.32),
 			card:     ui.RGBA(255, 255, 255, 0.07), cardHover: ui.RGBA(255, 255, 255, 0.05), cardActive: ui.RGBA(255, 255, 255, 0.08),
-			elevated: ui.RGBA(30, 30, 30, 0.85), subdued: ui.RGBA(0, 0, 0, 0.25), inset: ui.RGBA(255, 255, 255, 0.06),
+			elevated: ui.RGBA(30, 30, 30, 0.85), popup: ui.Hex("#232325"), subdued: ui.RGBA(0, 0, 0, 0.25), inset: ui.RGBA(255, 255, 255, 0.06),
 			listHeader:   ui.Hex("#1f1f21"),
 			borderSubtle: ui.RGBA(255, 255, 255, 0.05), borderDefault: ui.RGBA(255, 255, 255, 0.10), borderFocus: ui.Hex("#0a84ff"),
 			healthy: ui.Hex("#00d688"), healthySurface: ui.RGBA(0, 192, 120, 0.16),
@@ -57,7 +57,7 @@ func paletteFor(c *ui.Context) palette {
 		text: ui.Hex("#1d1d1f"), muted: ui.RGBA(0, 0, 0, 0.45), tertiary: ui.RGBA(0, 0, 0, 0.35), quaternary: ui.RGBA(0, 0, 0, 0.25),
 		rootTint: ui.RGBA(255, 255, 255, 0.22),
 		card:     ui.Hex("#ffffff"), cardHover: ui.RGBA(0, 0, 0, 0.035), cardActive: ui.RGBA(0, 0, 0, 0.06),
-		elevated: ui.RGBA(255, 255, 255, 0.85), subdued: ui.RGBA(0, 0, 0, 0.03), inset: ui.RGBA(0, 0, 0, 0.04),
+		elevated: ui.RGBA(255, 255, 255, 0.85), popup: ui.Hex("#fbfbfc"), subdued: ui.RGBA(0, 0, 0, 0.03), inset: ui.RGBA(0, 0, 0, 0.04),
 		listHeader:   ui.Hex("#f0f0f2"),
 		borderSubtle: ui.RGBA(0, 0, 0, 0.05), borderDefault: ui.RGBA(0, 0, 0, 0.08), borderFocus: ui.Hex("#007aff"),
 		healthy: ui.Hex("#00c078"), healthySurface: ui.RGBA(0, 192, 120, 0.10),
@@ -103,3 +103,15 @@ var (
 )
 
 func appMotion(d time.Duration) ui.Animation { return ui.Animation{Duration: d, Ease: easeApp} }
+
+// tuneTheme makes scroll bars belong to the panel: thin, and in the palette's own color
+// rather than the stock one. The theme is copied so the change is the app's only.
+func (a *app) tuneTheme(c *ui.Context, p palette) {
+	t := *c.Theme()
+	if t.ScrollbarWidth == 4 && t.Scrollbar == p.scrollbar {
+		return
+	}
+	t.ScrollbarWidth = 4
+	t.Scrollbar = p.scrollbar
+	c.SetTheme(&t)
+}

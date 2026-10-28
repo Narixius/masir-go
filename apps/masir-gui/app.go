@@ -47,6 +47,13 @@ type server struct {
 	search  string // lowercased text the search matches, including the flag's country
 }
 
+// textSetting is a settings field being typed in: the text it shows, and whether it
+// differs from the daemon's value because the person is editing it.
+type textSetting struct {
+	text   string
+	edited bool
+}
+
 // app is everything the panel shows and does. It is read and changed on the main thread
 // only: the daemon's streams and calls hand their results over with post.
 type app struct {
@@ -93,7 +100,11 @@ type app struct {
 	subError        string
 
 	// Settings form.
-	portText string
+	portText     string // digits only; synced from the daemon when not editing
+	portEdited   bool   // the port field has been typed in
+	dns          textSetting
+	tunDNS       textSetting
+	noticeMarked bool // the analytics notice has been shown and marked
 
 	// What the system says about starting at login, read once rather than on every frame
 	// (the OS call is not free).
@@ -114,10 +125,6 @@ type app struct {
 
 	trafficCancel context.CancelFunc
 	since         time.Time // when masir last turned on, as far as this app saw
-
-	holdID     string    // the subscription whose trash button is held
-	holdStart  time.Time // since when
-	portEdited bool      // the port field has been typed in
 
 	trayOn bool // the tray shows the connected icon
 
@@ -151,8 +158,6 @@ type app struct {
 	ruleItems   []ruleListItem
 	lastRuleTop int
 	lastRuleEnd int
-	subLists    map[string]*ui.ListState
-	subItems    map[string][]server
 	serversList ui.ListState
 	serverItems []serverListItem
 	onHeight    func(float32) // tells the window how tall the content is at rest
@@ -174,8 +179,6 @@ func newApp(d pb.DaemonServiceClient, binary string) *app {
 		latency:     map[serverKey]int64{},
 		testing:     map[serverKey]bool{},
 		rulesMetas:  map[string]ruleMeta{},
-		subLists:    map[string]*ui.ListState{},
-		subItems:    map[string][]server{},
 		warmed:      map[screen]bool{},
 		lastRuleTop: -1,
 		lastRuleEnd: -1,
@@ -275,20 +278,17 @@ func rpc() (context.Context, context.CancelFunc) {
 // the window's height before it slides; coming back, the window keeps its size until the
 // page has gone, and aimMotion shrinks it then, so nothing is resized while it moves.
 func (a *app) openScreen(s screen) {
-	from := a.screen
 	a.lastSub, a.screen = s, s
 	if s == screenSettings {
 		a.refreshCLIState()     // check the command-line tool in the background
 		a.refreshLoginState()   // the login item
 		a.refreshServiceState() // and the service, which may be stopped
+		a.syncTextSettings(a.status.GetSettings())
+		a.markAnalyticsNotice()
 	}
-	// The back arrow returns to the page this one opened over: the settings page can open
-	// its own add-subscription form, which then returns to it.
-	if s == screenAddSubscription && from == screenSettings {
-		a.backTo = screenSettings
-	} else {
-		a.backTo = screenMain
-	}
+	// The back arrow returns to the page this one opened over: the add-subscription form
+	// opens from the main page and returns there.
+	a.backTo = screenMain
 	// The window takes the new page's height as the pages move, from the first frame, so
 	// the two animations are one.
 	a.requestHeight()
@@ -339,8 +339,10 @@ func (a *app) applyStatus(st *pb.Status) {
 	} else if !a.connected() {
 		a.since = time.Time{}
 	}
-	if a.screen != screenSettings || a.portText == "" {
-		a.portText = fmt.Sprint(st.GetSettings().GetProxyPort())
+	// The fields on the settings page are only filled while the page isn't being
+	// edited: a status arriving mid-typing must not overwrite what was typed.
+	if a.screen != screenSettings {
+		a.syncTextSettings(st.GetSettings())
 	}
 	if a.lastRev == 0 || st.Revision != a.lastRev {
 		a.lastRev = st.Revision
@@ -403,6 +405,27 @@ func latencyOf(r *pb.LatencyResult) int64 {
 		return -1
 	}
 	return r.GetLatencyMs()
+}
+
+// syncTextSettings puts the daemon's values in the settings fields. It is called when the
+// page opens and while it is closed, never in the middle of typing.
+func (a *app) syncTextSettings(s *pb.Settings) {
+	if s == nil {
+		return
+	}
+	a.portText = fmt.Sprint(s.GetProxyPort())
+	a.dns = textSetting{text: strings.Join(s.GetDnsServers(), ", ")}
+	a.tunDNS = textSetting{text: strings.Join(s.GetTunDns(), ", ")}
+}
+
+// markAnalyticsNotice records that the app has shown the analytics notice, as the
+// command line does. The daemon sends nothing before this marker exists.
+func (a *app) markAnalyticsNotice() {
+	if a.noticeMarked {
+		return
+	}
+	a.noticeMarked = true
+	a.async(markNoticeShown)
 }
 
 // active is the selected server, if the lists have it.
