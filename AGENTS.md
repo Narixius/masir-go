@@ -98,9 +98,11 @@ subscriptions while smoke-testing unless that is the change under test.
   binary. Do not remove a lowercase `masir` after copying `Masir`: the default APFS is
   case-insensitive and they are the same file.
 - **The panel sizes itself from what it drew.** `heightForOpen` uses the last real
-  `mainHeight`; `settleHeight` resizes at rest when data (a status, a banner, the update
-  control) changes the drawn height. Do not call `ui.NewTester` in production to measure:
-  it shapes text for another engine.
+  `mainHeight`, or the closed-page height remembered in app data on the first open of a
+  process, so opening never resizes a frame later. `start()` resets to the main page
+  *before* it asks for the height. `settleHeight` resizes at rest when data (a status, a
+  banner, the update control) changes the drawn height. Do not call `ui.NewTester` in
+  production to measure: it shapes text for another engine.
 - **Inputs belong inside their box.** Build a container, then create its input inside
   `box.Children(func() { ... })`. An input created just before `box.Children` is a sibling
   of the box, so its text is positioned somewhere else. This has bitten the port field and

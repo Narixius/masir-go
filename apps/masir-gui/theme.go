@@ -87,6 +87,10 @@ const (
 	// Heights of the screens that don't size themselves to their content.
 	settingsHeight        = 520
 	addSubscriptionHeight = 340
+
+	// defaultPanelHeight is how tall the main page opens before it has ever drawn: the
+	// closed page at the current layout. The height the last launch drew replaces it.
+	defaultPanelHeight = 242
 )
 
 // tw converts Tailwind spacing units to DIPs: the design sets its root font size to 13px, so

@@ -48,16 +48,26 @@ func (s *shell) toggle() {
 	s.show()
 }
 
-// start resets the panel to the main page and follows the daemon's traffic while it shows.
-func (s *shell) start() {
-	s.a.screen, s.a.open, s.a.lastSub = screenMain, sectionNone, screenMain
-	s.a.motion = motion{instant: s.a.motion.instant} // a new panel starts at rest
-	s.a.warmPage = false
-	s.a.lastMotion = time.Time{}
-	s.a.lastSize = time.Time{}
+// resetForOpen puts the panel back on the main page with its lists closed. The height it
+// opens at must be asked for after this, or a panel hidden on Settings (or with a list
+// open) would open at that page's height and shrink once the main page drew.
+func (a *app) resetForOpen() {
+	a.screen, a.open, a.lastSub = screenMain, sectionNone, screenMain
+	a.motion = motion{instant: a.motion.instant} // a new panel starts at rest
+	a.warmPage = false
+	a.lastMotion = time.Time{}
+	a.lastSize = time.Time{}
+}
+
+// start resets the panel to the main page, returns the height that page opens at, and
+// follows the daemon's traffic while it shows.
+func (s *shell) start() float32 {
+	s.a.resetForOpen()
 	s.a.frameSize = s.frameSize
 	s.a.onHeight = s.setHeight
+	height := s.a.heightForOpen()
 	s.a.watchTraffic()
+	return height
 }
 
 // stop stops the traffic stream when the panel goes away.
@@ -136,7 +146,10 @@ func (s *shell) ready() {
 	// setting it in OnWillQuit (which runs after the windows close) meant the close was
 	// held back and the whole quit cancelled, so Exit in the tray did nothing on Windows
 	// and Linux. macOS has no such window, which is why it worked there.
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { s.quitting = true })
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		s.quitting = true
+		s.a.flushPanelHeight()
+	})
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
 		if s.tray != nil {
 			s.tray.Destroy()
@@ -274,6 +287,8 @@ func main() {
 			a.version = v
 		}
 		a.cliFile = cliInstallFile()
+		a.heightFile = panelHeightFile()
+		a.loadPanelHeight()
 		s.ready()
 		a.refreshLoginState()
 		a.autoInstallCLI()

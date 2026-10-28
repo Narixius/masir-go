@@ -17,8 +17,7 @@ func (s *shell) show() {
 		s.a.checkForUpdateOnForeground()
 		return
 	}
-	height := int(math.Round(float64(s.a.heightForOpen())))
-	s.start()
+	height := int(math.Round(float64(s.start())))
 	s.win = mygo.NewFlyout(mygo.FlyoutOptions{
 		Tray:      s.tray,
 		Placement: mygo.PlacementBottom,

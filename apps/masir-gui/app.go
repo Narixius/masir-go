@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -141,6 +142,10 @@ type app struct {
 	mainHeight   float32            // the main page's height as last measured
 	measuredOpen section            // the section that was open when mainHeight was measured
 	baseHeight   float32            // the main page's height with both lists closed
+	savedHeight  float32            // the base height last written to heightFile
+	heightFile   string             // where the drawn height is remembered across launches
+	heightWrites atomic.Uint64      // the scheduled height write that still stands
+	heightMu     sync.Mutex         // orders a scheduled write with one at quit
 	askedHeight  float32            // the height last given to the window, so data arriving at rest resizes it once
 	natural      map[string]float32 // the height each list has when fully open
 	serverListH  float32            // the server list's height with no search, so filtering keeps it
@@ -965,7 +970,7 @@ func (a *app) willMove() bool {
 func (a *app) windowHeight() float32 {
 	base := a.baseHeight
 	if base == 0 {
-		base = 262
+		base = defaultPanelHeight
 	}
 	main := base + a.motion.servers.x*a.naturalHeight("servers") + a.motion.rules.x*a.naturalHeight("rules")
 	if a.motion.settled() && a.mainHeight > 0 {
@@ -1001,7 +1006,7 @@ func (a *app) restHeight() float32 {
 	}
 	base := a.baseHeight
 	if base == 0 {
-		base = 262
+		base = defaultPanelHeight
 	}
 	if a.open == sectionServers {
 		base += a.naturalHeight("servers")

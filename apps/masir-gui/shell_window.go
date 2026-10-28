@@ -18,8 +18,7 @@ func (s *shell) show() {
 		s.a.checkForUpdateOnForeground()
 		return
 	}
-	height := int(math.Round(float64(s.a.heightForOpen())))
-	s.start()
+	height := int(math.Round(float64(s.start())))
 	if s.win == nil {
 		s.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:             "Masir",

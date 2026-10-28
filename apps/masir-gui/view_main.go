@@ -74,6 +74,7 @@ func (a *app) mainLayer(c *ui.Context, p palette, x float32) ui.Element {
 			a.mainHeight, a.measuredOpen = h, a.open
 			if a.motion.servers.x == 0 && a.motion.rules.x == 0 {
 				a.baseHeight = h
+				a.rememberPanelHeight(h) // for the first open of the next launch
 			}
 		}
 	})
@@ -847,10 +848,10 @@ func versionLabel(v string) string {
 }
 
 // heightForOpen is how tall the panel starts. It is the height the content actually had
-// the last time it was drawn, so a second open doesn't resize at all; the first open of
-// a session starts at a sane default and the first real frame settles it. Building the
-// view in a headless tester here (as an earlier version did) measured with another text
-// engine and made the panel open at a height it never drew.
+// the last time it was drawn, or, on the first open of a session, the height the previous
+// launch remembered. Opening therefore doesn't resize the panel a frame later. Building
+// the view in a headless tester here (as an earlier version did) measured with another
+// text engine and made the panel open at a height it never drew.
 func (a *app) heightForOpen() float32 {
 	if a.screen != screenMain {
 		return a.restHeight()
@@ -861,7 +862,7 @@ func (a *app) heightForOpen() float32 {
 	if a.baseHeight > 0 { // the main page with both lists closed, as it opens
 		return a.baseHeight
 	}
-	return 262
+	return defaultPanelHeight
 }
 
 // speedLabel shows a speed as the footer does: the number rolls, the unit and arrow stay.
