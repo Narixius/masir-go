@@ -16,6 +16,7 @@ import (
 func (a *app) view(c *ui.Context) {
 	p := paletteFor(c)
 	a.palette = p
+	a.tuneTheme(c, p)
 	c.Root().Background(ui.Transparent)
 
 	for _, msg := range a.notices {
@@ -57,7 +58,7 @@ func (a *app) view(c *ui.Context) {
 func (a *app) mainLayer(c *ui.Context, p palette, x float32) ui.Element {
 	layer := ui.Box(c.Key("main-layer")).Absolute().Top(0).Left(0).Width(panelWidth).Translate(x, 0)
 	layer.Children(func() {
-		col := ui.Column(c.Key("main-col")).Padding(16, 16, 12).Gap(tw(2.5)).Shrink(0)
+		col := ui.Column(c.Key("main-col")).Padding(12, 12, 12).Gap(tw(2.5)).Shrink(0)
 		col.Children(func() {
 			a.header(c, p)
 			a.banner(c, p)
