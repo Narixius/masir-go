@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -96,17 +95,13 @@ func TestDaemonUpdatePauseResumeAndStop(t *testing.T) {
 
 func TestDaemonUpdateThenAppUpdateRelaunches(t *testing.T) {
 	f := ukServers()
+	f.status.Version = "0.2.0" // the RESTARTING job's daemon has come back
 	f.release = releaseInfo("0.1.0", "v0.2.0")
-	f.updateJob = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_DONE, Version: "v0.2.0"}
-	f.updateStream = &fakeUpdateStream{jobs: []*pb.UpdateJob{
-		f.updateJob,
-	}}
-	a := newTestApp(f) // attaches to an empty stream; start this job explicitly
-	a.pendingFile = t.TempDir() + "/pending-update"
+	a := newTestApp(f)
+	f.updateJob = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_RESTARTING, Version: "v0.2.0"}
+	f.updateStream = &fakeUpdateStream{jobs: []*pb.UpdateJob{f.updateJob}}
 	a.upd.rel = releaseInfo("0.1.0", "v0.2.0")
 	a.upd.phase = updateAvailable
-	a.upd.daemonDone = false
-	f.updateStream = &fakeUpdateStream{jobs: []*pb.UpdateJob{f.updateJob}}
 	app := &mygo.Update{Version: "0.2.0"}
 	a.upd.app = app
 	installed, relaunched := false, false
@@ -129,11 +124,8 @@ func TestDaemonUpdateThenAppUpdateRelaunches(t *testing.T) {
 	if !installed || !relaunched {
 		t.Fatalf("installed=%v relaunched=%v", installed, relaunched)
 	}
-	if a.upd.pendingVersion != "v0.2.0" {
-		t.Fatalf("pending version = %q", a.upd.pendingVersion)
-	}
-	if b, err := os.ReadFile(a.pendingFile); err != nil || strings.TrimSpace(string(b)) != "v0.2.0" {
-		t.Fatalf("pending file = %q, %v", b, err)
+	if a.upd.phase != updateIdle {
+		t.Fatalf("phase = %v", a.upd.phase)
 	}
 }
 
@@ -211,30 +203,34 @@ func TestDaemonStartForgetsAnIgnoredPrompt(t *testing.T) {
 	}
 }
 
-func TestTheAppCatchesUpADaemonLeftBehindByAnAppOnlyUpdate(t *testing.T) {
+// A version gap asks for a fresh release instead of installing either half on its own.
+func TestAVersionGapAsksForAFreshRelease(t *testing.T) {
 	f := ukServers()
-	a := newTestApp(f) // daemon and app both 0.1.0, so no catch-up yet
+	a := newTestApp(f)
 	f.status.Version = "0.4.0"
 	f.release = releaseInfo("0.4.0", "v0.4.1")
-	f.updateJob = &pb.UpdateJob{
-		Target:  pb.UpdateTarget_UPDATE_TARGET_MASIR,
-		State:   pb.UpdateState_UPDATE_STATE_UP_TO_DATE,
-		Version: "v0.4.1",
-	}
 	a.version = "0.4.1"
+	calls := len(f.calls)
 	a.applyStatus(f.status)
-	if !f.called("start update") {
-		t.Fatalf("the daemon left at 0.4.0 was not updated: %v", f.calls)
+	if len(f.calls) == calls {
+		t.Fatal("a version gap did not ask for a fresh release")
+	}
+	if f.called("start update") {
+		t.Fatalf("the gap installed something on its own: %v", f.calls)
+	}
+	// The same gap is not asked for again on every status.
+	calls = len(f.calls)
+	a.applyStatus(f.status)
+	if len(f.calls) != calls {
+		t.Fatalf("the same gap checked again: %v", f.calls)
 	}
 }
 
-func TestDeferredRestartingFromAnOlderDaemonCompletesTheInstall(t *testing.T) {
+func TestAWatchedRestartWaitsForTheNewVersion(t *testing.T) {
 	f := ukServers()
-	f.restartVersion = "0.4.3"
+	f.status.Version = "0.4.3"
 	a := newTestApp(f)
-	a.pendingFile = t.TempDir() + "/pending-update"
 	a.upd.phase = updateRestarting
-	a.upd.deferRestart = true
 	a.upd.job = &pb.UpdateJob{
 		Target:  pb.UpdateTarget_UPDATE_TARGET_MASIR,
 		State:   pb.UpdateState_UPDATE_STATE_RESTARTING,
@@ -242,56 +238,93 @@ func TestDeferredRestartingFromAnOlderDaemonCompletesTheInstall(t *testing.T) {
 	}
 
 	a.daemonWatchEnded()
-	if !f.called("restart") {
-		t.Fatalf("the deferred install never restarted the daemon: %v", f.calls)
-	}
-	if a.upd.phase != updateIdle || a.upd.pendingVersion != "" {
-		t.Fatalf("phase=%v pending=%q", a.upd.phase, a.upd.pendingVersion)
+	if a.upd.phase != updateIdle {
+		t.Fatalf("phase=%v", a.upd.phase)
 	}
 }
 
-func TestDeferredDaemonUpdateRestartsWithoutAnAppUpdate(t *testing.T) {
+func TestADaemonUpdateWithoutAnAppUpdateFinishes(t *testing.T) {
 	f := ukServers()
 	f.status.Version = "0.2.0"
 	f.release = releaseInfo("0.1.0", "v0.2.0")
-	f.updateJob = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_DONE, Version: "v0.2.0"}
-	f.updateStream = &fakeUpdateStream{jobs: []*pb.UpdateJob{f.updateJob}}
 	a := newTestApp(f)
-	a.pendingFile = t.TempDir() + "/pending-update"
+	f.updateJob = &pb.UpdateJob{Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, State: pb.UpdateState_UPDATE_STATE_RESTARTING, Version: "v0.2.0"}
+	f.updateStream = &fakeUpdateStream{jobs: []*pb.UpdateJob{f.updateJob}}
 	a.upd.rel = releaseInfo("0.1.0", "v0.2.0")
 	a.upd.phase = updateAvailable
 
 	a.startUpdate()
-	if !f.called("restart") {
-		t.Fatalf("a daemon-only update did not restart: %v", f.calls)
+	if !f.called("start update") {
+		t.Fatalf("a daemon update did not start: %v", f.calls)
 	}
-	if a.upd.phase != updateIdle || a.upd.pendingVersion != "" {
-		t.Fatalf("phase=%v pending=%q", a.upd.phase, a.upd.pendingVersion)
-	}
-	if _, err := os.Stat(a.pendingFile); !os.IsNotExist(err) {
-		t.Fatalf("the pending file outlived the restart: %v", err)
+	if a.upd.phase != updateIdle {
+		t.Fatalf("phase=%v", a.upd.phase)
 	}
 }
 
-func TestPendingDaemonRestartHappensOnTheNextLaunch(t *testing.T) {
+// A daemon that runs from the app bundle is replaced by the app update, never by the
+// daemon's own updater.
+func TestABundledDaemonIsUpdatedByTheAppOnly(t *testing.T) {
 	f := ukServers()
-	f.status.Version = "0.1.0"
+	f.status.Bundled = true
 	f.restartVersion = "0.2.0"
-	f.release = releaseInfo("0.2.0", "v0.2.0")
+	f.release = releaseInfo("0.1.0", "v0.2.0")
 	a := newTestApp(f)
-	a.pendingFile = t.TempDir() + "/pending-update"
-	a.upd.pendingVersion = "v0.2.0"
-	a.upd.pendingAtLaunch = true
-	a.savePending("v0.2.0")
+	if a.daemonUpdateAvailable() {
+		t.Fatal("the bundled daemon offered a daemon update")
+	}
+	a.upd.app = &mygo.Update{Version: "0.2.0"}
+	a.upd.phase = updateAvailable
+	installed, relaunched := false, false
+	oldInstall, oldRelaunch := installAppUpdate, relaunchApp
+	installAppUpdate = func(context.Context, *mygo.Update, func(int64, int64)) error { installed = true; return nil }
+	relaunchApp = func() { relaunched = true }
+	t.Cleanup(func() { installAppUpdate, relaunchApp = oldInstall, oldRelaunch })
 
-	a.applyStatus(f.status)
+	a.startUpdate()
+	if f.called("start update") {
+		t.Fatalf("the bundled daemon started a daemon update: %v", f.calls)
+	}
 	if !f.called("restart") {
-		t.Fatalf("the pending daemon was not restarted: %v", f.calls)
+		t.Fatalf("the daemon was not restarted into the new bundle: %v", f.calls)
 	}
-	if a.upd.pendingVersion != "" || a.upd.pendingAtLaunch {
-		t.Fatalf("pending stayed: %q %v", a.upd.pendingVersion, a.upd.pendingAtLaunch)
+	if !installed || !relaunched {
+		t.Fatalf("installed=%v relaunched=%v", installed, relaunched)
 	}
-	if _, err := os.Stat(a.pendingFile); !os.IsNotExist(err) {
-		t.Fatalf("the pending file stayed: %v", err)
+}
+
+// A daemon that comes back without the tunnel is a failed update, not a success.
+func TestADaemonWithoutTheTunnelIsAFailedUpdate(t *testing.T) {
+	f := ukServers()
+	f.status.TunRunning = false
+	f.status.Version = "0.2.0"
+	f.restartVersion = "0.2.0"
+	a := newTestApp(f)
+	a.upd.tunWasOn = true
+	old := daemonWaitTimeout
+	daemonWaitTimeout = 60 * time.Millisecond
+	t.Cleanup(func() { daemonWaitTimeout = old })
+
+	a.restartDaemon("0.2.0")
+	if a.upd.phase != updateFailed {
+		t.Fatalf("phase=%v err=%q", a.upd.phase, a.upd.err)
+	}
+	if !strings.Contains(a.upd.err, "tunnel") {
+		t.Fatalf("err = %q", a.upd.err)
+	}
+}
+
+// An older daemon doesn't report that it is bundled; the path still protects it.
+func TestABundledDaemonPathIsNotOfferedADaemonUpdate(t *testing.T) {
+	f := ukServers()
+	f.release = releaseInfo("0.1.0", "v0.2.0")
+	a := newTestApp(f)
+	a.status.Bundled = false // a daemon built before the field existed
+	a.binary = "/Applications/Masir.app/Contents/Resources/bin/masir"
+	if a.daemonUpdateAvailable() {
+		t.Fatal("a daemon inside the app bundle was offered a daemon update")
+	}
+	if !a.appUpdateCoversDaemon() {
+		t.Fatal("the app update should carry a bundled daemon")
 	}
 }

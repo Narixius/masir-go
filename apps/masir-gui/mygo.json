@@ -2,7 +2,7 @@
   "name": "Masir",
   "slug": "masir-desktop",
   "identifier": "com.masir.app",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "updates": {
     "publicKey": "F1TF2/+0zZqyhC6UZOeAm6K6IzfhOQ91x98gNya4lzg=",
     "github": "Narixius/masir-go",

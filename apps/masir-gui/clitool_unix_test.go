@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/narixius/masir-go/libs/masir-core/service"
 )
 
 // tempHome gives the test a home of its own, and a PATH that does not find the tool.
@@ -397,4 +399,12 @@ func mustRead(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// A CLI link can fall back to the root service's copy (a build with no bundled masir).
+// It is still ours: removing the service must not make the CLI unremovable.
+func TestOurLinkTargetRecognizesTheServiceBinary(t *testing.T) {
+	if !ourLinkTarget(service.BinaryPath()) {
+		t.Fatalf("%s was not recognized as ours", service.BinaryPath())
+	}
 }

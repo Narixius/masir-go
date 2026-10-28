@@ -542,3 +542,76 @@ func TestMasirUpdateRecordsTheRulesThePreflightNamed(t *testing.T) {
 		t.Errorf("binary = %q", got)
 	}
 }
+
+// TestMain lets the update machinery run against local fake releases. The signature
+// tests opt out (or trust a key) themselves; a real build has no such override.
+func TestMain(m *testing.M) {
+	os.Setenv("MASIR_UPDATE_ALLOW_UNSIGNED", "1")
+	os.Exit(m.Run())
+}
+
+func TestVersionTagRejectsPaths(t *testing.T) {
+	for _, tag := range []string{"v0.2.0", "0.2.0", "v1.0.0-rc.1", "v1.2.3+build.1"} {
+		if got, err := VersionTag(tag); err != nil || got != tag {
+			t.Errorf("VersionTag(%q) = %q, %v", tag, got, err)
+		}
+	}
+	for _, tag := range []string{"", "..", "../../etc", "v1.2.3/../../x", "latest"} {
+		if _, err := VersionTag(tag); err == nil {
+			t.Errorf("VersionTag(%q) was accepted", tag)
+		}
+	}
+}
+
+func TestSafeDirNameRejectsPaths(t *testing.T) {
+	if got, err := safeDirName("202409230218"); err != nil || got != "202409230218" {
+		t.Errorf("safeDirName = %q, %v", got, err)
+	}
+	for _, tag := range []string{"", ".", "..", "a/b", `a\b`, "../x"} {
+		if _, err := safeDirName(tag); err == nil {
+			t.Errorf("safeDirName(%q) was accepted", tag)
+		}
+	}
+}
+
+func TestInsideAppBundle(t *testing.T) {
+	root := t.TempDir()
+	inside := filepath.Join(root, "Masir.app", "Contents", "Resources", "bin", "masir")
+	if err := os.MkdirAll(filepath.Dir(inside), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(inside, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !insideAppBundle(inside) {
+		t.Error("a binary in Contents/Resources was not seen as bundled")
+	}
+	link := filepath.Join(root, "masir-link")
+	if err := os.Symlink(inside, link); err != nil {
+		t.Fatal(err)
+	}
+	if !insideAppBundle(link) {
+		t.Error("a symlink into the bundle was not seen as bundled")
+	}
+	if insideAppBundle(filepath.Join(root, "plain", "masir")) {
+		t.Error("a plain path was seen as bundled")
+	}
+	// The desktop app ships its daemon in resources/bin on Windows and Linux too.
+	res := filepath.Join(root, "Masir", "resources", "bin", "masir.exe")
+	if !insideAppBundle(res) {
+		t.Error("a daemon in resources/bin was not seen as bundled")
+	}
+}
+
+func TestUpdatesNeedHTTPS(t *testing.T) {
+	for _, u := range []string{"https://example.test/x", "http://127.0.0.1:1/x", "http://localhost/x"} {
+		if err := secureURL(u); err != nil {
+			t.Errorf("secureURL(%q) = %v", u, err)
+		}
+	}
+	for _, u := range []string{"http://example.test/x", "ftp://example.test/x", "file:///etc/passwd"} {
+		if err := secureURL(u); err == nil {
+			t.Errorf("secureURL(%q) was accepted", u)
+		}
+	}
+}

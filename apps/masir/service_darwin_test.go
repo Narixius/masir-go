@@ -1,26 +1,54 @@
+//go:build darwin
+
 package main
 
 import (
+	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"golang.org/x/sys/unix"
+
+	"github.com/narixius/masir-go/libs/masir-core/service"
 )
 
-func TestServicePlistIsValid(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "masir.plist")
-	if err := os.WriteFile(p, []byte(servicePlist("/usr/local/lib/masir/masir", 501)), 0o644); err != nil {
+// Login Items shows a legacy daemon's executable icon. A bare binary gets it from a
+// resource fork and the FinderInfo custom-icon flag, which updates must re-apply.
+func TestApplyFileIconSetsTheServiceIcon(t *testing.T) {
+	dir := t.TempDir()
+	rsrc := bytes.Repeat([]byte{1, 2, 3, 4}, 16)
+	info := make([]byte, 32)
+	info[8] = 0x04 // kHasCustomIcon in the Finder flags
+	if err := os.WriteFile(filepath.Join(dir, "AppIcon.rsrc"), rsrc, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("plutil", "-lint", p).CombinedOutput(); err != nil {
-		t.Fatalf("plutil: %v\n%s", err, out)
+	if err := os.WriteFile(filepath.Join(dir, "FinderInfo.bin"), info, 0o644); err != nil {
+		t.Fatal(err)
 	}
-	out, err := exec.Command("plutil", "-extract", "ProgramArguments", "json", "-o", "-", p).Output()
-	if err != nil || strings.TrimSpace(string(out)) != `["\/usr\/local\/lib\/masir\/masir","daemon","run","--user","501"]` {
-		t.Fatalf("ProgramArguments = %s, %v", out, err)
+	bin := filepath.Join(dir, "Masir")
+	if err := os.WriteFile(bin, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if out, _ := exec.Command("plutil", "-extract", "KeepAlive.SuccessfulExit", "raw", p).Output(); strings.TrimSpace(string(out)) != "false" {
-		t.Fatalf("KeepAlive.SuccessfulExit = %s; a clean Shutdown must not be restarted", out)
+	applyFileIcon(bin, dir)
+	for _, c := range []struct {
+		attr string
+		want []byte
+	}{
+		{"com.apple.ResourceFork", rsrc},
+		{"com.apple.FinderInfo", info},
+	} {
+		buf := make([]byte, len(c.want)+16)
+		n, err := unix.Getxattr(bin, c.attr, buf)
+		if err != nil || !bytes.Equal(buf[:n], c.want) {
+			t.Fatalf("%s = %x, %v; want %x", c.attr, buf[:n], err, c.want)
+		}
+	}
+}
+
+// The legacy Login Items row falls back to the executable's name; capitalize it.
+func TestServiceBinaryIsNamedMasir(t *testing.T) {
+	if got := filepath.Base(service.BinaryPath()); got != "Masir" {
+		t.Fatalf("service binary = %q, want Masir", got)
 	}
 }

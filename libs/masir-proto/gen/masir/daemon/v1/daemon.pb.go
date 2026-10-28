@@ -287,7 +287,15 @@ type Status struct {
 	Revision uint64 `protobuf:"varint,25,opt,name=revision,proto3" json:"revision,omitempty"`
 	// When this daemon process started. A new value means it restarted, so a memory-only
 	// choice such as an ignored update prompt is gone.
-	StartedAtMs   int64 `protobuf:"varint,26,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	StartedAtMs int64 `protobuf:"varint,26,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	// The service as the OS sees it. service_installed says its definition exists;
+	// service_running says the service manager is running it now; service_enabled says the
+	// person hasn't turned it off (macOS Login Items, systemd enablement).
+	ServiceRunning bool `protobuf:"varint,27,opt,name=service_running,json=serviceRunning,proto3" json:"service_running,omitempty"`
+	ServiceEnabled bool `protobuf:"varint,28,opt,name=service_enabled,json=serviceEnabled,proto3" json:"service_enabled,omitempty"`
+	// bundled says this daemon runs from the desktop app's bundle. Such a copy belongs to
+	// the app updater: it must not replace itself, and an update of the app carries it.
+	Bundled       bool `protobuf:"varint,29,opt,name=bundled,proto3" json:"bundled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -502,6 +510,27 @@ func (x *Status) GetStartedAtMs() int64 {
 		return x.StartedAtMs
 	}
 	return 0
+}
+
+func (x *Status) GetServiceRunning() bool {
+	if x != nil {
+		return x.ServiceRunning
+	}
+	return false
+}
+
+func (x *Status) GetServiceEnabled() bool {
+	if x != nil {
+		return x.ServiceEnabled
+	}
+	return false
+}
+
+func (x *Status) GetBundled() bool {
+	if x != nil {
+		return x.Bundled
+	}
+	return false
 }
 
 type GetStatusRequest struct {
@@ -6168,7 +6197,7 @@ var File_masir_daemon_v1_daemon_proto protoreflect.FileDescriptor
 
 const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\n" +
-	"\x1cmasir/daemon/v1/daemon.proto\x12\x0fmasir.daemon.v1\"\x98\b\n" +
+	"\x1cmasir/daemon/v1/daemon.proto\x12\x0fmasir.daemon.v1\"\x84\t\n" +
 	"\x06Status\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12!\n" +
 	"\fxray_version\x18\x02 \x01(\tR\vxrayVersion\x12%\n" +
@@ -6202,7 +6231,10 @@ const file_masir_daemon_v1_daemon_proto_rawDesc = "" +
 	"\ageo_dir\x18\x17 \x01(\tR\x06geoDir\x12A\n" +
 	"\rrule_problems\x18\x18 \x03(\v2\x1c.masir.daemon.v1.RuleProblemR\fruleProblems\x12\x1a\n" +
 	"\brevision\x18\x19 \x01(\x04R\brevision\x12\"\n" +
-	"\rstarted_at_ms\x18\x1a \x01(\x03R\vstartedAtMs\"\x12\n" +
+	"\rstarted_at_ms\x18\x1a \x01(\x03R\vstartedAtMs\x12'\n" +
+	"\x0fservice_running\x18\x1b \x01(\bR\x0eserviceRunning\x12'\n" +
+	"\x0fservice_enabled\x18\x1c \x01(\bR\x0eserviceEnabled\x12\x18\n" +
+	"\abundled\x18\x1d \x01(\bR\abundled\"\x12\n" +
 	"\x10GetStatusRequest\"D\n" +
 	"\x11GetStatusResponse\x12/\n" +
 	"\x06status\x18\x01 \x01(\v2\x17.masir.daemon.v1.StatusR\x06status\"\x14\n" +

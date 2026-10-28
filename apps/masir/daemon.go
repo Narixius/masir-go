@@ -22,6 +22,15 @@ import (
 var errNoService = errors.New("installing the masir daemon as a service isn't supported on this OS yet")
 
 func daemonStart(args) error {
+	if service.Installed() { // the service is the supervisor; start it, not a second daemon
+		s := ui.Spin("Starting the masir service (" + elevationHint + ")")
+		if err := restartService(); err != nil {
+			s.Fail(err.Error())
+			return errReported
+		}
+		s.Stop("The masir service is running.")
+		return nil
+	}
 	sock, err := paths.SocketPath()
 	if err != nil {
 		return err
@@ -84,6 +93,32 @@ func daemonEnable(a args) error {
 		user = currentUser()
 	}
 	return enableService(user)
+}
+
+// daemonRollback restores the service's previous binary after an update that installed
+// but didn't start. `masir update` keeps it beside the service's copy.
+func daemonRollback(args) error {
+	if !service.Installed() {
+		return fail("no service is installed, so there is no previous service version to restore")
+	}
+	if !elevated() {
+		return elevate("daemon", "rollback")
+	}
+	prev := service.BinaryPath() + ".previous"
+	if _, err := os.Stat(prev); err != nil {
+		return fail("there is no previous version to restore")
+	}
+	if err := copyFile(prev, service.BinaryPath(), 0o755); err != nil {
+		return err
+	}
+	if same, err := sameContent(prev, service.BinaryPath()); err != nil || !same {
+		return fail("the restored copy doesn't match the saved version")
+	}
+	if err := restartService(); err != nil {
+		return err
+	}
+	ui.Success("The previous masir version is running.")
+	return nil
 }
 
 func daemonDisable(args) error {
@@ -150,11 +185,10 @@ func enableService(user string) error {
 	if err != nil {
 		return err
 	}
-	bin, err := installBinary(src)
-	if err != nil {
+	if _, err := installBinary(src); err != nil {
 		return err
 	}
-	if err := installService(bin, user); err != nil {
+	if err := installService(service.BinaryPath(), user); err != nil {
 		return err
 	}
 	ui.Success("masir is installed as a system service. It starts at boot, and TUN mode needs no permission prompt from now on.")
@@ -235,23 +269,56 @@ func installBinary(src string) (string, error) {
 		return "", err
 	}
 	stopServiceForInstall()
-	name := "masir"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
+	name := filepath.Base(service.BinaryPath())
 	bin := filepath.Join(dir, name)
 	if err := copyFile(src, bin, 0o755); err != nil {
 		return "", err
 	}
+	// The service runs this copy as root. A short write or a swapped source must not
+	// become the daemon.
+	if same, err := sameContent(src, bin); err != nil || !same {
+		return "", errors.New("the service's copy of masir doesn't match the running binary")
+	}
 	os.Remove(filepath.Join(dir, "masird")) // the separate daemon binary of earlier versions
+	if runtime.GOOS == "darwin" {
+		// An older app wrapper is not part of the service now, and a stale wrapper
+		// would keep the wrong name and icon in Login Items. Do not try to remove a
+		// lowercase "masir": on the default case-insensitive APFS it is this same file.
+		os.RemoveAll(filepath.Join(dir, "Masir.app"))
+	}
 	for _, f := range []string{"geoip.dat", "geosite.dat"} {
 		from := filepath.Join(filepath.Dir(src), f)
 		if _, err := os.Stat(from); err == nil {
-			if err := copyFile(from, filepath.Join(dir, f), 0o644); err != nil {
+			to := filepath.Join(dir, f)
+			if err := copyFile(from, to, 0o644); err != nil {
 				return "", err
+			}
+			if same, err := sameContent(from, to); err != nil || !same {
+				return "", errors.New("the service's copy of " + f + " doesn't match the running data")
 			}
 		}
 	}
+	// Give the service binary the app's Finder icon, so Login Items shows Masir's icon
+	// instead of the generic executable. The files sit beside it; updates re-apply them.
+	for _, f := range []string{"AppIcon.rsrc", "FinderInfo.bin"} {
+		to := filepath.Join(dir, f)
+		for _, from := range []string{
+			filepath.Join(filepath.Dir(src), "..", f),
+			filepath.Join(filepath.Dir(src), f),
+			to,
+		} {
+			if filepath.Clean(from) == filepath.Clean(to) {
+				break
+			}
+			if fi, err := os.Stat(from); err == nil && !fi.IsDir() {
+				if err := copyFile(from, to, 0o644); err != nil {
+					return "", err
+				}
+				break
+			}
+		}
+	}
+	applyFileIcon(bin, dir)
 	return bin, nil
 }
 

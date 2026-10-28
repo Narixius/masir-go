@@ -41,6 +41,17 @@ func uninstallService(bin string) error {
 	return runAdmin(bin, "daemon", "disable")
 }
 
+// startService starts the installed service again through launchd. The app never starts
+// a second daemon of its own while a service is installed.
+func startService(bin string) error {
+	return runAdmin(bin, "daemon", "restart")
+}
+
+// openLoginItems opens System Settings where the person can allow the background item.
+func openLoginItems() error {
+	return exec.Command("open", "x-apple.systempreferences:com.apple.LoginItems-Settings.extension").Run()
+}
+
 // runAdmin runs bin with args through the system's permission prompt.
 func runAdmin(bin string, args ...string) error {
 	if bin == "" {

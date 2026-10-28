@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,7 +19,9 @@ import (
 // prompt comes back when a fresh check runs (or when the daemon restarts).
 const (
 	updateCheckEvery = 24 * time.Hour
-	updateRetryWait  = updateCheckEvery
+	// updateRetryWait is how soon a failed check is tried again. A lost network at launch
+	// must not hide a security update for a day.
+	updateRetryWait = 15 * time.Minute
 )
 
 // updatePhase is what the footer's update control shows.
@@ -49,8 +51,10 @@ type updateState struct {
 	job      *pb.UpdateJob
 	err      string
 	checking bool
-	// appChecked says the signed app update was asked for in this check cycle.
+	// appChecked says the signed app update was asked for in this check cycle;
+	// appAttempt is when, so a failed check is retried later rather than on every status.
 	appChecked bool
+	appAttempt time.Time
 	// lastAttempt keeps a failed release check from being repeated on every status.
 	lastAttempt time.Time
 	lastStart   int64
@@ -61,16 +65,28 @@ type updateState struct {
 	appCancel       context.CancelFunc
 	appRun          int
 	watchCancel     context.CancelFunc
-	daemonDone      bool
 	ignoreBusy      bool
 	attached        bool
 	attaching       bool
-	deferRestart    bool
-	pendingVersion  string
-	pendingAtLaunch bool
+	sawJob          bool // the current watch stream saw a job that was doing something
 	restarting      bool
-	catchUp         bool // this app launch already checked a daemon left behind by an app-only update
+	// tunWasOn remembers the tunnel before a daemon update, so the update can report
+	// that it didn't come back instead of calling itself installed.
+	tunWasOn bool
+	// gapSeen is the daemon/app version pair already checked, so a persistent gap asks
+	// for a fresh release once instead of on every status.
+	gapSeen string
+	// wantApp says the person asked for the update and the app feed hasn't answered yet.
+	// A bundled daemon is updated by the app, so the answer decides what runs.
+	wantApp bool
+	// relaunchAfterRestart relaunches the app once a bundled daemon has restarted into
+	// the app update's copy.
+	relaunchAfterRestart bool
 }
+
+// daemonWaitTimeout bounds how long a restarted daemon may take to answer with the new
+// version (and the tunnel). Tests shorten it.
+var daemonWaitTimeout = 2 * time.Minute
 
 // The app's updater is behind variables so tests do not need a signed release or a
 // running application.
@@ -94,7 +110,6 @@ func (a *app) observeUpdates(st *pb.Status) {
 		a.upd.appChecked = false
 		a.upd.lastAttempt = time.Time{}
 		a.upd.attached = false
-		a.upd.deferRestart = false
 		if a.upd.phase == updateAvailable || a.upd.phase == updateFailed {
 			a.upd.phase = updateIdle
 		}
@@ -107,8 +122,7 @@ func (a *app) observeUpdates(st *pb.Status) {
 	} else if !a.busyUpdate() {
 		a.upd.rel = nil
 	}
-	a.maybeFinishPending(st)
-	a.catchUpDaemon(st)
+	a.noteVersionGap(st)
 	a.maybeCheckUpdates()
 	if !a.upd.attached {
 		// A job started by the CLI or a previous GUI is still the one to show.
@@ -125,6 +139,7 @@ func (a *app) applyRelease(rel *pb.ReleaseInfo) {
 	if old == nil || old.GetCheckedAtMs() != rel.GetCheckedAtMs() {
 		// A fresh daemon check starts a new check cycle for the signed app update too.
 		a.upd.appChecked = false
+		a.upd.appAttempt = time.Time{}
 	}
 	if a.upd.phase == updateAvailable && !a.hasUpdate() {
 		a.upd.phase = updateIdle
@@ -134,41 +149,32 @@ func (a *app) applyRelease(rel *pb.ReleaseInfo) {
 	}
 }
 
-// catchUpDaemon handles the one case the app update can leave behind: the desktop app
-// reached a release before the daemon's cached release check knew about it, so the update
-// only replaced the app. The daemon and the app should run the same release; ask GitHub
-// directly, then install the daemon if it is behind.
-func (a *app) catchUpDaemon(st *pb.Status) {
-	if a.upd.catchUp || a.busyUpdate() || a.upd.checking || a.upd.restarting {
+// noteVersionGap notices that the app and the daemon run different releases. The
+// source of truth is the release, not a forced install: ask for a fresh check so the
+// control can offer the right side (the app when the daemon is bundled, the service
+// update when the service is behind). A gap that is still there is not checked again.
+func (a *app) noteVersionGap(st *pb.Status) {
+	if a.busyUpdate() || a.upd.checking || a.upd.restarting {
 		return
 	}
-	if a.version == "" || st.GetVersion() == "" || sameVersion(a.version, st.GetVersion()) {
+	if a.version == "" || st.GetVersion() == "" {
 		return
 	}
-	a.upd.catchUp = true
-	a.checkDaemonReleaseForced()
-}
-
-// checkDaemonReleaseForced asks GitHub through the daemon, ignoring its one-day cache,
-// and starts the daemon update when the app is newer than what runs.
-func (a *app) checkDaemonReleaseForced() {
-	a.upd.checking = true
-	a.async(func() {
-		ctx, cancel := rpc()
-		res, err := a.d.CheckUpdate(ctx, &pb.CheckUpdateRequest{Force: true})
-		cancel()
-		a.post(func() {
-			a.upd.checking = false
-			if err == nil && res.GetRelease() != nil {
-				a.applyRelease(res.GetRelease())
-				if a.daemonUpdateAvailable() && !a.busyUpdate() {
-					a.startDaemonUpdate()
-					return
-				}
-			}
-			a.maybeCheckUpdates()
-		})
-	})
+	if sameVersion(a.version, st.GetVersion()) {
+		a.upd.gapSeen = ""
+		return
+	}
+	gap := a.version + "|" + st.GetVersion()
+	if a.upd.gapSeen == gap {
+		return
+	}
+	a.upd.gapSeen = gap
+	// Drop the cached release so the next check asks the daemon for fresh data; the
+	// app feed is asked again in the same cycle.
+	a.upd.rel = nil
+	a.upd.appChecked = false
+	a.upd.lastAttempt = time.Time{}
+	a.maybeCheckUpdates()
 }
 
 // maybeCheckUpdates asks the daemon for a release when its cached one is missing or old,
@@ -190,6 +196,9 @@ func (a *app) maybeCheckUpdates() {
 		return
 	}
 	if !a.upd.appChecked {
+		if !a.upd.appAttempt.IsZero() && time.Since(a.upd.appAttempt) < updateRetryWait {
+			return
+		}
 		a.checkAppRelease()
 	}
 }
@@ -215,7 +224,12 @@ func (a *app) checkDaemonRelease() {
 // checkAppRelease asks MyGo for a signed update of the desktop app itself.
 func (a *app) checkAppRelease() {
 	a.upd.appChecked = true
+	a.upd.appAttempt = time.Now()
 	if !appUpdatesEnabled() {
+		if a.upd.wantApp {
+			a.upd.wantApp = false
+			a.upd.phase = updateIdle
+		}
 		return
 	}
 	a.async(func() {
@@ -225,6 +239,19 @@ func (a *app) checkAppRelease() {
 		a.post(func() {
 			if err == nil {
 				a.upd.app = u
+			} else {
+				// Try again after updateRetryWait instead of hiding the update until
+				// the next daily release check.
+				a.upd.appChecked = false
+			}
+			if a.upd.wantApp {
+				a.upd.wantApp = false
+				if u != nil {
+					a.startAppUpdate()
+					return
+				}
+				a.upd.phase = updateIdle
+				a.upd.err = ""
 			}
 			if a.upd.phase == updateAvailable && !a.hasUpdate() {
 				a.upd.phase = updateIdle
@@ -246,10 +273,40 @@ func sameVersion(a, b string) bool {
 	return strings.TrimPrefix(strings.TrimSpace(a), "v") == strings.TrimPrefix(strings.TrimSpace(b), "v")
 }
 
-// daemonUpdateAvailable reports whether the daemon and CLI have a newer release.
+// daemonUpdateAvailable reports whether the daemon and CLI have a newer release that
+// this copy may install. A daemon running from the desktop app's bundle is the app's
+// copy: only the app updater may replace it. A service or standalone copy is the
+// daemon's own to update from the signed release.
 func (a *app) daemonUpdateAvailable() bool {
+	if a.daemonIsBundled() {
+		return false
+	}
+	return a.daemonReleaseAvailable()
+}
+
+// daemonIsBundled reports whether the daemon the app starts or talks to is the app's
+// own copy. The path says so even when the daemon predates the status field, which is
+// the first update after this change.
+func (a *app) daemonIsBundled() bool {
+	if a.status != nil && a.status.GetBundled() {
+		return true
+	}
+	p := filepath.ToSlash(a.binary)
+	return strings.Contains(p, ".app/Contents/") ||
+		strings.Contains(p, "/resources/bin/") || strings.Contains(p, "/Resources/bin/")
+}
+
+// daemonReleaseAvailable is the release check alone, before deciding which copy (the
+// app's bundle or the service) is the one that may install it.
+func (a *app) daemonReleaseAvailable() bool {
 	rel := a.upd.rel
 	return rel != nil && rel.GetAvailable() && !a.ignored(rel.GetLatestVersion())
+}
+
+// appUpdateCoversDaemon reports whether the only way to update this daemon is the app
+// update, because it runs from the app bundle.
+func (a *app) appUpdateCoversDaemon() bool {
+	return a.daemonIsBundled()
 }
 
 // appUpdateAvailable reports whether the signed desktop app has a newer release.
@@ -257,9 +314,41 @@ func (a *app) appUpdateAvailable() bool {
 	return a.upd.app != nil && !a.ignored(a.upd.app.Version)
 }
 
-// hasUpdate reports whether either side has an update the person has not ignored.
+// hasUpdate reports whether either side has an update the person has not ignored. A
+// bundled daemon's release is shown too: the app update is how it is installed.
 func (a *app) hasUpdate() bool {
-	return a.daemonUpdateAvailable() || a.appUpdateAvailable()
+	if a.daemonUpdateAvailable() || a.appUpdateAvailable() {
+		return true
+	}
+	// A bundled daemon is updated by the app. Until the app feed has answered, its
+	// release is still worth showing; once it says the app is current, it isn't.
+	return a.appUpdateCoversDaemon() && a.daemonReleaseAvailable() && !a.upd.appChecked
+}
+
+// updateInFlight answers the daemon watch from another goroutine. The update state is
+// main-thread only, so the question is asked there and the answer carried back.
+func (a *app) updateInFlight() bool {
+	var busy bool
+	a.post(func() { busy = a.busyUpdate() || a.upd.restarting })
+	return busy
+}
+
+// servicePresent answers whether a service is installed, from the main thread. It also
+// asks the filesystem, so a status that hasn't arrived yet can't make the app start a
+// second daemon beside a service.
+func (a *app) servicePresent() bool {
+	var present bool
+	a.post(func() {
+		present = (a.status != nil && a.status.GetServiceInstalled()) || service.Installed()
+	})
+	return present
+}
+
+// daemonPath is a.binary, read on the main thread.
+func (a *app) daemonPath() string {
+	var p string
+	a.post(func() { p = a.binary })
+	return p
 }
 
 // busy reports whether an update is doing something, so a check must not interrupt it.
@@ -294,12 +383,22 @@ func (a *app) startUpdate() {
 	}
 	if a.appUpdateAvailable() {
 		a.startAppUpdate()
+		return
+	}
+	if a.appUpdateCoversDaemon() {
+		// The daemon runs from the app bundle, so the app update is the update. Its
+		// feed may still be answering; start it as soon as it does.
+		a.upd.wantApp = true
+		a.upd.phase = updateStarting
+		a.upd.appChecked = false
+		a.upd.appAttempt = time.Time{}
+		a.checkAppRelease()
 	}
 }
 
 func (a *app) startDaemonUpdate() {
 	a.upd.phase = updateStarting
-	a.upd.deferRestart = true
+	a.upd.tunWasOn = a.status != nil && a.status.GetTunRunning()
 	client := ""
 	if a.cli.installed {
 		client = a.cli.path
@@ -307,19 +406,19 @@ func (a *app) startDaemonUpdate() {
 	root := a.privileged()
 	a.async(func() {
 		if service.Installed() && !root {
-			if err := a.becomePrivileged(); err != nil {
-				a.post(func() {
-					a.upd.phase = updateFailed
-					a.upd.err = describe(err)
-					a.notify("The update failed: " + a.upd.err)
-				})
-				return
-			}
+			// The service is the supervisor. Starting a session root daemon here would
+			// replace it (launchd doesn't restart a clean exit), so ask the person to
+			// start the service instead of quietly taking over.
+			a.post(func() {
+				a.upd.phase = updateFailed
+				a.upd.err = "the background service isn't running; start it in Settings"
+				a.notify("The update failed: " + a.upd.err)
+			})
+			return
 		}
 		ctx, cancel := rpc()
 		res, err := a.d.StartUpdate(ctx, &pb.StartUpdateRequest{
 			Target: pb.UpdateTarget_UPDATE_TARGET_MASIR, Trigger: "user", ClientBinary: client,
-			DeferRestart: true,
 		})
 		cancel()
 		a.post(func() {
@@ -382,6 +481,9 @@ func (a *app) applyJob(job *pb.UpdateJob) {
 		}
 	}
 	a.upd.job = job
+	if updateActive(job.GetState()) {
+		a.upd.sawJob = true
+	}
 	switch job.GetState() {
 	case pb.UpdateState_UPDATE_STATE_CHECKING:
 		a.upd.phase = updateStarting
@@ -396,7 +498,7 @@ func (a *app) applyJob(job *pb.UpdateJob) {
 	case pb.UpdateState_UPDATE_STATE_RESTARTING:
 		a.upd.phase = updateRestarting
 	case pb.UpdateState_UPDATE_STATE_DONE:
-		a.daemonInstalled()
+		a.daemonAfterInstall(job)
 	case pb.UpdateState_UPDATE_STATE_UP_TO_DATE:
 		a.daemonFinished()
 	case pb.UpdateState_UPDATE_STATE_STOPPED:
@@ -416,20 +518,18 @@ func (a *app) applyJob(job *pb.UpdateJob) {
 }
 
 // daemonWatchEnded handles a watch stream that ended, including the daemon going away
-// to restart into the new version.
+// to restart into the new version. A stream that saw a real job leaves the attach flag
+// clear, so the next job (for example one started by the CLI) is followed too.
 func (a *app) daemonWatchEnded() {
 	a.upd.attaching = false
+	if a.upd.sawJob {
+		a.upd.sawJob = false
+		a.upd.attached = false
+	}
 	if a.upd.phase == updateRestarting && a.upd.restarting {
-		return // the deferred restart is driven by restartDaemon
+		return // restartDaemon is following the daemon it asked to restart
 	}
 	if a.upd.phase == updateRestarting {
-		if a.upd.deferRestart {
-			// An older daemon finishes a deferred install as RESTARTING. It means the
-			// binary is installed and this process is intentionally still running; the
-			// GUI records the install and does the restart itself.
-			a.daemonInstalled()
-			return
-		}
 		a.awaitDaemon(a.upd.job.GetVersion())
 		return
 	}
@@ -444,66 +544,73 @@ func (a *app) daemonWatchEnded() {
 	a.notify("The update failed: " + a.upd.err)
 }
 
-// awaitDaemon waits for the restarted daemon to report the version the update installed.
+// awaitDaemon waits for the restarted daemon to report the version the update installed,
+// and for the tunnel to come back when it was on before the update.
 func (a *app) awaitDaemon(version string) {
 	a.async(func() {
-		deadline := time.Now().Add(2 * time.Minute)
-		for time.Now().Before(deadline) {
-			ctx, cancel := rpc()
-			res, err := a.d.GetStatus(ctx, &pb.GetStatusRequest{})
-			cancel()
-			if err == nil && (version == "" || sameVersion(res.GetStatus().GetVersion(), version)) {
-				a.post(a.daemonFinished)
-				return
+		if err := a.waitForDaemon(version, daemonWaitTimeout); err != nil {
+			msg := err.Error()
+			if service.Installed() {
+				msg += "; run `masir daemon rollback` to put the previous version back"
 			}
-			time.Sleep(500 * time.Millisecond)
+			a.post(func() {
+				a.upd.phase = updateFailed
+				a.upd.err = msg
+				a.notify("The update failed: " + a.upd.err)
+			})
+			return
 		}
-		a.post(func() {
-			a.upd.phase = updateFailed
-			a.upd.err = "the daemon didn't come back after the update"
-			a.notify("The update failed: " + a.upd.err)
-		})
+		a.post(a.daemonFinished)
 	})
 }
 
-// daemonInstalled records a deferred daemon install and moves on to the app update, or
-// restarts the daemon when there is no app update to follow.
-func (a *app) daemonInstalled() {
-	if a.upd.phase == updateAppDownloading || a.upd.phase == updateAppPaused || a.upd.phase == updateAppInstalling {
-		return
+// waitForDaemon polls until the daemon reports version and, if the tunnel was on
+// before the update, has it up again. It never treats a daemon without the tunnel as
+// installed.
+func (a *app) waitForDaemon(version string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	sawVersion := false
+	for time.Now().Before(deadline) {
+		ctx, cancel := rpc()
+		res, err := a.d.GetStatus(ctx, &pb.GetStatusRequest{})
+		cancel()
+		if err == nil {
+			st := res.GetStatus()
+			if version == "" || sameVersion(st.GetVersion(), version) {
+				sawVersion = true
+				if !a.upd.tunWasOn || st.GetTunRunning() {
+					return nil
+				}
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	version := a.upd.job.GetVersion()
-	a.upd.daemonDone = true
-	a.upd.job = nil
-	a.upd.deferRestart = false
-	if a.upd.rel != nil {
-		rel := proto.Clone(a.upd.rel).(*pb.ReleaseInfo)
-		rel.Available = false
-		rel.IgnoredVersion = ""
-		a.upd.rel = rel
+	if sawVersion {
+		return errors.New("the daemon came back without the tunnel; it will be back when masir reconnects")
 	}
-	if version != "" {
-		a.upd.pendingVersion = version
-		a.upd.pendingAtLaunch = false
-		a.savePending(version)
-	}
-	if a.appUpdateAvailable() {
-		a.startAppUpdate()
-		return
-	}
-	if version != "" {
-		a.restartDaemon(version)
-		return
-	}
-	a.upd.phase = updateIdle
+	return errors.New("the daemon didn't come back after the update")
 }
 
-// daemonFinished moves on after an immediate daemon restart, or back to the version text.
+// daemonAfterInstall handles a job that installed without restarting (an older daemon,
+// or a target that has no restart step): restart only when the running version differs.
+func (a *app) daemonAfterInstall(job *pb.UpdateJob) {
+	if a.status != nil && job.GetVersion() != "" && sameVersion(a.status.GetVersion(), job.GetVersion()) {
+		a.daemonFinished()
+		return
+	}
+	if job.GetVersion() != "" {
+		a.upd.tunWasOn = a.status != nil && a.status.GetTunRunning()
+		a.restartDaemon(job.GetVersion())
+		return
+	}
+	a.daemonFinished()
+}
+
+// daemonFinished moves on to the app update, or back to the version text.
 func (a *app) daemonFinished() {
 	if a.upd.phase == updateAppDownloading || a.upd.phase == updateAppPaused || a.upd.phase == updateAppInstalling {
 		return // the app update already started from the daemon's final job
 	}
-	a.upd.daemonDone = true
 	a.upd.job = nil
 	if a.upd.rel != nil {
 		// Keep the release for the app-only ignore; it is no longer daemon-available.
@@ -572,7 +679,17 @@ func (a *app) startAppUpdate() {
 				a.upd.err = err.Error()
 				a.notify("The app update failed: " + a.upd.err)
 			default:
-				a.upd.phase = updateAppInstalling
+				a.upd.phase = updateIdle
+				// A daemon that runs from the old bundle must restart into the new one
+				// before the app relaunches, so the tunnel comes back with this release.
+				// If no daemon is running there is nothing to restart: the new app starts
+				// one itself.
+				if a.appUpdateCoversDaemon() && a.reachable && a.status != nil && !sameVersion(a.status.GetVersion(), u.Version) {
+					a.upd.tunWasOn = a.status.GetTunRunning()
+					a.upd.relaunchAfterRestart = true
+					a.restartDaemon(u.Version)
+					return
+				}
 				relaunchApp()
 			}
 		})
@@ -677,7 +794,7 @@ func (a *app) ignoreUpdate() {
 	}
 	version := ""
 	switch {
-	case a.daemonUpdateAvailable():
+	case a.daemonReleaseAvailable():
 		version = a.upd.rel.GetLatestVersion()
 	case a.appUpdateAvailable():
 		version = a.upd.app.Version
@@ -761,63 +878,9 @@ func (a *app) updateLabel() string {
 	return ""
 }
 
-// pendingUpdateFile is where the GUI remembers a daemon binary it installed but did not
-// restart yet. It is separate from the daemon's data, so an app update keeps it.
-func pendingUpdateFile() string {
-	dir, err := mygo.App.Path(mygo.PathUserData)
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "pending-update")
-}
-
-func readPendingUpdate(path string) string {
-	if path == "" {
-		return ""
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
-
-func (a *app) savePending(version string) {
-	if a.pendingFile == "" || version == "" {
-		return
-	}
-	_ = os.MkdirAll(filepath.Dir(a.pendingFile), 0o700)
-	_ = os.WriteFile(a.pendingFile, []byte(version+"\n"), 0o600)
-}
-
-func (a *app) clearPending() {
-	if a.pendingFile != "" {
-		_ = os.Remove(a.pendingFile)
-	}
-}
-
-// maybeFinishPending restarts a daemon whose new binary was installed by the previous
-// app session, once the app has been updated and started again.
-func (a *app) maybeFinishPending(st *pb.Status) {
-	version := a.upd.pendingVersion
-	if version == "" {
-		return
-	}
-	if st.GetVersion() != "" && sameVersion(st.GetVersion(), version) {
-		a.upd.pendingVersion, a.upd.pendingAtLaunch = "", false
-		a.clearPending()
-		if a.upd.phase == updateRestarting {
-			a.upd.phase = updateIdle
-		}
-		return
-	}
-	if a.upd.pendingAtLaunch && !a.busyUpdate() && !a.upd.restarting {
-		a.restartDaemon(version)
-	}
-}
-
-// restartDaemon stops the running daemon so the service (or the app's watch) starts the
-// binary installed by the deferred daemon update.
+// restartDaemon asks the daemon to start the binary now on disk: the service or the
+// app's watch starts the same process again. It waits for the expected version and the
+// tunnel, so a binary that installs but doesn't run is a failure, not a success.
 func (a *app) restartDaemon(version string) {
 	if a.upd.restarting {
 		return
@@ -834,27 +897,28 @@ func (a *app) restartDaemon(version string) {
 			_, _ = a.d.Shutdown(ctx, &pb.ShutdownRequest{})
 			cancel()
 		}
-		deadline := time.Now().Add(2 * time.Minute)
-		for time.Now().Before(deadline) {
-			ctx, cancel := rpc()
-			res, err := a.d.GetStatus(ctx, &pb.GetStatusRequest{})
-			cancel()
-			if err == nil && (version == "" || sameVersion(res.GetStatus().GetVersion(), version)) {
-				a.post(func() {
-					a.upd.restarting = false
-					a.upd.pendingVersion, a.upd.pendingAtLaunch = "", false
-					a.clearPending()
-					a.upd.phase = updateIdle
-				})
-				return
+		if err := a.waitForDaemon(version, daemonWaitTimeout); err != nil {
+			msg := err.Error()
+			if service.Installed() {
+				msg += "; run `masir daemon rollback` to put the previous version back"
 			}
-			time.Sleep(500 * time.Millisecond)
+			a.post(func() {
+				a.upd.restarting = false
+				a.upd.relaunchAfterRestart = false
+				a.upd.phase = updateFailed
+				a.upd.err = msg
+				a.notify("The update failed: " + a.upd.err)
+			})
+			return
 		}
+		relaunch := a.upd.relaunchAfterRestart
 		a.post(func() {
 			a.upd.restarting = false
-			a.upd.phase = updateFailed
-			a.upd.err = "the daemon didn't restart into the installed version"
-			a.notify("The update failed: " + a.upd.err)
+			a.upd.relaunchAfterRestart = false
+			a.upd.phase = updateIdle
+			if relaunch {
+				relaunchApp()
+			}
 		})
 	})
 }

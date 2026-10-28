@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/narixius/masir-go/libs/masir-core/service"
 	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
 
@@ -206,6 +207,7 @@ func newTestApp(f *fakeDaemon) *app {
 	setOpenAtLogin = func(bool) error { return nil }
 	quit = func() {}
 	readClipboard = func() string { return "" }
+	readService = func() service.Info { return service.Info{} }
 	a := newApp(f, "")
 	a.motion.instant = true // no waiting for animations
 	a.async = func(fn func()) { fn() }

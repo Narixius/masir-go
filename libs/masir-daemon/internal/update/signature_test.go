@@ -117,8 +117,26 @@ func TestUpdateAcceptsEitherOfTwoKeys(t *testing.T) {
 	}
 }
 
-func TestBuildWithoutKeysDoesNotCheckSignatures(t *testing.T) {
+// A release build that lost its key must not fall back to installing unsigned archives:
+// that would make the update channel forgeable.
+func TestBuildWithoutKeysRefusesEveryRelease(t *testing.T) {
+	t.Setenv("MASIR_UPDATE_ALLOW_UNSIGNED", "")
 	trust(t) // none
+	bin, r, task := release(t, nil)
+	r.Start(task.Run)
+	job := wait(t, r)
+	if job.State != pb.UpdateState_UPDATE_STATE_FAILED || !strings.Contains(job.Error, "no update signing key") {
+		t.Fatalf("job = %v %q, want a failure about the missing key", job.State, job.Error)
+	}
+	if got := installed(t, bin); got != "old masir" {
+		t.Errorf("an unsigned release replaced the binary: %q", got)
+	}
+}
+
+// The escape hatch is explicit and environment-only, for development builds.
+func TestUnsignedBuildsNeedTheExplicitOverride(t *testing.T) {
+	trust(t) // none
+	t.Setenv("MASIR_UPDATE_ALLOW_UNSIGNED", "1")
 	bin, r, task := release(t, nil)
 	r.Start(task.Run)
 	if job := wait(t, r); job.Error != "" {
@@ -140,5 +158,21 @@ func TestInvalidKeyInTheBuildFailsClosed(t *testing.T) {
 	}
 	if got := installed(t, bin); got != "old masir" {
 		t.Errorf("installed %q", got)
+	}
+}
+
+// Replacing a binary keeps the version it replaced beside it, so a service that doesn't
+// start can be rolled back.
+func TestAReplacedBinaryKeepsThePreviousVersion(t *testing.T) {
+	pub, priv := newKey(t)
+	trust(t, pub)
+	bin, r, task := release(t, func(sums []byte) []byte { return minisign.Sign(priv, sums) })
+	r.Start(task.Run)
+	if job := wait(t, r); job.State != pb.UpdateState_UPDATE_STATE_DONE {
+		t.Fatalf("job = %v (%s)", job.State, job.Error)
+	}
+	prev, err := os.ReadFile(bin + ".previous")
+	if err != nil || string(prev) != "old masir" {
+		t.Fatalf("previous = %q, %v", prev, err)
 	}
 }

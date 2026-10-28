@@ -97,3 +97,24 @@ func canonical(v string) string {
 	}
 	return v
 }
+
+// VersionTag checks that tag is a release version before it is used to name an archive
+// and a work directory. GitHub tags are external input; a tag such as "../../x" must
+// never reach filepath.Join.
+func VersionTag(tag string) (string, error) {
+	t := strings.TrimSpace(tag)
+	if t == "" || strings.ContainsAny(t, `/\`) || strings.Contains(t, "..") || !semver.IsValid(canonical(t)) {
+		return "", fmt.Errorf("release tag %q isn't a version", tag)
+	}
+	return t, nil
+}
+
+// safeDirName rejects a tag that can't be a single directory name. Third-party releases,
+// such as the geo data, use date-like tags rather than versions.
+func safeDirName(tag string) (string, error) {
+	t := strings.TrimSpace(tag)
+	if t == "" || t == "." || strings.ContainsAny(t, `/\`) || strings.Contains(t, "..") {
+		return "", fmt.Errorf("release tag %q can't name a directory", tag)
+	}
+	return t, nil
+}

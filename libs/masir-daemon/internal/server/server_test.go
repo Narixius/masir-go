@@ -439,8 +439,13 @@ func TestIdleBootWaitsForPower(t *testing.T) {
 	if xc.Running() || listening(uint32(st.Settings.ProxyPort)) {
 		t.Fatal("an idle daemon must not start xray, even with power and always-on proxy saved on")
 	}
-	if saved, _ := store.Load(dir); saved.Settings.Power {
-		t.Error("an idle start saves masir as off, so status doesn't claim it's connected")
+	// The saved choice stays on: an idle daemon (started by a short CLI command) must
+	// not turn masir off for the next normal daemon. Its status still says off.
+	if saved, _ := store.Load(dir); !saved.Settings.Power {
+		t.Error("an idle start turned the saved power off")
+	}
+	if s.status().GetSettings().GetPower() {
+		t.Error("an idle status claims masir is on while Xray is down")
 	}
 
 	// Other work doesn't wake it: rules change, xray stays down.

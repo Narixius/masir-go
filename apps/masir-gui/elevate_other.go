@@ -9,3 +9,5 @@ var errNoElevation = errors.New("installing the daemon as a service isn't suppor
 func elevateDaemon(string) error    { return errNoElevation }
 func installService(string) error   { return errNoElevation }
 func uninstallService(string) error { return errNoElevation }
+func startService(string) error     { return errNoElevation }
+func openLoginItems() error         { return errNoElevation }

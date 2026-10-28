@@ -199,6 +199,11 @@ func assetDir() string {
 	if err != nil {
 		return "."
 	}
+	// The macOS service wrapper starts a symlink to the real binary, and the geo data
+	// sits beside the real binary, not inside the wrapper.
+	if real, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = real
+	}
 	return filepath.Dir(exe)
 }
 

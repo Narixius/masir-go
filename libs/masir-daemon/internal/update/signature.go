@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"aead.dev/minisign"
@@ -38,17 +39,27 @@ func trustedKeys() ([]minisign.PublicKey, error) {
 	return keys, nil
 }
 
+// allowUnsigned is the development escape hatch for builds made without a release key.
+// It is an environment variable on purpose: a release build that lost its key must fail
+// closed, never install an unverified archive, and a developer who wants an unsigned
+// build has to say so explicitly.
+func allowUnsigned() bool { return os.Getenv("MASIR_UPDATE_ALLOW_UNSIGNED") == "1" }
+
 // checkSignature verifies checksums.txt, the list every download is then checked
-// against, so a release can't be altered by whoever can upload files to it. Without
-// keys in the build there's nothing to check against and it says so.
+// against, so a release can't be altered by whoever can upload files to it. A build
+// without a key refuses releases altogether: an unsigned update is a security incident,
+// not a convenience.
 func checkSignature(ctx context.Context, c Clients, rel *Release, list []byte) error {
 	keys, err := trustedKeys()
 	if err != nil {
 		return err
 	}
 	if len(keys) == 0 {
-		log.Printf("update: this build has no signing key, so %s isn't checked", rel.Tag)
-		return nil
+		if allowUnsigned() {
+			log.Printf("update: MASIR_UPDATE_ALLOW_UNSIGNED is set, so %s isn't checked", rel.Tag)
+			return nil
+		}
+		return errors.New("this build has no update signing key, so it can't verify a release; updates are off (build it with MASIR_UPDATE_PUBKEY)")
 	}
 	asset, ok := rel.Asset(SignatureAsset)
 	if !ok {

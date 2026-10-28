@@ -44,33 +44,50 @@ type Masir struct {
 
 func (m Masir) Run(ctx context.Context, r *Reporter) error {
 	r.State(pb.UpdateState_UPDATE_STATE_CHECKING)
+	if m.Binary == "" {
+		return errors.New("masir can't find the binary it runs from, so it can't replace it")
+	}
+	if m.WorkDir == "" {
+		return errors.New("updates are off: there is no safe directory to stage a download")
+	}
+	// The running binary may live inside the desktop app's bundle. That copy belongs to
+	// the app updater: replacing it would break the bundle's signature and let the
+	// daemon rewrite itself through a user-writable path. The app update carries the
+	// matching daemon instead.
+	if insideAppBundle(m.Binary) {
+		return errors.New("the running masir is inside Masir.app; update the app, which carries masir")
+	}
 	rel, err := Latest(ctx, m.Clients, ReleaseRepo)
 	if err != nil {
 		return err
 	}
-	r.Version(rel.Tag)
+	tag, err := VersionTag(rel.Tag)
+	if err != nil {
+		return err
+	}
+	r.Version(tag)
 	if !m.Force {
 		if !IsRelease(m.Current) {
 			return errors.New("this is a development build; install a release, or force the update")
 		}
-		if !Newer(rel.Tag, m.Current) {
+		if !Newer(tag, m.Current) {
 			r.State(pb.UpdateState_UPDATE_STATE_UP_TO_DATE)
 			return nil
 		}
 	}
 
-	name := ArchiveName(rel.Tag, runtime.GOOS, runtime.GOARCH)
+	name := ArchiveName(tag, runtime.GOOS, runtime.GOARCH)
 	archive, ok := rel.Asset(name)
 	if !ok {
-		return fmt.Errorf("release %s has no build for %s/%s (%s)", rel.Tag, runtime.GOOS, runtime.GOARCH, name)
+		return fmt.Errorf("release %s has no build for %s/%s (%s)", tag, runtime.GOOS, runtime.GOARCH, name)
 	}
 	sums, ok := rel.Asset("checksums.txt")
 	if !ok {
-		return fmt.Errorf("release %s has no checksums.txt", rel.Tag)
+		return fmt.Errorf("release %s has no checksums.txt", tag)
 	}
 
-	dir := filepath.Join(m.WorkDir, rel.Tag)
-	if err := prepare(m.WorkDir, rel.Tag); err != nil {
+	dir := filepath.Join(m.WorkDir, tag)
+	if err := prepare(m.WorkDir, tag); err != nil {
 		return err
 	}
 	path := filepath.Join(dir, name)
@@ -183,11 +200,21 @@ var geoFiles = []struct{ remote, local string }{
 
 func (g Geo) Run(ctx context.Context, r *Reporter) error {
 	r.State(pb.UpdateState_UPDATE_STATE_CHECKING)
+	if g.WorkDir == "" {
+		return errors.New("updates are off: there is no safe directory to stage a download")
+	}
+	if insideAppBundle(filepath.Join(g.AssetDir, "geoip.dat")) {
+		return errors.New("the geo data is inside Masir.app; update the app, which carries it")
+	}
 	rel, err := Latest(ctx, g.Clients, GeoRepo)
 	if err != nil {
 		return err
 	}
-	r.Version(rel.Tag)
+	tag, err := safeDirName(rel.Tag)
+	if err != nil {
+		return err
+	}
+	r.Version(tag)
 
 	type file struct {
 		asset      Asset
@@ -199,11 +226,11 @@ func (g Geo) Run(ctx context.Context, r *Reporter) error {
 	for _, f := range geoFiles {
 		a, ok := rel.Asset(f.remote)
 		if !ok {
-			return fmt.Errorf("%s release %s has no %s", GeoRepo, rel.Tag, f.remote)
+			return fmt.Errorf("%s release %s has no %s", GeoRepo, tag, f.remote)
 		}
 		s, ok := rel.Asset(f.remote + ".sha256sum")
 		if !ok {
-			return fmt.Errorf("%s release %s has no checksum for %s", GeoRepo, rel.Tag, f.remote)
+			return fmt.Errorf("%s release %s has no checksum for %s", GeoRepo, tag, f.remote)
 		}
 		list, err := fetchSmall(ctx, g.Clients, s.URL)
 		if err != nil {
@@ -224,8 +251,8 @@ func (g Geo) Run(ctx context.Context, r *Reporter) error {
 		return nil
 	}
 
-	dir := filepath.Join(g.WorkDir, rel.Tag)
-	if err := prepare(g.WorkDir, rel.Tag); err != nil {
+	dir := filepath.Join(g.WorkDir, tag)
+	if err := prepare(g.WorkDir, tag); err != nil {
 		return err
 	}
 	var done int64
@@ -404,13 +431,63 @@ func unpack(archive, dir string) error {
 	return nil
 }
 
+// insideAppBundle reports whether path resolves into the desktop app's bundle: a macOS
+// .app, or the resources/bin folder the app ships on Windows and Linux. The bundle is
+// the app updater's to replace; a daemon or CLI that rewrites a file inside it breaks its
+// signature and turns a user-writable directory into a root-owned update channel.
+func insideAppBundle(path string) bool {
+	if path == "" {
+		return false
+	}
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	slash := filepath.ToSlash(path)
+	if strings.Contains(slash, "/resources/bin/") || strings.Contains(slash, "/Resources/bin/") {
+		return true
+	}
+	for p := filepath.Clean(path); ; p = filepath.Dir(p) {
+		if strings.HasSuffix(p, ".app") {
+			return true
+		}
+		if filepath.Dir(p) == p {
+			return false
+		}
+	}
+}
+
 // replaceFile puts src at dst. A running program can't be overwritten in place, but on
 // Unix its file can be renamed over (the old process keeps the old file open); Windows
-// lets the running file be renamed out of the way first.
+// lets the running file be renamed out of the way first. The copy is compared with the
+// verified source before it is moved into place, so a short or altered write can't
+// become the daemon.
 func replaceFile(src, dst string) error {
+	if insideAppBundle(dst) {
+		return fmt.Errorf("%s is inside an app bundle, which the app updater owns", dst)
+	}
+	// Keep the version being replaced beside it, so `masir daemon rollback` can put it
+	// back if the new one doesn't start. The copy is overwritten by the next update.
+	if fi, err := os.Stat(dst); err == nil && fi.Mode().IsRegular() {
+		if err := copyFile(dst, dst+".previous", 0o755); err != nil {
+			return fmt.Errorf("save the previous %s: %w", dst, err)
+		}
+	}
 	tmp := dst + ".new"
 	if err := copyFile(src, tmp, 0o755); err != nil {
 		return err
+	}
+	want, err := fileSHA256(src)
+	if err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	got, err := fileSHA256(tmp)
+	if err != nil || got != want {
+		os.Remove(tmp)
+		if err != nil {
+			return err
+		}
+		return errors.New("the installed copy doesn't match the verified download")
 	}
 	preserveOwner(tmp, dst)
 	if runtime.GOOS == "windows" {
@@ -424,6 +501,7 @@ func replaceFile(src, dst string) error {
 		os.Remove(tmp)
 		return err
 	}
+	applyFileIcon(dst)
 	return nil
 }
 

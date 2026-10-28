@@ -9,9 +9,41 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
+
+	"github.com/narixius/masir-go/libs/masir-core/service"
+	pb "github.com/narixius/masir-go/libs/masir-proto/gen/masir/daemon/v1"
 )
+
+// readService asks the OS service manager. Tests replace it so they never look at the
+// machine they run on.
+var readService = func() service.Info { return service.Status() }
+
+// refreshServiceState keeps the service badge honest when no daemon is running to report
+// it. It runs off the main thread and at most every few seconds.
+func (a *app) refreshServiceState() {
+	if !a.serviceChecked.IsZero() && time.Since(a.serviceChecked) < 5*time.Second {
+		return
+	}
+	a.serviceChecked = time.Now()
+	a.async(func() {
+		info := readService()
+		a.post(func() {
+			if a.status == nil {
+				a.status = &pb.Status{}
+			}
+			a.status.ServiceInstalled = info.Installed
+			a.status.ServiceRunning = info.Running
+			a.status.ServiceEnabled = info.Enabled
+			if info.Installed != a.lastServiceInstalled {
+				a.lastServiceInstalled = info.Installed
+				a.binary = daemonBinary()
+			}
+		})
+	})
+}
 
 // cliState is the command-line tool as Settings shows it: the last check, refreshed in the
 // background, never with a shell or registry read in the frame that opens Settings.
@@ -236,7 +268,35 @@ func (a *app) installDaemonService() {
 				a.fail("Couldn't install the background service: ", err)
 				return
 			}
+			a.binary = daemonBinary() // the service's copy is the one to start from now
+			a.serviceChecked = time.Time{}
+			a.refreshServiceState()
 			a.notify("The background service is installed")
+		})
+	})
+}
+
+func (a *app) startDaemonService() {
+	if a.serviceBusy {
+		return
+	}
+	bin := a.binary
+	if bin == "" {
+		a.notify("This app ships no masir executable to start the service with")
+		return
+	}
+	a.serviceBusy = true
+	a.async(func() {
+		err := startService(bin)
+		a.post(func() {
+			a.serviceBusy = false
+			if err != nil {
+				a.fail("Couldn't start the background service: ", err)
+				return
+			}
+			a.serviceChecked = time.Time{}
+			a.refreshServiceState()
+			a.notify("The background service is starting")
 		})
 	})
 }
@@ -259,6 +319,10 @@ func (a *app) removeDaemonService() {
 				a.fail("Couldn't remove the background service: ", err)
 				return
 			}
+			// The service's directory is gone; the bundle's masir is the daemon now.
+			a.binary = daemonBinary()
+			a.serviceChecked = time.Time{}
+			a.refreshServiceState()
 			a.notify("The background service is removed")
 		})
 	})

@@ -54,6 +54,18 @@ func uninstallService(bin string) error {
 	return runDaemonCommand(bin, "disable")
 }
 
+// startService starts the installed Windows service again. The app never starts a second
+// daemon of its own while a service is installed.
+func startService(bin string) error {
+	if bin == "" {
+		return errors.New("no masir executable to start the service with")
+	}
+	return runDaemonCommand(bin, "restart")
+}
+
+// openLoginItems has no equivalent on Windows: the service's start type is the setting.
+func openLoginItems() error { return nil }
+
 // runDaemonCommand runs `masir daemon <cmd>`; masir asks Windows for permission itself and
 // waits for the elevated copy to report its outcome.
 func runDaemonCommand(bin, cmd string) error {
@@ -64,7 +76,7 @@ func runDaemonCommand(bin, cmd string) error {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return fmt.Errorf("couldn't %s the service: %s", map[string]string{"enable": "install", "disable": "remove"}[cmd], msg)
+		return fmt.Errorf("couldn't %s the service: %s", map[string]string{"enable": "install", "disable": "remove", "restart": "start"}[cmd], msg)
 	}
 	return nil
 }

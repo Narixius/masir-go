@@ -78,6 +78,29 @@ subscriptions while smoke-testing unless that is the change under test.
   text, prefetch app icons one at a time, and keep RPC/CLI/OS checks asynchronous on
   `a.async` + `a.post`. Lists must virtualize with `ui.List`; do not build thousands of
   rows to show twenty.
+- **The app bundle has one writer.** Updates of `Masir.app` belong to the MyGo updater.
+  The daemon and CLI refuse a target inside `*.app` (`insideAppBundle`); a CLI inside the
+  bundle tells the person to update the app. The root service's own copy is updated by the
+  daemon from the signed release, never from the bundle.
+- **An idle daemon reports off but saves nothing.** `--idle` keeps Xray down for the
+  process; it must not write `Power=false`. The app starts the daemon in normal mode so a
+  restart doesn't silently turn masir (or the tunnel) off.
+- **Never start a daemon during an update or restart, and never beside a service.** The
+  watch waits while `upd.busyUpdate()`/`restarting`, and when a service is installed it
+  asks the service manager instead of spawning an unsupervised daemon.
+- **Signature checks fail closed.** A build without an update key refuses every release;
+  `MASIR_UPDATE_ALLOW_UNSIGNED=1` is a development-only escape hatch. Updates need HTTPS
+  (loopback excepted).
+- **The macOS service carries its own name and icon.** It is installed as
+  `/usr/local/lib/masir/Masir` (Login Items falls back to the executable name), and
+  `AppIcon.rsrc`/`FinderInfo.bin` become its resource fork and FinderInfo for the Masir
+  icon. Updates re-apply them after replacing the binary; never `xattr -c` the service
+  binary. Do not remove a lowercase `masir` after copying `Masir`: the default APFS is
+  case-insensitive and they are the same file.
+- **The panel sizes itself from what it drew.** `heightForOpen` uses the last real
+  `mainHeight`; `settleHeight` resizes at rest when data (a status, a banner, the update
+  control) changes the drawn height. Do not call `ui.NewTester` in production to measure:
+  it shapes text for another engine.
 - **Inputs belong inside their box.** Build a container, then create its input inside
   `box.Children(func() { ... })`. An input created just before `box.Children` is a sibling
   of the box, so its text is positioned somewhere else. This has bitten the port field and
@@ -117,8 +140,11 @@ subscriptions while smoke-testing unless that is the change under test.
 - **Desktop updates are signed.** The public key is in `apps/masir-gui/mygo.json`; the
   matching private key is `MYGO_UPDATER_PRIVATE_KEY`, kept in `.env` or the GitHub secret.
   Generate it with `cd apps/masir-gui && go tool mygo keygen`; never commit the private
-  key, and back it up. `make gui`/`gui-local` produce `update-*.json` and the signed
-  `masir-desktop-<os>-<version>-<arch>.tar.gz`; the release workflow needs both.
+  key, keep a copy offline, and keep `.env` at mode 600: a machine that can read the key
+  can sign an update for every user. The same holds for `MINISIGN_SECRET_KEY`, which
+  signs the command-line and desktop checksums. `make gui`/`gui-local` produce
+  `update-*.json` and the signed `masir-desktop-<os>-<version>-<arch>.tar.gz`; the release
+  workflow needs both.
 - **Strict list keys.** MyGo panics in tests when two rows under one parent share a key.
   When adding fixtures to the existing `c1`/`c2` configs, use distinct IDs such as `x%d`.
 

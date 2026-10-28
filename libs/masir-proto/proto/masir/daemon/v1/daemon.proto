@@ -125,6 +125,14 @@ message Status {
   // When this daemon process started. A new value means it restarted, so a memory-only
   // choice such as an ignored update prompt is gone.
   int64 started_at_ms = 26;
+  // The service as the OS sees it. service_installed says its definition exists;
+  // service_running says the service manager is running it now; service_enabled says the
+  // person hasn't turned it off (macOS Login Items, systemd enablement).
+  bool service_running = 27;
+  bool service_enabled = 28;
+  // bundled says this daemon runs from the desktop app's bundle. Such a copy belongs to
+  // the app updater: it must not replace itself, and an update of the app carries it.
+  bool bundled = 29;
 }
 
 message GetStatusRequest {}

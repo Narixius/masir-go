@@ -399,6 +399,14 @@ func updateSelf(job *pb.UpdateJob) error {
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
 		self = resolved
 	}
+	if insideAppBundle(self) {
+		// The CLI is the app's own copy. The app updater is the only writer of a
+		// bundle: replacing a file inside it breaks its signature and turns a
+		// user-writable directory into a root-owned update channel.
+		trackSelfUpdate("app-bundle", false, job, nil)
+		ui.Warn("This masir runs from inside Masir.app; update the app, which carries it.")
+		return nil
+	}
 	if same, _ := sameContent(src, self); same {
 		trackSelfUpdate("daemon", true, job, nil)
 		ui.Success("masir " + job.Version + " is installed.")
@@ -475,6 +483,29 @@ func quoteArg(s string) string {
 		return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// insideAppBundle reports whether path resolves into the desktop app's bundle: a macOS
+// .app, or the resources/bin folder the app ships on Windows and Linux.
+func insideAppBundle(path string) bool {
+	if path == "" {
+		return false
+	}
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	slash := filepath.ToSlash(path)
+	if strings.Contains(slash, "/resources/bin/") || strings.Contains(slash, "/Resources/bin/") {
+		return true
+	}
+	for p := filepath.Clean(path); ; p = filepath.Dir(p) {
+		if strings.HasSuffix(p, ".app") {
+			return true
+		}
+		if filepath.Dir(p) == p {
+			return false
+		}
+	}
 }
 
 // friendlyFileError explains a failed file replacement without a raw Go error.
@@ -591,6 +622,9 @@ func daemonSyncSelf(a args) error {
 			return err
 		}
 	}
+	if insideAppBundle(dst) {
+		return fail("%s is inside Masir.app; update the app, which carries masir", dst)
+	}
 	if !elevated() {
 		return elevate("daemon", "sync-self", "--from", src, "--to", dst)
 	}
@@ -608,7 +642,15 @@ func syncService(src string) error {
 		return err
 	}
 	stopServiceForInstall() // Windows can't replace a running executable
-	return copyFile(src, service.BinaryPath(), 0o755)
+	dst := service.BinaryPath()
+	if err := copyFile(src, dst, 0o755); err != nil {
+		return err
+	}
+	if same, err := sameContent(src, dst); err != nil || !same {
+		return fail("the service's copy of masir doesn't match the verified download")
+	}
+	applyFileIcon(dst, filepath.Dir(dst))
+	return nil
 }
 
 func replaceSelf(src, dst string) error {

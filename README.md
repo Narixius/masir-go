@@ -257,6 +257,7 @@ masir settings reset mixedPort
 | `masir logs [--no-follow] [--level debug\|info\|warn\|error]` | Show recent daemon and Xray activity, then follow it |
 | `masir get-config` | Print the exact Xray config masir runs |
 | `masir daemon start\|stop\|restart\|enable\|disable` | Manage the daemon and the system service |
+| `masir daemon rollback` | Put the service's previous version back after an update that didn't start |
 | `masir menu` | Every command, one pick away |
 
 Every command has `--help` with examples.

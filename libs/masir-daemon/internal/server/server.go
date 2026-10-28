@@ -106,12 +106,11 @@ func (s *Server) Boot(ctx context.Context, dir string) error {
 	s.subs = m
 	s.refreshSubscriptionCounts()
 
-	if s.idle.Load() && st.Settings.Power { // masir is off while the daemon is idle
-		st.Settings.Power = false
-		if err := store.Save(dir, st); err != nil {
-			return err
-		}
-	}
+	// An idle daemon is one a short command started for its own work. It leaves Xray
+	// down, but it must not change what the person chose: the saved power and tunnel
+	// state come back when a daemon that isn't idle starts. status() reports power as
+	// off while idle, so a UI doesn't show "Connecting..." for a daemon that may never
+	// start Xray.
 	s.initUpdates(dir)
 	s.mu.Lock()
 	s.dir, s.state = dir, st

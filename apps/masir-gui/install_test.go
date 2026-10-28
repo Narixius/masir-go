@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/narixius/masir-go/libs/masir-core/service"
 )
 
 func autoTestApp(t *testing.T) (*app, string) {
@@ -93,5 +96,25 @@ func TestAutoInstallCLISkipsADevCopy(t *testing.T) {
 	}
 	if a.cliChoice() != "" {
 		t.Fatalf("a dev copy recorded a choice")
+	}
+}
+
+// A service whose definition exists but whose process is stopped is not "Active", and
+// the app offers to start it instead of quietly running a second daemon.
+func TestSettingsShowsAStoppedServiceAndOffersToStartIt(t *testing.T) {
+	f := ukServers()
+	f.status.ServiceInstalled = true
+	f.status.ServiceRunning = false
+	f.status.ServiceEnabled = true
+	a := newTestApp(f)
+	readService = func() service.Info { return service.Info{Installed: true, Running: false, Enabled: true} }
+	a.serviceChecked = time.Time{}
+	a.openScreen(screenSettings)
+	tt := tester(a)
+	if !tt.HasText("Stopped") {
+		t.Fatalf("no stopped badge: %q", tt.Texts())
+	}
+	if !tt.HasText("Start Service") {
+		t.Fatalf("no start action: %q", tt.Texts())
 	}
 }

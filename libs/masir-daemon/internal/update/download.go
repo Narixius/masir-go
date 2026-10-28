@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -40,10 +42,35 @@ func (c Clients) do(ctx context.Context, fn func(*http.Client) error) error {
 	return nil
 }
 
+// secureURL keeps updates on HTTPS. A test server on the loopback interface is the only
+// plain-HTTP exception; a release URL must never arrive over a cleartext network.
+func secureURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return err
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	if u.Scheme == "http" {
+		host := u.Hostname()
+		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+			return nil
+		}
+		if host == "localhost" {
+			return nil
+		}
+	}
+	return fmt.Errorf("refusing %s: updates need HTTPS", raw)
+}
+
 // download fetches url into path. A partial file already at path is continued with a
 // Range request, which is how a paused job resumes, including after switching from the
 // direct client to the proxy. progress gets the bytes written each time.
 func download(ctx context.Context, c Clients, url, path string, progress func(n int64)) error {
+	if err := secureURL(url); err != nil {
+		return err
+	}
 	return c.do(ctx, func(hc *http.Client) error {
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -105,6 +132,9 @@ func (p *progressReader) Read(b []byte) (int, error) {
 
 // fetchSmall reads a small file, such as a checksum list, into memory.
 func fetchSmall(ctx context.Context, c Clients, url string) ([]byte, error) {
+	if err := secureURL(url); err != nil {
+		return nil, err
+	}
 	var body []byte
 	err := c.do(ctx, func(hc *http.Client) error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

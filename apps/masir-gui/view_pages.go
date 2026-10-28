@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -446,8 +447,12 @@ func (a *app) systemSection(c *ui.Context, p palette) {
 				ui.Row(c).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 					label(c, "Background Service", sizeSubhead, 18, 500, p.text)
 					switch {
-					case st.GetServiceInstalled():
+					case st.GetServiceInstalled() && st.GetServiceRunning():
 						badge(c, "Active", nil, p.healthy, p.healthySurface, 0, 0)
+					case st.GetServiceInstalled() && !st.GetServiceEnabled():
+						badge(c, "Disabled", nil, p.degraded, p.degradedSurface, 0, 0)
+					case st.GetServiceInstalled():
+						badge(c, "Stopped", nil, p.degraded, p.degradedSurface, 0, 0)
 					case st.GetPrivileged():
 						badge(c, "This Session", nil, p.degraded, p.degradedSurface, 0, 0)
 					default:
@@ -455,8 +460,23 @@ func (a *app) systemSection(c *ui.Context, p palette) {
 					}
 				})
 				label(c, "Starts the daemon at boot, so connecting in tunnel mode never asks for permission again.", sizeCaption, 14.85, 400, p.muted)
+				if st.GetServiceInstalled() && !st.GetServiceEnabled() {
+					label(c, "The system has it turned off. Allow Masir in Login Items, or start it here.", sizeCaption, 14.85, 400, p.degraded)
+				}
 				ui.Row(c).Gap(tw(2)).Margin(4, 0, 0).Children(func() {
 					if st.GetServiceInstalled() {
+						if !st.GetServiceRunning() {
+							if button(c, "service-start", "Start Service", true, a.serviceBusy, a.serviceBusy, p) {
+								a.startDaemonService()
+							}
+						}
+						if runtime.GOOS == "darwin" && !st.GetServiceEnabled() {
+							if button(c, "service-login-items", "Open Login Items", false, false, false, p) {
+								if err := openLoginItems(); err != nil {
+									a.fail("Couldn't open Login Items: ", err)
+								}
+							}
+						}
 						if button(c, "service-remove", "Remove Service", false, a.serviceBusy, a.serviceBusy, p) {
 							a.removeDaemonService()
 						}

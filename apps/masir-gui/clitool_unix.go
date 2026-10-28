@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/narixius/masir-go/libs/masir-core/service"
 )
 
 // The command-line tool is a link in the user's own bin directory, so installing it needs
@@ -316,8 +318,15 @@ func repairCLI(bin string) {
 // ourLinkTarget recognizes a link this app made in an earlier location, including one
 // left by a moved or replaced Masir.app.
 func ourLinkTarget(target string) bool {
-	if filepath.Base(target) != "masir" {
+	base := filepath.Base(target)
+	if base != "masir" && base != "Masir" {
 		return false
+	}
+	// A build without a bundled masir can link the CLI to the root service's copy.
+	// On macOS that copy is Masir (capitalized), and it is still ours: the link must
+	// be repairable after the service is removed.
+	if samePath(target, service.BinaryPath()) {
+		return true
 	}
 	return strings.Contains(target, "Masir.app/") ||
 		strings.Contains(target, ".app/Contents/Resources/") ||

@@ -16,7 +16,7 @@ func (s *shell) show() {
 		s.win.Focus()
 		return
 	}
-	height := int(math.Round(float64(s.a.measure())))
+	height := int(math.Round(float64(s.a.heightForOpen())))
 	s.start()
 	s.win = mygo.NewFlyout(mygo.FlyoutOptions{
 		Tray:      s.tray,
@@ -30,6 +30,7 @@ func (s *shell) show() {
 	})
 	s.open = true
 	s.wantHeight, s.lastHeight, s.sizeQueued = height, height, false
+	s.a.askedHeight = float32(height)
 	s.win.OnClosed(func() {
 		s.win, s.open, s.sizeQueued = nil, false, false
 		s.stop()

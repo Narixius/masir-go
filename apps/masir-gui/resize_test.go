@@ -247,3 +247,40 @@ func TestSpringsFollowTheFrameClock(t *testing.T) {
 		t.Fatalf("the page settled at %v, not 1", a.motion.page.x)
 	}
 }
+
+// Data that arrives while the panel is open must resize it at rest: the daemon's
+// status, subscriptions, a banner or the update control can all change the height
+// without any spring moving.
+func TestHeightSettlesWhenDataArrivesAtRest(t *testing.T) {
+	f := ukServers()
+	a := newApp(f, "")
+	a.async = func(fn func()) { fn() }
+	a.motion.instant = true
+	var asked []float32
+	a.onHeight = func(h float32) { asked = append(asked, h) }
+	tt := ui.NewTester(a.view, panelWidth, 900)
+	tt.Frame()
+	asked = nil
+
+	a.applyStatus(f.status) // the first status: banner, server, update control
+	tt.Frame()
+	if len(asked) == 0 {
+		t.Fatal("data arriving at rest did not resize the panel")
+	}
+	if last := asked[len(asked)-1]; abs32(last-a.restHeight()) > 0.5 {
+		t.Fatalf("settled at %v, want %v", last, a.restHeight())
+	}
+}
+
+// heightForOpen uses what the page really drew, not a headless tester's measurement.
+func TestHeightForOpenUsesTheDrawnHeight(t *testing.T) {
+	a := newTestApp(ukServers())
+	tt := tester(a)
+	tt.Frame()
+	if a.mainHeight <= 0 {
+		t.Fatal("the frame did not measure the main page")
+	}
+	if got := a.heightForOpen(); got != a.mainHeight {
+		t.Fatalf("heightForOpen = %v, want the drawn %v", got, a.mainHeight)
+	}
+}

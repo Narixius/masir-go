@@ -155,11 +155,45 @@ jobs:
               "$dir/masir-desktop-linux-$version-$arch.tar.gz" \
               "$dir/update-linux-$arch.json" --clobber
           done
+  desktop-checksums:
+    # The release job signs the command-line archives; the desktop assets are uploaded
+    # later by the gui jobs, so they need their own signed checksum list. One published
+    # key then verifies every download a person installs.
+    needs: [gui]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MASIR_UPDATE_PUBKEY: ${{ vars.MASIR_UPDATE_PUBKEY }}
+      MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+    steps:
+      - name: Download the desktop assets
+        run: |
+          mkdir -p desktop
+          gh release download "$GITHUB_REF_NAME" --dir desktop \
+            --pattern 'masir-desktop-*' --pattern 'update-*'
+      - name: Sign their checksums
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/minisign.key"
+          cd desktop
+          sha256sum masir-desktop-* update-* | sort -k2 > checksums-desktop.txt
+          minisign -S -s "$RUNNER_TEMP/minisign.key" -m checksums-desktop.txt -x checksums-desktop.txt.minisig
+          rm -f "$RUNNER_TEMP/minisign.key"
+          ok=
+          for key in $(printf '%s' "$MASIR_UPDATE_PUBKEY" | tr ',' ' '); do
+            if minisign -V -P "$key" -m checksums-desktop.txt -x checksums-desktop.txt.minisig; then ok=1; fi
+          done
+          [ -n "$ok" ] || { echo "::error::the desktop checksums don't verify with MASIR_UPDATE_PUBKEY"; exit 1; }
+          gh release upload "$GITHUB_REF_NAME" checksums-desktop.txt checksums-desktop.txt.minisig --clobber
+
   publish:
-    # A release stays a draft until the command line and every system's app are in it.
-    # Failed app builds leave it unpublished instead of shipping a release that is missing
-    # a platform; re-run the failed job, then this one.
-    needs: [release, gui]
+    # A release stays a draft until the command line, every system's app and the desktop
+    # checksums are in it. Failed app builds leave it unpublished instead of shipping a
+    # release that is missing a platform; re-run the failed job, then this one.
+    needs: [release, gui, desktop-checksums]
     runs-on: ubuntu-latest
     permissions:
       contents: write

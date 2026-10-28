@@ -20,6 +20,11 @@ const plistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
   <key>Label</key><string>%s</string>
+  <!-- Login Items groups a helper with its app when the Team ID matches. This build
+       is ad-hoc (no Team ID), so the executable itself carries the name and Finder
+       icon: it is installed as Masir with AppIcon.rsrc/FinderInfo.bin. -->
+  <key>AssociatedBundleIdentifiers</key>
+  <array><string>com.masir.app</string></array>
   <key>ProgramArguments</key>
   <array>
     <string>%s</string>
@@ -50,6 +55,9 @@ func installService(bin, user string) error {
 	if err := os.WriteFile(service.DefinitionPath(), []byte(servicePlist(bin, uid)), 0o644); err != nil {
 		return err
 	}
+	// A provenance xattr on a file written from a sandboxed or copied context makes
+	// launchd refuse the job with "Bootstrap failed: 5: Input/output error".
+	_ = exec.Command("xattr", "-c", service.DefinitionPath()).Run()
 	return bootstrap()
 }
 

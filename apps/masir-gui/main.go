@@ -268,9 +268,6 @@ func main() {
 		if v := mygo.App.Version(); v != "" { // the bundle's version, which is the app's
 			a.version = v
 		}
-		a.pendingFile = pendingUpdateFile()
-		a.upd.pendingVersion = readPendingUpdate(a.pendingFile)
-		a.upd.pendingAtLaunch = a.upd.pendingVersion != ""
 		a.cliFile = cliInstallFile()
 		s.ready()
 		a.refreshLoginState()

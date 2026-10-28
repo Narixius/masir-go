@@ -475,7 +475,9 @@ func (s *Server) maintainUpdates(ctx context.Context) {
 			}
 			cancel()
 		}
-		if age, ok := s.geoAge(); (!ok || age > geoMaxAge) && !s.upd.geo.Active() {
+		// A daemon in Masir.app gets its geo data from the app update; writing into the
+		// bundle would change a signed app from the inside.
+		if age, ok := s.geoAge(); (!ok || age > geoMaxAge) && !s.upd.geo.Active() && !bundled() {
 			if _, err := s.upd.geo.Start(s.geoTask(false, "background", false)); err == nil {
 				s.Log("info", "refreshing geo data")
 			}

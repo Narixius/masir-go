@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,16 +38,31 @@ func (s *Server) WatchStatus(_ *pb.WatchStatusRequest, stream pb.DaemonService_W
 }
 
 func (s *Server) status() *pb.Status {
+	// Ask the OS and the filesystem before taking the lock: both can run a subprocess,
+	// and the status stream should not hold up a change while it waits.
+	svc := service.Status()
+	inBundle := bundled()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	settings := toPBSettings(s.state.Settings)
+	if s.idle.Load() {
+		// This process intentionally keeps Xray down. Report masir as off so a UI shows
+		// the saved choice as "off" instead of a connection that never starts; the
+		// saved setting itself is untouched and comes back with the next normal daemon.
+		settings.Power = false
+	}
 	st := &pb.Status{
 		Version:          Version,
 		XrayVersion:      s.xray.GetVersion(),
 		UptimeSeconds:    int64(time.Since(s.startedAt).Seconds()),
 		StartedAtMs:      s.startedAt.UnixMilli(),
 		Privileged:       s.id.Privileged,
-		ServiceInstalled: service.Installed(),
+		ServiceInstalled: svc.Installed,
+		ServiceRunning:   svc.Running,
+		ServiceEnabled:   svc.Enabled,
+		Bundled:          inBundle,
 		ServedUid:        int64(s.id.UID),
 		ServedUser:       s.id.Name,
 		TunAvailable:     s.id.Privileged,
@@ -54,7 +71,7 @@ func (s *Server) status() *pb.Status {
 		ProxyAddress:     s.running.proxyAddr,
 		TunRunning:       s.running.tun,
 		LastError:        s.lastErr,
-		Settings:         toPBSettings(s.state.Settings),
+		Settings:         settings,
 		Revision:         s.changes.revision.Load(),
 	}
 	if !s.id.Privileged {
@@ -113,6 +130,33 @@ func (g *signal) notify() {
 		select {
 		case ch <- struct{}{}:
 		default:
+		}
+	}
+}
+
+// bundled reports whether this daemon runs from inside the desktop app's bundle. That
+// copy belongs to the app updater, so an update it starts must not replace it.
+func bundled() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	if real, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = real
+	}
+	slash := filepath.ToSlash(exe)
+	if strings.Contains(slash, "/resources/bin/") || strings.Contains(slash, "/Resources/bin/") {
+		return true
+	}
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	for p := filepath.Clean(exe); ; p = filepath.Dir(p) {
+		if strings.HasSuffix(p, ".app") {
+			return true
+		}
+		if filepath.Dir(p) == p {
+			return false
 		}
 	}
 }

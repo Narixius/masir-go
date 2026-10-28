@@ -76,6 +76,9 @@ func (a *app) mainLayer(c *ui.Context, p palette, x float32) ui.Element {
 			}
 		}
 	})
+	if a.screen == screenMain {
+		a.settleHeight()
+	}
 	return layer
 }
 
@@ -92,6 +95,7 @@ func (a *app) subLayer(c *ui.Context, p palette, x float32) ui.Element {
 			a.settingsScreen(c, p)
 		}
 	})
+	a.settleHeight()
 	return layer
 }
 
@@ -831,23 +835,22 @@ func versionLabel(v string) string {
 	return v
 }
 
-// measure is how tall the panel will be when it opens, from the state as it is now: the
-// view is built once in memory, so the window can open at its real height instead of
-// opening at a guess and resizing a moment later, which shows as the content jumping.
-func (a *app) measure() float32 {
-	onHeight, notices := a.onHeight, a.notices
-	a.onHeight, a.notices = nil, nil
-	wasScreen, wasOpen, wasSub, wasMotion, wasLast := a.screen, a.open, a.lastSub, a.motion, a.lastMotion
-	a.screen, a.open = screenMain, sectionNone
-	a.motion = motion{instant: a.motion.instant}
-	a.lastMotion = time.Time{}
-	tt := ui.NewTester(a.view, panelWidth, 900) // tall enough that nothing is cut off
-	tt.Frame()
-	tt.Frame() // an element knows its size from the frame before
-	h := a.restHeight()
-	a.screen, a.open, a.lastSub, a.motion, a.lastMotion = wasScreen, wasOpen, wasSub, wasMotion, wasLast
-	a.onHeight, a.notices = onHeight, notices
-	return h
+// heightForOpen is how tall the panel starts. It is the height the content actually had
+// the last time it was drawn, so a second open doesn't resize at all; the first open of
+// a session starts at a sane default and the first real frame settles it. Building the
+// view in a headless tester here (as an earlier version did) measured with another text
+// engine and made the panel open at a height it never drew.
+func (a *app) heightForOpen() float32 {
+	if a.screen != screenMain {
+		return a.restHeight()
+	}
+	if a.mainHeight > 0 && a.open == a.measuredOpen {
+		return a.mainHeight
+	}
+	if a.baseHeight > 0 { // the main page with both lists closed, as it opens
+		return a.baseHeight
+	}
+	return 262
 }
 
 // speedLabel shows a speed as the footer does: the number rolls, the unit and arrow stay.

@@ -294,7 +294,9 @@ func rootCmd() *cobra.Command {
 	daemonGroup := group("daemon", "Manage the masir daemon",
 		leaf("start", "Start the daemon in the background", daemonStart, cobra.NoArgs),
 		leaf("stop", "Stop the daemon", daemonStop, cobra.NoArgs),
-		restart, enable, disable, runDaemon, syncSvc, syncSelf, checkRules)
+		restart,
+		leaf("rollback", "Put the service's previous version back after a failed update", daemonRollback, cobra.NoArgs),
+		enable, disable, runDaemon, syncSvc, syncSelf, checkRules)
 
 	targetArg := cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs)
 	targets := []string{"masir\tthe app itself", "geo\tgeosite.dat and geoip.dat"}

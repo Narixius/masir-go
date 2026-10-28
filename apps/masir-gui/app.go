@@ -57,6 +57,12 @@ type app struct {
 
 	d      pb.DaemonServiceClient
 	binary string // the masir executable to start a daemon from
+	// lastServiceInstalled is what the last status said, so a service installed or
+	// removed while the app runs can make binary point at the copy that exists.
+	lastServiceInstalled bool
+	// serviceChecked is when the app last asked the OS service manager itself. The
+	// daemon reports it too, but a stopped service has no daemon to ask.
+	serviceChecked time.Time
 
 	// What the daemon last said.
 	reachable bool
@@ -127,6 +133,7 @@ type app struct {
 	mainHeight   float32            // the main page's height as last measured
 	measuredOpen section            // the section that was open when mainHeight was measured
 	baseHeight   float32            // the main page's height with both lists closed
+	askedHeight  float32            // the height last given to the window, so data arriving at rest resizes it once
 	natural      map[string]float32 // the height each list has when fully open
 	serverListH  float32            // the server list's height with no search, so filtering keeps it
 	ruleListH    float32            // the rules list's height with no search, so filtering keeps it
@@ -149,9 +156,8 @@ type app struct {
 	serverItems []serverListItem
 	onHeight    func(float32) // tells the window how tall the content is at rest
 
-	version     string
-	pendingFile string  // where a deferred daemon update is recorded
-	palette     palette // the colors of the frame being built, for helpers that format text
+	version string
+	palette palette // the colors of the frame being built, for helpers that format text
 }
 
 func newApp(d pb.DaemonServiceClient, binary string) *app {
@@ -271,8 +277,9 @@ func (a *app) openScreen(s screen) {
 	from := a.screen
 	a.lastSub, a.screen = s, s
 	if s == screenSettings {
-		a.refreshCLIState()   // check the command-line tool in the background
-		a.refreshLoginState() // and the login item
+		a.refreshCLIState()     // check the command-line tool in the background
+		a.refreshLoginState()   // the login item
+		a.refreshServiceState() // and the service, which may be stopped
 	}
 	// The back arrow returns to the page this one opened over: the settings page can open
 	// its own add-subscription form, which then returns to it.
@@ -321,6 +328,10 @@ func (a *app) applyStatus(st *pb.Status) {
 	wasOn := a.connected()
 	a.reachable = true
 	a.status = st
+	if st.GetServiceInstalled() != a.lastServiceInstalled {
+		a.lastServiceInstalled = st.GetServiceInstalled()
+		a.binary = daemonBinary()
+	}
 	a.pend.caughtUp()
 	if a.connected() && !wasOn {
 		a.since = time.Now()
@@ -340,6 +351,7 @@ func (a *app) applyStatus(st *pb.Status) {
 func (a *app) setUnreachable() {
 	a.reachable = false
 	a.down, a.up = 0, 0
+	a.refreshServiceState()
 }
 
 // refreshLists fetches subscriptions with their configs, and the rules.
@@ -677,12 +689,29 @@ func (a *app) watch(ctx context.Context) {
 	for ctx.Err() == nil {
 		if !client.Alive() {
 			a.post(a.setUnreachable)
-			if a.binary == "" {
+			if a.updateInFlight() {
+				// An update is restarting the daemon. Starting another one here would
+				// race the new version for the socket, and an idle start would look
+				// like the person turned masir off.
+				sleep(ctx, time.Second)
+				continue
+			}
+			if a.servicePresent() {
+				// A service exists: it is the supervisor, not this app. Starting a
+				// second, unsupervised daemon would fight it for the socket.
+				warn("The background service isn't running; start it in Settings")
+				sleep(ctx, 3*time.Second)
+				continue
+			}
+			bin := a.daemonPath()
+			if bin == "" {
 				warn("Couldn't start the masir daemon: the app ships no masir executable")
 				sleep(ctx, 5*time.Second)
 				continue
 			}
-			if err := client.Start(ctx, a.binary, true); err != nil {
+			// Normal mode, not idle: the daemon honors the saved power and tunnel
+			// settings, so an app restart doesn't silently turn masir off.
+			if err := client.Start(ctx, bin, false); err != nil {
 				warn("Couldn't start the masir daemon: " + err.Error())
 				sleep(ctx, 3*time.Second)
 				continue
@@ -778,6 +807,27 @@ func (a *app) aimMotion(c *ui.Context) {
 	}
 }
 
+// settleHeight gives the window the height the page just drew, when nothing is moving.
+// Data arrives while the panel is open (a status, subscriptions, a banner, the update
+// control) and nothing springs, so without this the window would keep the height from
+// the frame that opened it. Layers call it after they have recorded their bounds.
+func (a *app) settleHeight() {
+	if a.onHeight == nil || !a.motion.settled() {
+		return
+	}
+	if a.willMove() {
+		// The click that just changed the page or a list is drawn in this frame with
+		// the old springs; the height it measured belongs to the state that is leaving.
+		// The transition asks for the target height, and the frame that settles asks
+		// for the exact one.
+		return
+	}
+	if h := a.restHeight(); h > 0 && abs32(h-a.askedHeight) > 0.5 {
+		a.askedHeight = h
+		a.onHeight(h)
+	}
+}
+
 // requestHeight tells the window how tall the content will be once at rest. On a window
 // that follows the springs, a transition is sized frame by frame instead, so the window and
 // the content move together; only a change with no movement is asked for here.
@@ -788,7 +838,9 @@ func (a *app) requestHeight() {
 	if a.frameSize && a.willMove() {
 		return
 	}
-	a.onHeight(a.restHeight())
+	h := a.restHeight()
+	a.askedHeight = h
+	a.onHeight(h)
 }
 
 // willMove reports whether the state asks for a spring to move that is not there yet.

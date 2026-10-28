@@ -58,6 +58,29 @@ itself. Generate a pair once with `cd apps/masir-gui && go tool mygo keygen`, pu
 public key in `mygo.json`, keep the private key secret, and back it up: installed apps
 accept only updates signed with it.
 
+The app is ad hoc code signed (macOS runs it; Gatekeeper still asks on first launch). The
+background service is installed as `Masir` — Login Items falls back to a legacy daemon's
+executable name — and the app's icon is attached to that binary as a Finder resource fork
+(`AppIcon.rsrc` and `FinderInfo.bin`), so the service shows as Masir with the Masir icon
+without a Developer ID. `AssociatedBundleIdentifiers` stays in the plist for a signed
+build. Updates re-apply the icon to the new binary. `resources/AppIcon.rsrc` and
+`resources/FinderInfo.bin` are generated from `AppIcon.icns` with `sips -i`, `DeRez`,
+`Rez` and `SetFile`; regenerate them if the icon changes. The security of an update does
+not come from that signature: the app archive is verified with
+the MyGo ed25519 key, and the command line/daemon archives with the release minisign key
+(`MASIR_UPDATE_PUBKEY`, signed `checksums.txt` and `checksums-desktop.txt`). A build
+without a key refuses updates instead of installing an unverified one;
+`MASIR_UPDATE_ALLOW_UNSIGNED=1` is only for development. The app bundle is the one copy
+the app updater writes: the daemon and CLI refuse to replace a file inside `*.app`. When
+the app updates, a daemon running from the old bundle restarts into the new one before the
+app relaunches, and a daemon running as the service updates itself from the signed
+release. The previous download stays verifiable with:
+
+```sh
+minisign -V -P <MASIR_UPDATE_PUBKEY> -m checksums-desktop.txt -x checksums-desktop.txt.minisig
+shasum -a 256 -c checksums-desktop.txt
+```
+
 The macOS build is `dist/darwin-<arch>/Masir.app` (and a `.dmg`); drag it to Applications,
 or:
 

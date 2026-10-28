@@ -63,6 +63,23 @@ func uninstallService(bin string) error {
 	return nil
 }
 
+// startService starts the installed systemd unit again. The app never starts a second
+// daemon of its own while a service is installed.
+func startService(bin string) error {
+	if bin == "" {
+		return errors.New("no masir executable to start the service with")
+	}
+	abs, err := filepath.Abs(bin)
+	if err != nil {
+		return err
+	}
+	_, err = pkexec(abs, "daemon", "restart")
+	return err
+}
+
+// openLoginItems has no equivalent on Linux: systemd's enablement is the setting.
+func openLoginItems() error { return nil }
+
 // pkexec runs a command as root through the desktop's polkit prompt.
 func pkexec(argv ...string) ([]byte, error) {
 	if _, err := exec.LookPath("pkexec"); err != nil {

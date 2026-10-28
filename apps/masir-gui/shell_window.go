@@ -17,7 +17,7 @@ func (s *shell) show() {
 		s.win.Focus()
 		return
 	}
-	height := int(math.Round(float64(s.a.measure())))
+	height := int(math.Round(float64(s.a.heightForOpen())))
 	s.start()
 	if s.win == nil {
 		s.win = mygo.NewWindow(mygo.WindowOptions{
@@ -48,6 +48,7 @@ func (s *shell) show() {
 		})
 	}
 	s.wantHeight, s.lastHeight, s.sizeQueued = height, height, false
+	s.a.askedHeight = float32(height)
 	s.win.SetContentSize(panelWidth, height)
 	s.open = true
 	s.win.Show()
