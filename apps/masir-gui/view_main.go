@@ -819,7 +819,9 @@ func (a *app) footer(c *ui.Context, p palette) {
 		ui.Box(c).Height(1).Background(p.borderSubtle).Shrink(0)
 		ui.Row(c).Padding(tw(2.5), tw(0.5), 0).MinHeight(tw(6)).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 			if a.showUpdateControl() {
-				a.updateControl(c, p)
+				ui.Row(c).Gap(tw(1)).AlignItems(ui.Center).Children(func() {
+					a.updateControl(c, p)
+				})
 			} else {
 				label(c, "Masir "+versionLabel(a.version), sizeCaption, 15, 400, p.muted).LetterSpacing(0.275)
 			}

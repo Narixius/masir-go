@@ -19,7 +19,7 @@ func (a *app) updateControl(c *ui.Context, p palette) {
 	r := tw(2)
 
 	main := ui.ButtonBase(c.Key("update")).Width(mainW).Height(h).Radius(r).Shrink(0).
-		Cursor(ui.CursorPointer).Clip().Center()
+		Cursor(ui.CursorPointer).Clip().Center().AlignItems(ui.Center).Justify(ui.SpaceBetween)
 	text, icon, bg, fg := a.updateLook(p)
 	main.Background(bg).Label(text)
 	// The label says "Part 1/2"; the tooltip says what that part is, with the room the
@@ -52,7 +52,7 @@ func (a *app) updateControl(c *ui.Context, p palette) {
 			// An indeterminate phase: a short filled lead-in and a spinner are enough.
 			ui.Box(c).Absolute().Top(0).Bottom(0).Left(0).WidthPercent(28).Background(p.accent)
 		}
-		ui.Row(c).Absolute().Top(0).Bottom(0).Left(0).Right(0).Center().Gap(tw(1)).Children(func() {
+		ui.Row(c).Absolute().Top(0).Bottom(0).Left(0).Right(0).Center().Gap(tw(1)).Justify(ui.SpaceBetween).PaddingX(tw(2)).Children(func() {
 			label(c, text, sizeCaption, 15, 500, fg).SingleLine()
 			if icon != nil {
 				ui.Icon(c, icon).FontSize(11).TextColor(fg)
