@@ -50,6 +50,8 @@ func (s *Server) StreamLogs(req *pb.StreamLogsRequest, stream pb.DaemonService_S
 		select {
 		case <-stream.Context().Done():
 			return nil
+		case <-s.stopped: // a shutting-down daemon sends nothing more
+			return nil
 		case e := <-ch:
 			if logLevelRank(e.Level) < min {
 				continue

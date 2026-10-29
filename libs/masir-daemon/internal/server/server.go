@@ -157,12 +157,28 @@ func (s *Server) Restart(_ context.Context, _ *pb.RestartRequest) (*pb.RestartRe
 func (s *Server) Shutdown(ctx context.Context, _ *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	s.Log("info", "shutdown requested")
 	s.TrackDaemonStopped("client")
-	// Tear the TUN and proxy down before answering. A new daemon waits for this reply
+	s.BeginShutdown()
+	return &pb.ShutdownResponse{}, nil
+}
+
+// BeginShutdown tears down what the daemon serves and tells its clients to go: every
+// stream ends, so a graceful stop can finish. Shutdown uses it after saying why; a
+// supervisor's signal (launchd's bootout, systemd's stop) uses it directly, because
+// nobody is waiting for a reply there and an open stream would hold the process — and
+// the service manager waiting for it — until it's killed. It is safe to call twice.
+func (s *Server) BeginShutdown() {
+	// Tear the TUN and proxy down before answering. A new daemon waits for the reply
 	// before taking the socket, so returning first would let it start while the old TUN
 	// still held its address.
 	_ = s.xray.Close()
+	// A latency test is a call with nothing to watch `stopped`: cancel it, or the
+	// graceful stop waits for a probe that can take a while.
+	s.testMu.Lock()
+	for _, cancel := range s.tests {
+		cancel()
+	}
+	s.testMu.Unlock()
 	s.stopOnce.Do(func() { close(s.stopped) })
-	return &pb.ShutdownResponse{}, nil
 }
 
 func (s *Server) retryFailed(ctx context.Context) {

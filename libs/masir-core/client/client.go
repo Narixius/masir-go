@@ -51,6 +51,24 @@ func Alive() bool {
 	return ok
 }
 
+// AliveAt reports whether a daemon answers on sock.
+func AliveAt(sock string) bool { return transport.Alive(sock) }
+
+// DialSocket connects to the daemon on sock, for a caller that knows which daemon it
+// means: a root process replacing the service that serves a uid, say. Close the
+// connection when done.
+func DialSocket(sock string) (*grpc.ClientConn, pb.DaemonServiceClient, error) {
+	conn, err := grpc.NewClient("passthrough:///masir-daemon",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return transport.DialContext(ctx, sock)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, err
+	}
+	return conn, pb.NewDaemonServiceClient(conn), nil
+}
+
 // Dial connects to whichever daemon answers. The socket is looked up again on every
 // (re)connect: a root daemon taking over from this user's daemon listens somewhere else.
 // Close the returned connection when done with it.

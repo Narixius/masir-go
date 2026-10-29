@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/narixius/masir-go/apps/masir/internal/ui"
@@ -173,6 +174,11 @@ func ensureDaemon(sock string, idle bool) error {
 // the password, or Windows for permission.
 func enableService(user string) error {
 	if !elevated() {
+		// Ask and stop here, as the person: after sudo the daemon is found by the uid it
+		// serves, not by this process's own sockets.
+		if err := stopBeforeInstall(currentUser()); err != nil {
+			return err
+		}
 		return elevate("daemon", "enable", "--user", currentUser())
 	}
 	if user == "" || user == "0" {
@@ -180,6 +186,9 @@ func enableService(user string) error {
 	}
 	if !service.Supported() {
 		return errNoService
+	}
+	if err := stopBeforeInstall(user); err != nil {
+		return err
 	}
 	src, err := self()
 	if err != nil {
@@ -194,6 +203,74 @@ func enableService(user string) error {
 	ui.Success("masir is installed as a system service. It starts at boot, and TUN mode needs no permission prompt from now on.")
 	return nil
 }
+
+// stopBeforeInstall asks before taking down the daemon that would hold the install up,
+// then stops it over the socket. The service manager's own stop (launchd's bootout,
+// systemd's stop) sends a signal, and that waits on the streams a client keeps open —
+// the app holds two — so asking over the socket stops it at once.
+//
+// There is a prompt only in a terminal: the app's Install Service is the person's answer
+// already, and its pkexec'd masir has no terminal to ask on.
+func stopBeforeInstall(user string) error {
+	sock, ok := socketForInstall(user)
+	if !ok {
+		return nil
+	}
+	stop, err := ui.Confirm("A masir daemon is already running. Stop it and install the service?", true)
+	if err != nil {
+		return err
+	}
+	if !stop {
+		return advised("Nothing was installed: a running daemon owns the socket, and the service can't take it over while it does.",
+			"Install it when you're ready:", "masir daemon enable")
+	}
+	s := ui.Spin("Stopping the masir daemon")
+	if err := stopTheDaemon(sock); err != nil {
+		s.Fail(err.Error())
+		return errReported
+	}
+	s.Stop("Daemon stopped.")
+	return nil
+}
+
+// socketForInstall is where the daemon the install must stop answers. As the person that
+// is the live socket; as root it is the service's socket for the uid it serves, which is
+// why the lookup takes the uid rather than trusting root's own.
+func socketForInstall(user string) (string, bool) {
+	if sock, ok := liveDaemonSocket(); ok {
+		return sock, true
+	}
+	if !elevated() {
+		return "", false
+	}
+	uid, err := strconv.Atoi(user)
+	if err != nil {
+		return "", false
+	}
+	sock := paths.PrivilegedSocketPath(uid)
+	return sock, client.AliveAt(sock)
+}
+
+// stopDaemonAt asks the daemon on sock to exit and waits until it has let go of it.
+func stopDaemonAt(sock string) error {
+	conn, c, err := client.DialSocket(sock)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(appCtx, 5*time.Second)
+	defer cancel()
+	// A daemon that exits before answering is stopped too; the socket is what counts.
+	_, _ = c.Shutdown(ctx, &pb.ShutdownRequest{})
+	return waitFor(func() bool { return !client.AliveAt(sock) }, 10*time.Second, "the daemon didn't stop")
+}
+
+// liveDaemonSocket and stopTheDaemon are the machine calls an install makes. Tests
+// replace them so they never stop a daemon on the machine they run on.
+var (
+	liveDaemonSocket = client.LiveSocket
+	stopTheDaemon    = stopDaemonAt
+)
 
 // enableTun turns TUN on, elevating the daemon first when it isn't root.
 func enableTun() error {

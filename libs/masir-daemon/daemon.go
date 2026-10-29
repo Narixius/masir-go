@@ -157,20 +157,41 @@ func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle
 	pb.RegisterDaemonServiceServer(srv, daemon)
 	healthpb.RegisterHealthServer(srv, health.NewServer())
 	reflection.Register(srv)
+	// Serve on a goroutine so a stop is bounded: a call that never returns must not keep
+	// the daemon alive, nor the service manager waiting for it.
+	served := make(chan error, 1)
+	go func() { served <- srv.Serve(lis) }()
+	stopping := make(chan struct{})
 	go func() {
 		select {
 		case <-ctx.Done():
 		case <-daemon.Stopped():
 		}
-		log.Println("shutting down")
-		srv.GracefulStop() // waits for in-flight calls, including the Shutdown that asked for this
+		close(stopping)
 	}()
 
 	log.Printf("serving %s (uid %d, root: %v) on %s", id.Name, id.UID, id.Privileged, sock)
-	if err := srv.Serve(lis); err != nil {
-		daemon.TrackDaemonError("serve", err)
+	var serveErr error
+	select {
+	case serveErr = <-served:
+	case <-stopping:
+		// A supervisor's signal (launchd's bootout, systemd's stop) reaches us here and
+		// nobody is waiting for a reply; a client's Shutdown already closed stopped, and
+		// BeginShutdown is safe twice. Either way the streams must end, or GracefulStop
+		// would wait on the app's open status and traffic streams until the supervisor
+		// killed the process — which is what made an install look stuck.
+		daemon.BeginShutdown()
+		log.Println("shutting down")
+		if gracefulStop(srv, shutdownGrace) {
+			serveErr = <-served
+		} else {
+			log.Printf("a call was still running after %s; exiting anyway", shutdownGrace)
+		}
+	}
+	if serveErr != nil && !errors.Is(serveErr, grpc.ErrServerStopped) {
+		daemon.TrackDaemonError("serve", serveErr)
 		daemon.TrackDaemonStopped("error")
-		return false, false, err
+		return false, false, serveErr
 	}
 	reason := "signal"
 	if daemon.RestartRequested() {
@@ -178,6 +199,27 @@ func run(parent context.Context, userFlag string, idle bool) (restart, stillIdle
 	}
 	daemon.TrackDaemonStopped(reason)
 	return daemon.RestartRequested(), daemon.Idle(), nil
+}
+
+// shutdownGrace bounds the graceful part of a stop. Every stream ends when the daemon is
+// asked to shut down, so this is only a backstop for a call that ignores it (a latency
+// test still running, say). Past it the daemon returns anyway and the process exits,
+// rather than leaving the service manager to wait and then kill it.
+const shutdownGrace = 5 * time.Second
+
+// gracefulStop waits for in-flight calls and reports whether they all finished.
+func gracefulStop(srv *grpc.Server, grace time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		srv.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(grace):
+		return false
+	}
 }
 
 // configDir is the served user's masir directory. As root it's derived from their home

@@ -20,6 +20,9 @@ Wants=network-online.target
 [Service]
 ExecStart=%s daemon run --user %d
 Restart=on-failure
+# The daemon ends its streams and exits on SIGTERM; this only bounds a stop that can't
+# finish (a wedged Xray, say), so systemctl stop never waits systemd's 90s default.
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
