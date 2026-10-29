@@ -60,22 +60,13 @@ publish a `masir-desktop-<from>-to-<version>-<os>-<arch>.delta` from the previou
 which is what an update downloads when it applies; a delta that doesn't apply falls back to
 the whole archive.
 
-The build applies the patches in `patches/` to MyGo for its duration. Windows stretched a
-frame drawn for one client height into a window that has changed height, which made the
-content magnify during the animated height changes; `mygo-dxgi-no-stretch.patch` makes the
-swap chain show the stale frame unscaled and fills the rest with the window's background.
-`mygo-windows-software-gpu.patch` keeps a window from drawing through a renderer that
-cannot follow a resize: Windows' software D3D rasterizer (no 3D adapter), and a virtual
-machine's display adapter, which D3D11 takes for a GPU but which shows the frame of the old
-window size stretched into the new one until the frame of the new size comes, on every frame
-of an animated resize. There the window draws in memory instead, the path `MYGO_GPU=0`
-takes everywhere, and a window on a real GPU keeps the swap chain fix above. A Windows build
-fails if the executable does not carry both fixes.
-The macOS popover animated a content size change on AppKit's own schedule, so the panel's
-height ran ahead of the lists it holds; `mygo-darwin-popover-resize.patch` turns that
-animation off so the shell can follow the springs every frame, as the other platforms do.
-The patched copy is made in `.mygo-patched` and removed, and `go.mod`/`go.sum` are put
-back, after the build. `make gui-dev` uses stock MyGo; if MyGo is updated, the patches may
+The build applies `patches/mygo-darwin-popover-resize.patch` to MyGo for its duration. The
+macOS popover animated a content size change on AppKit's own schedule, so the panel's
+height ran ahead of the lists it holds; the patch turns that animation off so the shell can
+follow the springs every frame, as the other platforms do. The Windows resize fixes, which
+kept a stale frame from stretching into a new window size, are in MyGo 0.7.3 and need no
+patch. The patched copy is made in `.mygo-patched` and removed, and `go.mod`/`go.sum` are
+put back, after the build. `make gui-dev` uses stock MyGo; if MyGo is updated, the patch may
 need updating.
 
 The app updates itself from MyGo's signed release archives. The public key is

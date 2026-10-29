@@ -46,14 +46,10 @@ add github.com/narixius/masir-go/libs/masir-daemon/internal/analytics.host "${MA
 add github.com/narixius/masir-go/libs/masir-daemon/internal/update.publicKeys "${MASIR_UPDATE_PUBKEY:-}"
 ldflags="$ldflags -X main.version=$version"
 
-# MyGo has the platform fixes the app needs, each a patch in patches/: its Windows swap
-# chain stretched a frame drawn for one client height into a window that changed height,
-# magnifying the content for a moment on every resize; a renderer that shows a resized
-# window late (D3D11 in software, or on a virtual machine's adapter) cannot follow a window
-# that animates its height, so the window draws in memory there instead; and its macOS
-# popover animates a content size change on AppKit's own schedule, so the panel's height ran
-# ahead of the lists it holds. Build against a patched copy, and put the module files back
-# after.
+# MyGo has the platform fix the app needs, a patch in patches/: its macOS popover animates
+# a content size change on AppKit's own schedule, so the panel's height ran ahead of the
+# lists it holds. Build against a patched copy, and put the module files back after. The
+# Windows resize fixes are upstream since MyGo 0.7.3 and need no patch.
 work="$root/.mygo-patched"
 go_mod="$root/apps/masir-gui/go.mod"
 go_sum="$root/apps/masir-gui/go.sum"
@@ -178,19 +174,6 @@ for os in $os_list; do
 		GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -ldflags "$ldflags" -o "$res/$name" ./apps/masir
 		cp build/geo/geoip.dat build/geo/geosite.dat "$res/"
 		(cd apps/masir-gui && go tool mygo build -platform "$os/$arch")
-		if [ "$os" = windows ]; then
-			# The app itself must carry the Windows fixes: a build that somehow
-			# lost them shows a stretched frame on every animated resize, which
-			# is the bug they exist for. Each patch leaves a line the built app
-			# still holds.
-			exe="apps/masir-gui/dist/$os-$arch/Masir.exe"
-			for marker in "no stretch" "no 3D adapter" "cannot follow a resized window"; do
-				if ! grep -aq "$marker" "$exe"; then
-					echo "build-gui: $exe does not carry the MyGo fix that says \"$marker\"" >&2
-					exit 1
-				fi
-			done
-		fi
 		name_app "$os" "$arch"
 		built="$built $os/$arch"
 	done

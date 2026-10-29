@@ -3,7 +3,7 @@ module github.com/narixius/masir-go/apps/masir-gui
 go 1.27.3
 
 require (
-	github.com/egoist/mygo v0.6.5-0.20261026162610-43199d0b0fb9
+	github.com/egoist/mygo v0.7.3
 	github.com/narixius/masir-go/libs/masir-core v0.0.0
 	github.com/narixius/masir-go/libs/masir-proto v0.0.0
 	golang.org/x/sys v0.49.0
