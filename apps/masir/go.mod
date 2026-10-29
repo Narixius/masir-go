@@ -33,7 +33,6 @@ require (
 	github.com/clipperhouse/displaywidth v0.4.1 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344 // indirect
 	github.com/go-typeset/bidi v0.3.1 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
@@ -68,7 +67,6 @@ require (
 	github.com/pion/transport/v4 v4.1.3 // indirect
 	github.com/pion/transport/v5 v5.1.4 // indirect
 	github.com/pires/go-proxyproto v0.16.0 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/posthog/posthog-go v1.37.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/refraction-networking/utls v1.8.3-0.20260301010127-aa6edf4b11af // indirect
@@ -98,7 +96,7 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/orochaa/go-clack => github.com/Narixius/go-clack v0.1.22-0.20261024213753-964c3673406c
+replace github.com/orochaa/go-clack => github.com/Narixius/go-clack v0.1.22-0.20261029133130-792a8ad9d3ec
 
 replace github.com/narixius/masir-go/libs/masir-core => ../../libs/masir-core
 
