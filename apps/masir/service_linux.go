@@ -54,6 +54,9 @@ func uninstallService() error {
 	if err := os.Remove(service.DefinitionPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
+	// Drop the fcontext rule labelServiceBinary added; best effort — semanage may be
+	// absent, and the rule names a path this removal is about to empty anyway.
+	_ = exec.Command("semanage", "fcontext", "-d", service.BinaryPath()).Run()
 	return run("systemctl", "daemon-reload")
 }
 

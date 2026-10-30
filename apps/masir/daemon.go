@@ -115,6 +115,10 @@ func daemonRollback(args) error {
 	if same, err := sameContent(prev, service.BinaryPath()); err != nil || !same {
 		return fail("the restored copy doesn't match the saved version")
 	}
+	// The restore rewrote the binary, so the SELinux label of the fresh copy applies.
+	if err := labelServiceBinary(service.BinaryPath()); err != nil {
+		return err
+	}
 	if err := restartService(); err != nil {
 		return err
 	}
@@ -396,6 +400,9 @@ func installBinary(src string) (string, error) {
 		}
 	}
 	applyFileIcon(bin, dir)
+	if err := labelServiceBinary(bin); err != nil {
+		return "", err
+	}
 	return bin, nil
 }
 
