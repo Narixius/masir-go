@@ -650,7 +650,7 @@ func syncService(src string) error {
 		return fail("the service's copy of masir doesn't match the verified download")
 	}
 	applyFileIcon(dst, filepath.Dir(dst))
-	return nil
+	return labelServiceBinary(dst)
 }
 
 func replaceSelf(src, dst string) error {

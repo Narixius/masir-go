@@ -185,6 +185,10 @@ func explain(msg string) advice {
 			[]string{"masir update geo"}}
 	case strings.Contains(lower, "geosite") || strings.Contains(lower, "geoip.dat"):
 		return advice{"geosite: and geoip: rules need geoip.dat and geosite.dat next to the masir executable. Download them:", []string{"masir update geo"}}
+	case strings.Contains(lower, "dial") && strings.Contains(lower, "permission denied") && selinuxEnforcing():
+		return advice{"SELinux is blocking the daemon's network connections. " +
+			"Reinstall the service, which labels its binary so the daemon may use the network:",
+			[]string{"masir daemon enable"}}
 	case strings.Contains(lower, "permission denied"):
 		return advice{"masir doesn't have permission to write there. If it's the system service or a root-owned file, do one of these once:",
 			[]string{"masir daemon enable", "sudo masir update"}}
