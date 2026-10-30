@@ -28,6 +28,7 @@ from a development build, and `MASIR_NO_CLI_INSTALL=1` turns it off.
 
 ```sh
 make gui-local                             # this machine only: the fast build while developing
+sh scripts/build-rpm.sh                    # the .rpm from an existing `make gui GUI_OS=linux`
 # MASIR_GEO_SKIP=1 skips the geo checksum check for an offline build with good files
 make gui                                   # darwin, linux and windows; amd64 and arm64
 make gui GUI_OS=darwin                     # one system, both architectures
@@ -43,8 +44,8 @@ Space or comma separated; the default is all six builds. Each goes to
 Every download is named `<app>-<role>-<os>-<version>-<arch>`:
 
 - `masir-desktop-<os>-<version>-<arch>.dmg` (macOS, drag to Applications),
-  `masir-desktop-setup-windows-<version>-<arch>.exe` and
-  `masir-desktop-<os>-<version>-<arch>.deb` are the installers;
+  `masir-desktop-setup-windows-<version>-<arch>.exe`,
+  `masir-desktop-<os>-<version>-<arch>.deb` and, on Linux, `.rpm`, are the installers;
 - `masir-desktop-portable-<os>-<version>-<arch>.<ext>` is the archive a person unpacks and
   runs: `.tar.gz` on macOS and Linux, `.zip` on Windows (the release workflow packs it);
 - `masir-desktop-update-windows-<version>-<arch>.tar.gz` is the Windows archive MyGo's

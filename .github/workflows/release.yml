@@ -118,6 +118,18 @@ jobs:
         if: matrix.name == 'linux'
         shell: bash
         run: make gui GUI_OS=linux
+      - name: Build the Linux RPMs (x64 and ARM64)
+        if: matrix.name == 'linux'
+        shell: bash
+        run: |
+          # rpmbuild packs the archives the step above just produced; it cross-packages
+          # the ARM64 one on this x64 runner since nothing is compiled.
+          sudo apt-get update -qq && sudo apt-get install -y -qq rpm imagemagick
+          version="${GITHUB_REF_NAME#v}"
+          for arch in amd64 arm64; do
+            sh scripts/build-rpm.sh \
+              "apps/masir-gui/dist/linux-$arch/masir-desktop-portable-linux-$version-$arch.tar.gz"
+          done
       - name: Upload the macOS app
         if: matrix.name == 'darwin'
         shell: bash
@@ -172,6 +184,7 @@ jobs:
             dir="apps/masir-gui/dist/linux-$arch"
             gh release upload "$GITHUB_REF_NAME" \
               "$dir/masir-desktop-linux-$version-$arch.deb" \
+              "$dir/masir-desktop-linux-$version-$arch.rpm" \
               "$dir/masir-desktop-portable-linux-$version-$arch.tar.gz" \
               "$dir/update-linux-$arch.json" --clobber
             # Delta updates, when the build had a published version to diff against.
